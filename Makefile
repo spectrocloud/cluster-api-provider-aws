@@ -195,6 +195,9 @@ docker-build: ## Build the docker image for controller-manager
 docker-push: ## Push the docker image
 	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
 
+docker-rmi: ## Remove the local docker image
+	docker rmi ${CONTROLLER_IMG}-$(ARCH):$(TAG)
+
 ## --------------------------------------
 ## Docker — All ARCH
 ## --------------------------------------
