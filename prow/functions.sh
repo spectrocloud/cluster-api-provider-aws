@@ -38,6 +38,7 @@ build_code() {
 
 create_images() {
 	print_step "Create and Push the images"
+	make binaries
 	make release
 }
 
