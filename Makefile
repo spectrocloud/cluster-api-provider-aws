@@ -45,9 +45,9 @@ RELEASE_NOTES_BIN := bin/release-notes
 RELEASE_NOTES := $(TOOLS_DIR)/$(RELEASE_NOTES_BIN)
 
 # Define Docker related variables. Releases should modify and double check these vars.
-REGISTRY ?= gcr.io/$(shell gcloud config get-value project)
-STAGING_REGISTRY := gcr.io/k8s-staging-cluster-api-aws
-PROD_REGISTRY := us.gcr.io/k8s-artifacts-prod/cluster-api-aws
+REGISTRY ?= gcr.io/spectro-images/test-infra/staging/cluster-api-aws
+STAGING_REGISTRY := gcr.io/spectro-images/test-infra/staging/cluster-api-aws
+PROD_REGISTRY ?= gcr.io/spectro-images/test-infra/prod/cluster-api-aws
 IMAGE_NAME ?= cluster-api-aws-controller
 CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= dev
