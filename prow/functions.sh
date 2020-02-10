@@ -96,5 +96,5 @@ run_container_scan() {
 export REPO_NAME=cluster-api-provider-aws
 export VERSION_SUFFIX=""
 set_image_tag
-export CONTROLLER_IMG=${DOCKER_REGISTRY}/${IMG_LOC}/cluster-api-aws-controller-${IMG_TAG}
+export CONTROLLER_IMG=${DOCKER_REGISTRY}/${IMG_LOC}/cluster-api-aws/cluster-api-aws-controller
 IMAGES_LIST="${CONTROLLER_IMG}"
