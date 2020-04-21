@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm generated/*
+rm ./generated/*
 
 kustomize build global > ./generated/core-global.yaml
 kustomize build base > ./generated/core-base.yaml
