@@ -58,9 +58,9 @@ GINKGO := $(abspath $(TOOLS_BIN_DIR)/ginkgo)
 export PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
 
 # Define Docker related variables. Releases should modify and double check these vars.
-REGISTRY ?= gcr.io/$(shell gcloud config get-value project)
-STAGING_REGISTRY := gcr.io/k8s-staging-cluster-api-aws
-PROD_REGISTRY := us.gcr.io/k8s-artifacts-prod/cluster-api-aws
+REGISTRY ?= gcr.io/spectro-images/test-infra/staging/cluster-api-aws
+STAGING_REGISTRY := gcr.io/spectro-images/test-infra/staging/cluster-api-aws
+PROD_REGISTRY ?= gcr.io/spectro-images/test-infra/prod/cluster-api-aws
 IMAGE_NAME ?= cluster-api-aws-controller
 CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= dev
@@ -251,6 +251,9 @@ docker-build: ## Build the docker image for controller-manager
 .PHONY: docker-push
 docker-push: ## Push the docker image
 	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+
+docker-rmi: ## Remove the local docker image
+	docker rmi ${CONTROLLER_IMG}-$(ARCH):$(TAG)
 
 ## --------------------------------------
 ## Docker — All ARCH
