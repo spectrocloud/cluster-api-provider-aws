@@ -169,6 +169,8 @@ func (s *Service) defaultBastionAMILookup(region string) string {
 		return "ami-1ee65166"
 	case "eu-north-1":
 		return "ami-7dd85203"
+	case "eu-south-1":
+		return "ami-08bb6fa4a2d8676d4"
 	default:
 		return "unknown region"
 	}

@@ -146,7 +146,7 @@ func (s *Service) getDefaultBastion() *infrav1.Instance {
 	}
 
 	i := &infrav1.Instance{
-		Type:       "t2.micro",
+		Type:       "t3.micro",
 		SubnetID:   s.scope.Subnets().FilterPublic()[0].ID,
 		ImageID:    s.defaultBastionAMILookup(s.scope.AWSCluster.Spec.Region),
 		SSHKeyName: keyName,
