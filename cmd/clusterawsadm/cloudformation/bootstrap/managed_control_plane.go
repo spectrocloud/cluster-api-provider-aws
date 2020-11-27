@@ -16,20 +16,14 @@ limitations under the License.
 
 package bootstrap
 
-import iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
-
 func (t Template) eksControlPlanePolicies() []string {
 	policies := []string{EKSClusterPolicy}
-	if t.Spec.ManagedControlPlane.ExtraPolicyAttachments != nil {
-		for _, policy := range t.Spec.ManagedControlPlane.ExtraPolicyAttachments {
+	if t.Spec.EKS.DefaultControlPlaneRole.ExtraPolicyAttachments != nil {
+		for _, policy := range t.Spec.EKS.DefaultControlPlaneRole.ExtraPolicyAttachments {
 			additionalPolicy := policy
 			policies = append(policies, additionalPolicy)
 		}
 	}
 
 	return policies
-}
-
-func eksAssumeRolePolicy() *iamv1.PolicyDocument {
-	return assumeRolePolicy("eks.amazonaws.com")
 }

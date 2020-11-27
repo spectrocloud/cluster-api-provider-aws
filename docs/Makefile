@@ -15,25 +15,11 @@
 # If you update this file, please follow
 # https://suva.sh/posts/well-documented-makefiles
 
+ROOT_DIR_RELATIVE := ..
+include $(ROOT_DIR_RELATIVE)/common.mk
 
-# Hosts running SELinux need :z added to volume mounts
-SELINUX_ENABLED := $(shell cat /sys/fs/selinux/enforce 2> /dev/null || echo 0)
+DIAGRAM_SRCS := $(call rwildcard,.,*.md,*.plantuml)
 
-ifeq ($(SELINUX_ENABLED),1)
-  DOCKER_VOL_OPTS?=:z
-endif
-
-.PHONY: docs
-docs: diagrams
-
-
-.PHONY: plantuml-image
-plantuml-image:
-	docker build . -t "plantuml-builder"
-
-.PHONY: diagrams
-diagrams: plantuml-image
+diagrams: $(TOOLS_BIN_DIR)/plantuml-sentinal ## Generate plantuml diagrams
 	-docker run -u $(UID):$(GID) -v $(abspath .):/docs$(DOCKER_VOL_OPTS) plantuml-builder -tsvg /docs/**/*.md
 	-docker run -u $(UID):$(GID) -v $(abspath .):/docs$(DOCKER_VOL_OPTS) plantuml-builder -tsvg /docs/**/*.plantuml
-
-

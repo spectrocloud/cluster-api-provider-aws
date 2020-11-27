@@ -394,6 +394,9 @@ var (
 	// SecurityGroupNode defines a Kubernetes workload node role
 	SecurityGroupNode = SecurityGroupRole("node")
 
+	// SecurityGroupEKSNodeAdditional defines an extra node group from eks nodes
+	SecurityGroupEKSNodeAdditional = SecurityGroupRole("node-eks-additional")
+
 	// SecurityGroupControlPlane defines a Kubernetes control plane node role
 	SecurityGroupControlPlane = SecurityGroupRole("controlplane")
 
@@ -651,20 +654,24 @@ type Instance struct {
 
 	// SpotMarketOptions option for configuring instances to be run using AWS Spot instances.
 	SpotMarketOptions *SpotMarketOptions `json:"spotMarketOptions,omitempty"`
+
+	// Tenancy indicates if instance should run on shared or single-tenant hardware.
+	// +optional
+	Tenancy string `json:"tenancy,omitempty"`
 }
 
-// Volume encapsulates the configuration options for the root volume
+// Volume encapsulates the configuration options for the storage device
 type Volume struct {
 	// Device name
 	// +optional
 	DeviceName string `json:"deviceName,omitempty"`
 
-	// Size specifies size (in Gi) of the root storage device.
-	// Must be greater than the image root snapshot size or 8 (whichever is greater).
+	// Size specifies size (in Gi) of the storage device.
+	// Must be greater than the image snapshot size or 8 (whichever is greater).
 	// +kubebuilder:validation:Minimum=8
 	Size int64 `json:"size"`
 
-	// Type is the type of the root volume (e.g. gp2, io1, etc...).
+	// Type is the type of the volume (e.g. gp2, io1, etc...).
 	// +optional
 	Type string `json:"type,omitempty"`
 

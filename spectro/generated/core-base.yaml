@@ -84,6 +84,15 @@ rules:
   - list
   - watch
 - apiGroups:
+  - controlplane.cluster.x-k8s.io
+  resources:
+  - awsmanagedcontrolplanes
+  - awsmanagedcontrolplanes/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ""
   resources:
   - events
@@ -92,6 +101,15 @@ rules:
   - get
   - list
   - patch
+  - watch
+- apiGroups:
+  - exp.cluster.x-k8s.io
+  resources:
+  - machinepools
+  - machinepools/status
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
@@ -109,6 +127,26 @@ rules:
   - infrastructure.cluster.x-k8s.io
   resources:
   - awsclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinepools/status
   verbs:
   - get
   - patch
@@ -156,7 +194,7 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - awsmanagedcontrolplanes
+  - awsmanagedmachinepools
   verbs:
   - create
   - delete
@@ -168,7 +206,7 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - awsmanagedcontrolplanes/status
+  - awsmanagedmachinepools/status
   verbs:
   - get
   - patch
@@ -306,7 +344,7 @@ spec:
       - args:
         - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
-        - --feature-gates=EKS=${EXP_EKS:=false},EKSEnableIAM=${EXP_EKS_IAM:=false},EKSAllowAddRoles=${EXP_EKS_ADD_ROLES:=false}
+        - --feature-gates=EKS=${EXP_EKS:=false},MachinePool=${EXP_MACHINE_POOL:=false}
         env:
         - name: AWS_SHARED_CREDENTIALS_FILE
           value: /home/.aws/credentials

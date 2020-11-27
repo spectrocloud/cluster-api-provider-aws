@@ -25,6 +25,7 @@ import (
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1alpha1"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/converters"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 )
 
@@ -37,6 +38,7 @@ const (
 	AWSIAMRoleControlPlane                       = "AWSIAMRoleControlPlane"
 	AWSIAMRoleNodes                              = "AWSIAMRoleNodes"
 	AWSIAMRoleEKSControlPlane                    = "AWSIAMRoleEKSControlPlane"
+	AWSIAMRoleEKSNodegroup                       = "AWSIAMRoleEKSNodegroup"
 	AWSIAMUserBootstrapper                       = "AWSIAMUserBootstrapper"
 	ControllersPolicy                 PolicyName = "AWSIAMManagedPolicyControllers"
 	ControlPlanePolicy                PolicyName = "AWSIAMManagedPolicyCloudProviderControlPlane"
@@ -132,7 +134,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 	template.Resources[AWSIAMRoleNodes] = &cfn_iam.Role{
 		RoleName:                 t.NewManagedName("nodes"),
 		AssumeRolePolicyDocument: t.nodeTrustPolicy(),
-		ManagedPolicyArns:        t.Spec.Nodes.ExtraPolicyAttachments,
+		ManagedPolicyArns:        t.nodeManagedPolicies(),
 		Policies:                 t.nodePolicies(),
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.Nodes.Tags),
 	}
@@ -158,12 +160,21 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 		},
 	}
 
-	if !t.Spec.ManagedControlPlane.Disable {
+	if !t.Spec.EKS.DefaultControlPlaneRole.Disable {
 		template.Resources[AWSIAMRoleEKSControlPlane] = &cfn_iam.Role{
-			RoleName:                 infrav1exp.DefaultEKSControlPlaneRole,
-			AssumeRolePolicyDocument: eksAssumeRolePolicy(),
+			RoleName:                 ekscontrolplanev1.DefaultEKSControlPlaneRole,
+			AssumeRolePolicyDocument: assumeRolePolicy([]string{"eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksControlPlanePolicies(),
-			Tags:                     converters.MapToCloudFormationTags(t.Spec.ManagedControlPlane.Tags),
+			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.DefaultControlPlaneRole.Tags),
+		}
+	}
+
+	if !t.Spec.EKS.ManagedMachinePool.Disable {
+		template.Resources[AWSIAMRoleEKSNodegroup] = &cfn_iam.Role{
+			RoleName:                 infrav1exp.DefaultEKSNodegroupRole,
+			AssumeRolePolicyDocument: assumeRolePolicy([]string{"ec2.amazonaws.com", "eks.amazonaws.com"}),
+			ManagedPolicyArns:        t.eksMachinePoolPolicies(),
+			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.ManagedMachinePool.Tags),
 		}
 	}
 
@@ -171,16 +182,16 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 }
 
 func ec2AssumeRolePolicy() *iamv1.PolicyDocument {
-	return assumeRolePolicy("ec2.amazonaws.com")
+	return assumeRolePolicy([]string{"ec2.amazonaws.com"})
 }
 
-func assumeRolePolicy(principalID string) *iamv1.PolicyDocument {
+func assumeRolePolicy(principalIDs []string) *iamv1.PolicyDocument {
 	return &iamv1.PolicyDocument{
 		Version: iamv1.CurrentVersion,
 		Statement: []iamv1.StatementEntry{
 			{
 				Effect:    iamv1.EffectAllow,
-				Principal: iamv1.Principals{iamv1.PrincipalService: iamv1.PrincipalID{principalID}},
+				Principal: iamv1.Principals{iamv1.PrincipalService: principalIDs},
 				Action:    iamv1.Actions{"sts:AssumeRole"},
 			},
 		},

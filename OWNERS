@@ -10,6 +10,7 @@ reviewers:
   - cluster-api-maintainers
   - cluster-api-aws-maintainers
   - cluster-api-aws-reviewers
+  - cluster-api-aws-eks-maintainers
 
 emeritus_approvers:
   - davidewatson

@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/cluster-api/util/secret"
 
-	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 )
 
@@ -107,7 +107,7 @@ func (s *Service) reconcileAdditionalKubeconfigs(ctx context.Context, cluster *e
 }
 
 func (s *Service) createCAPIKubeconfigSecret(ctx context.Context, cluster *eks.Cluster, clusterRef *types.NamespacedName) error {
-	controllerOwnerRef := *metav1.NewControllerRef(s.scope.ControlPlane, infrav1exp.GroupVersion.WithKind("AWSManagedControlPlane"))
+	controllerOwnerRef := *metav1.NewControllerRef(s.scope.ControlPlane, ekscontrolplanev1.GroupVersion.WithKind("AWSManagedControlPlane"))
 
 	clusterName := s.scope.KubernetesClusterName()
 	userName := s.getKubeConfigUserName(clusterName, false)
@@ -179,7 +179,7 @@ func (s *Service) updateCAPIKubeconfigSecret(ctx context.Context, configSecret *
 }
 
 func (s *Service) createUserKubeconfigSecret(ctx context.Context, cluster *eks.Cluster, clusterRef *types.NamespacedName) error {
-	controllerOwnerRef := *metav1.NewControllerRef(s.scope.ControlPlane, infrav1exp.GroupVersion.WithKind("AWSManagedControlPlane"))
+	controllerOwnerRef := *metav1.NewControllerRef(s.scope.ControlPlane, ekscontrolplanev1.GroupVersion.WithKind("AWSManagedControlPlane"))
 
 	clusterName := s.scope.KubernetesClusterName()
 	userName := s.getKubeConfigUserName(clusterName, true)
@@ -191,14 +191,14 @@ func (s *Service) createUserKubeconfigSecret(ctx context.Context, cluster *eks.C
 
 	execConfig := &api.ExecConfig{APIVersion: "client.authentication.k8s.io/v1alpha1"}
 	switch s.scope.TokenMethod() {
-	case infrav1exp.EKSTokenMethodIAMAuthenticator:
+	case ekscontrolplanev1.EKSTokenMethodIAMAuthenticator:
 		execConfig.Command = "aws-iam-authenticator"
 		execConfig.Args = []string{
 			"token",
 			"-i",
 			clusterName,
 		}
-	case infrav1exp.EKSTokenMethodAWSCli:
+	case ekscontrolplanev1.EKSTokenMethodAWSCli:
 		execConfig.Command = "aws"
 		execConfig.Args = []string{
 			"eks",

@@ -27,6 +27,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -38,6 +39,7 @@ type ClusterScopeParams struct {
 	Cluster        *clusterv1.Cluster
 	AWSCluster     *infrav1.AWSCluster
 	ControllerName string
+	Endpoints      []ServiceEndpoint
 	Session        awsclient.ConfigProvider
 }
 
@@ -55,7 +57,7 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 		params.Logger = klogr.New()
 	}
 
-	session, err := sessionForRegion(params.AWSCluster.Spec.Region)
+	session, err := sessionForRegion(params.AWSCluster.Spec.Region, params.Endpoints)
 	if err != nil {
 		return nil, errors.Errorf("failed to create aws session: %v", err)
 	}
@@ -170,6 +172,32 @@ func (s *ClusterScope) ListOptionsLabelSelector() client.ListOption {
 
 // PatchObject persists the cluster configuration and status.
 func (s *ClusterScope) PatchObject() error {
+	// Always update the readyCondition by summarizing the state of other conditions.
+	// A step counter is added to represent progress during the provisioning process (instead we are hiding during the deletion process).
+	applicableConditions := []clusterv1.ConditionType{
+		infrav1.VpcReadyCondition,
+		infrav1.SubnetsReadyCondition,
+		infrav1.ClusterSecurityGroupsReadyCondition,
+		infrav1.LoadBalancerReadyCondition,
+	}
+
+	if s.VPC().IsManaged(s.Name()) {
+		applicableConditions = append(applicableConditions,
+			infrav1.InternetGatewayReadyCondition,
+			infrav1.NatGatewaysReadyCondition,
+			infrav1.RouteTablesReadyCondition)
+
+		if s.AWSCluster.Spec.Bastion.Enabled {
+			applicableConditions = append(applicableConditions, infrav1.BastionHostReadyCondition)
+		}
+	}
+
+	conditions.SetSummary(s.AWSCluster,
+		conditions.WithConditions(applicableConditions...),
+		conditions.WithStepCounterIf(s.AWSCluster.ObjectMeta.DeletionTimestamp.IsZero()),
+		conditions.WithStepCounter(),
+	)
+
 	return s.patchHelper.Patch(
 		context.TODO(),
 		s.AWSCluster,

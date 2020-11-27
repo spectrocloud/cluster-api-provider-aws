@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 )
 
@@ -38,8 +38,9 @@ type ManagedControlPlaneScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
 	Cluster        *clusterv1.Cluster
-	ControlPlane   *infrav1exp.AWSManagedControlPlane
+	ControlPlane   *ekscontrolplanev1.AWSManagedControlPlane
 	ControllerName string
+	Endpoints      []ServiceEndpoint
 	Session        awsclient.ConfigProvider
 
 	EnableIAM            bool
@@ -59,7 +60,7 @@ func NewManagedControlPlaneScope(params ManagedControlPlaneScopeParams) (*Manage
 		params.Logger = klogr.New()
 	}
 
-	session, err := sessionForRegion(params.ControlPlane.Spec.Region)
+	session, err := sessionForRegion(params.ControlPlane.Spec.Region, params.Endpoints)
 	if err != nil {
 		return nil, errors.Errorf("failed to create aws session: %v", err)
 	}
@@ -89,7 +90,7 @@ type ManagedControlPlaneScope struct {
 	patchHelper *patch.Helper
 
 	Cluster      *clusterv1.Cluster
-	ControlPlane *infrav1exp.AWSManagedControlPlane
+	ControlPlane *ekscontrolplanev1.AWSManagedControlPlane
 
 	session        awsclient.ConfigProvider
 	controllerName string
@@ -165,8 +166,8 @@ func (s *ManagedControlPlaneScope) PatchObject() error {
 			infrav1.NatGatewaysReadyCondition,
 			infrav1.RouteTablesReadyCondition,
 			infrav1.BastionHostReadyCondition,
-			infrav1exp.EKSControlPlaneReadyCondition,
-			infrav1exp.IAMControlPlaneRolesReadyCondition,
+			ekscontrolplanev1.EKSControlPlaneReadyCondition,
+			ekscontrolplanev1.IAMControlPlaneRolesReadyCondition,
 		}})
 }
 
@@ -229,12 +230,12 @@ func (s *ManagedControlPlaneScope) ControllerName() string {
 }
 
 // TokenMethod returns the token method to use in the kubeconfig
-func (s *ManagedControlPlaneScope) TokenMethod() infrav1exp.EKSTokenMethod {
+func (s *ManagedControlPlaneScope) TokenMethod() ekscontrolplanev1.EKSTokenMethod {
 	if s.ControlPlane.Spec.TokenMethod != nil {
 		return *s.ControlPlane.Spec.TokenMethod
 	}
 
-	return infrav1exp.EKSTokenMethodIAMAuthenticator
+	return ekscontrolplanev1.EKSTokenMethodIAMAuthenticator
 }
 
 // KubernetesClusterName is the name of the Kubernetes cluster. For the managed
@@ -266,4 +267,12 @@ func (s *ManagedControlPlaneScope) ImageLookupOrg() string {
 // ImageLookupBaseOS returns the base operating system name to use when looking up AMIs
 func (s *ManagedControlPlaneScope) ImageLookupBaseOS() string {
 	return s.ControlPlane.Spec.ImageLookupBaseOS
+}
+
+// IAMAuthConfig returns the IAM authenticator config. The returned value will never be nil.
+func (s *ManagedControlPlaneScope) IAMAuthConfig() *ekscontrolplanev1.IAMAuthenticatorConfig {
+	if s.ControlPlane.Spec.IAMAuthenticatorConfig == nil {
+		s.ControlPlane.Spec.IAMAuthenticatorConfig = &ekscontrolplanev1.IAMAuthenticatorConfig{}
+	}
+	return s.ControlPlane.Spec.IAMAuthenticatorConfig
 }

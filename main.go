@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -32,29 +31,28 @@ import (
 	cgrecord "k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 	"k8s.io/klog/klogr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	infrav1alpha2 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha2"
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/controllers"
+	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	infrav1alpha3exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	controllersexp "sigs.k8s.io/cluster-api-provider-aws/exp/controllers"
 	"sigs.k8s.io/cluster-api-provider-aws/feature"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/endpoints"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 	"sigs.k8s.io/cluster-api-provider-aws/version"
-
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme                   = runtime.NewScheme()
-	setupLog                 = ctrl.Log.WithName("setup")
-	maxEKSSyncPeriod         = time.Minute * 10
-	errMaxSyncPeriodExceeded = errors.New("sync period greater than maximum allowed")
-	errEKSInvalidFlags       = errors.New("invalid EKS flag combination")
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -63,6 +61,8 @@ func init() {
 	_ = infrav1alpha3.AddToScheme(scheme)
 	_ = infrav1alpha3exp.AddToScheme(scheme)
 	_ = clusterv1.AddToScheme(scheme)
+	_ = controlplanev1.AddToScheme(scheme)
+	_ = clusterv1exp.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -77,6 +77,7 @@ var (
 	syncPeriod              time.Duration
 	webhookPort             int
 	healthAddr              string
+	serviceEndpoints        string
 )
 
 func main() {
@@ -126,21 +127,30 @@ func main() {
 	// Initialize event recorder.
 	record.InitFromRecorder(mgr.GetEventRecorderFor("aws-controller"))
 
-	setupLog.V(1).Info(fmt.Sprintf("%+v\n", feature.Gates))
+	setupLog.V(1).Info(fmt.Sprintf("feature gates: %+v\n", feature.Gates))
+
+	// Parse service endpoints.
+	AWSServiceEndpoints, err := endpoints.ParseFlag(serviceEndpoints)
+	if err != nil {
+		setupLog.Error(err, "unable to parse service endpoints", "controller", "AWSCluster")
+		os.Exit(1)
+	}
 
 	if webhookPort == 0 {
 		if err = (&controllers.AWSMachineReconciler{
-			Client:   mgr.GetClient(),
-			Log:      ctrl.Log.WithName("controllers").WithName("AWSMachine"),
-			Recorder: mgr.GetEventRecorderFor("awsmachine-controller"),
+			Client:    mgr.GetClient(),
+			Log:       ctrl.Log.WithName("controllers").WithName("AWSMachine"),
+			Recorder:  mgr.GetEventRecorderFor("awsmachine-controller"),
+			Endpoints: AWSServiceEndpoints,
 		}).SetupWithManager(mgr, controller.Options{MaxConcurrentReconciles: awsMachineConcurrency}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSMachine")
 			os.Exit(1)
 		}
 		if err = (&controllers.AWSClusterReconciler{
-			Client:   mgr.GetClient(),
-			Log:      ctrl.Log.WithName("controllers").WithName("AWSCluster"),
-			Recorder: mgr.GetEventRecorderFor("awscluster-controller"),
+			Client:    mgr.GetClient(),
+			Log:       ctrl.Log.WithName("controllers").WithName("AWSCluster"),
+			Recorder:  mgr.GetEventRecorderFor("awscluster-controller"),
+			Endpoints: AWSServiceEndpoints,
 		}).SetupWithManager(mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AWSCluster")
 			os.Exit(1)
@@ -148,27 +158,17 @@ func main() {
 
 		if feature.Gates.Enabled(feature.EKS) {
 			setupLog.Info("enabling EKS controllers")
-			if syncPeriod > maxEKSSyncPeriod {
-				setupLog.Error(errMaxSyncPeriodExceeded, "sync period exceeded maximum allowed when using EKS", "max-sync-period", maxEKSSyncPeriod)
-				os.Exit(1)
-			}
 
 			enableIAM := feature.Gates.Enabled(feature.EKSEnableIAM)
-			allowAddRoles := feature.Gates.Enabled(feature.EKSAllowAddRoles)
 
-			if allowAddRoles && !enableIAM {
-				setupLog.Error(errEKSInvalidFlags, "cannot use EKSAllowAddRoles flag without EKSEnableIAM")
-				os.Exit(1)
-			}
-
-			if err = (&controllersexp.AWSManagedControlPlaneReconciler{
-				Client:               mgr.GetClient(),
-				Log:                  ctrl.Log.WithName("controllers").WithName("AWSManagedControlPlane"),
-				Recorder:             mgr.GetEventRecorderFor("awsmanagedcontrolplane-reconciler"),
-				AllowAdditionalRoles: allowAddRoles,
-				EnableIAM:            enableIAM,
-			}).SetupWithManager(mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency}); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "AWSManagedControlPlane")
+			if err = (&controllersexp.AWSManagedMachinePoolReconciler{
+				Client:    mgr.GetClient(),
+				Log:       ctrl.Log.WithName("controllers").WithName("AWSManagedMachinePool"),
+				Recorder:  mgr.GetEventRecorderFor("awsmanagedmachinepool-reconciler"),
+				EnableIAM: enableIAM,
+				Endpoints: AWSServiceEndpoints,
+			}).SetupWithManager(mgr, controller.Options{}); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "AWSManagedMachinePool")
 				os.Exit(1)
 			}
 			if err = (&controllersexp.AWSManagedClusterReconciler{
@@ -177,10 +177,18 @@ func main() {
 				Recorder: mgr.GetEventRecorderFor("awsmanagedcluster-reconciler"),
 			}).SetupWithManager(mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency}); err != nil {
 				setupLog.Error(err, "unable to create controller", "controller", "AWSManagedCluster")
+			}
+		}
+		if feature.Gates.Enabled(feature.MachinePool) {
+			if err = (&controllersexp.AWSMachinePoolReconciler{
+				Client:   mgr.GetClient(),
+				Log:      ctrl.Log.WithName("controllers").WithName("AWSMachinePool"),
+				Recorder: mgr.GetEventRecorderFor("awsmachinepool-controller"),
+			}).SetupWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "AWSMachinePool")
 				os.Exit(1)
 			}
 		}
-
 	} else {
 		if err = (&infrav1alpha3.AWSMachineTemplate{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "AWSMachineTemplate")
@@ -208,12 +216,20 @@ func main() {
 		}
 		if feature.Gates.Enabled(feature.EKS) {
 			setupLog.Info("enabling EKS webhooks")
-			if err = (&infrav1alpha3exp.AWSManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlane")
+			if err = (&infrav1alpha3exp.AWSManagedMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedMachinePool")
+				os.Exit(1)
+			}
+		}
+		if feature.Gates.Enabled(feature.MachinePool) {
+			setupLog.Info("enabling webhook for AWSMachinePool")
+			if err = (&infrav1alpha3exp.AWSMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "AWSMachinePool")
 				os.Exit(1)
 			}
 		}
 	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
@@ -297,6 +313,12 @@ func initFlags(fs *pflag.FlagSet) {
 		"health-addr",
 		":9440",
 		"The address the health endpoint binds to.",
+	)
+
+	fs.StringVar(&serviceEndpoints,
+		"service-endpoints",
+		"",
+		"Set custom AWS service endpoins in semi-colon separated format: ${SigningRegion1}:${ServiceID1}=${URL},${ServiceID2}=${URL};${SigningRegion2}...",
 	)
 
 	feature.MutableGates.AddFlag(fs)

@@ -21,6 +21,7 @@ import (
 
 	"github.com/awslabs/goformation/v4/cloudformation"
 
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
 )
 
@@ -133,25 +134,54 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 			},
 		},
 		{
+			Effect: iamv1.EffectAllow,
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
+			},
+			Resource: iamv1.Resources{
+				"arn:*:iam::*:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot",
+			},
+			Condition: iamv1.Conditions{
+				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "spot.amazonaws.com"},
+			},
+		},
+		{
 			Effect:   iamv1.EffectAllow,
 			Resource: t.allowedEC2InstanceProfiles(),
 			Action: iamv1.Actions{
 				"iam:PassRole",
 			},
 		},
-		{
-			Effect: iamv1.EffectAllow,
-			Resource: iamv1.Resources{
-				"arn:*:secretsmanager:*:*:secret:aws.cluster.x-k8s.io/*",
-			},
-			Action: iamv1.Actions{
-				"secretsmanager:CreateSecret",
-				"secretsmanager:DeleteSecret",
-				"secretsmanager:TagResource",
-			},
-		},
 	}
-	if t.Spec.ClusterAPIControllers.EKS.Enable {
+	for _, secureSecretBackend := range t.Spec.SecureSecretsBackends {
+		switch secureSecretBackend {
+		case infrav1.SecretBackendSecretsManager:
+			statement = append(statement, iamv1.StatementEntry{
+				Effect: iamv1.EffectAllow,
+				Resource: iamv1.Resources{
+					"arn:*:secretsmanager:*:*:secret:aws.cluster.x-k8s.io/*",
+				},
+				Action: iamv1.Actions{
+					"secretsmanager:CreateSecret",
+					"secretsmanager:DeleteSecret",
+					"secretsmanager:TagResource",
+				},
+			})
+		case infrav1.SecretBackendSSMParameterStore:
+			statement = append(statement, iamv1.StatementEntry{
+				Effect: iamv1.EffectAllow,
+				Resource: iamv1.Resources{
+					"arn:*:ssm:*:*:parameter/cluster.x-k8s.io/*",
+				},
+				Action: iamv1.Actions{
+					"ssm:PutParameter",
+					"ssm:DeleteParameter",
+					"ssm:AddTagsToResource",
+				},
+			})
+		}
+	}
+	if t.Spec.EKS.Enable {
 		allowedIAMActions := iamv1.Actions{
 			"iam:GetRole",
 			"iam:ListAttachedRolePolicies",
@@ -166,7 +196,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 			},
 		})
 
-		if t.Spec.ClusterAPIControllers.EKS.IAMRoleCreation {
+		if t.Spec.EKS.AllowIAMRoleCreation {
 			allowedIAMActions = append(allowedIAMActions, iamv1.Actions{
 				"iam:DetachRolePolicy",
 				"iam:DeleteRole",
@@ -187,7 +217,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"iam:GetPolicy",
 				},
 				Resource: iamv1.Resources{
-					"arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+					EKSClusterPolicy,
 				},
 				Effect: iamv1.EffectAllow,
 			}, {
@@ -200,9 +230,15 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"eks:DeleteCluster",
 					"eks:UpdateClusterConfig",
 					"eks:UntagResource",
+					"eks:UpdateNodegroupVersion",
+					"eks:DescribeNodegroup",
+					"eks:DeleteNodegroup",
+					"eks:UpdateNodegroupConfig",
+					"eks:CreateNodegroup",
 				},
 				Resource: iamv1.Resources{
 					"arn:aws:eks:*:*:cluster/*",
+					"arn:aws:eks:*:*:nodegroup/*/*/*",
 				},
 				Effect: iamv1.EffectAllow,
 			}, {

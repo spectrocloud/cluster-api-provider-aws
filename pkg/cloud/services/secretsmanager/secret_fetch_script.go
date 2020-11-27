@@ -41,6 +41,9 @@ set -o pipefail
 umask 006
 
 REGION="{{.Region}}"
+if [ "{{.Endpoint}}" != "" ]; then
+  ENDPOINT="--endpoint-url {{.Endpoint}}"
+fi
 SECRET_PREFIX="{{.SecretPrefix}}"
 CHUNKS="{{.Chunks}}"
 FILE="/etc/secret-userdata.txt"
@@ -120,7 +123,7 @@ delete_secret_value() {
   set +o nounset
   set +o pipefail
   out=$(
-    aws secretsmanager --region ${REGION} delete-secret --force-delete-without-recovery --secret-id "${id}" 2>&1
+    aws secretsmanager ${ENDPOINT} --region ${REGION} delete-secret --force-delete-without-recovery --secret-id "${id}" 2>&1
   )
   local delete_return=$?
   set -o errexit
@@ -152,7 +155,7 @@ get_secret_value() {
   data=$(
     set +e
     set +o pipefail
-    aws secretsmanager --region ${REGION} get-secret-value --output text --query 'SecretBinary' --secret-id "${id}" 2>&1
+    aws secretsmanager ${ENDPOINT} --region ${REGION} get-secret-value --output text --query 'SecretBinary' --secret-id "${id}" 2>&1
   )
   local get_return=$?
   check_aws_command "SecretsManager::GetSecretValue" "${get_return}" "${data}"

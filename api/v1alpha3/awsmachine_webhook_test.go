@@ -17,8 +17,10 @@ limitations under the License.
 package v1alpha3
 
 import (
+	"github.com/aws/aws-sdk-go/aws"
 	"testing"
 
+	. "github.com/onsi/gomega"
 	"k8s.io/utils/pointer"
 )
 
@@ -94,6 +96,60 @@ func TestAWSMachine_ValidateCreate(t *testing.T) {
 						{
 							DeviceName: "name",
 							Type:       "io2",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "SSH key is invalid",
+			machine: &AWSMachine{
+				Spec: AWSMachineSpec{
+					SSHKeyName: aws.String("test\t"),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "SSH key is valid",
+			machine: &AWSMachine{
+				Spec: AWSMachineSpec{
+					SSHKeyName: aws.String("test"),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "SSH key with underscore is valid",
+			machine: &AWSMachine{
+				Spec: AWSMachineSpec{
+					SSHKeyName: aws.String("test_key"),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "SSH key with dash is valid",
+			machine: &AWSMachine{
+				Spec: AWSMachineSpec{
+					SSHKeyName: aws.String(`test-key`),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "additional security groups should not have filters",
+			machine: &AWSMachine{
+				Spec: AWSMachineSpec{
+					AdditionalSecurityGroups: []AWSResourceReference{
+						{
+							Filters: []Filter{
+								{
+									Name:   "example-name",
+									Values: []string{"example-value"},
+								},
+							},
 						},
 					},
 				},
@@ -177,6 +233,47 @@ func TestAWSMachine_ValidateUpdate(t *testing.T) {
 			if err := tt.newMachine.ValidateUpdate(tt.oldMachine); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateUpdate() error = %v, wantErr %v", err, tt.wantErr)
 			}
+		})
+	}
+}
+
+func TestAWSMachine_Default(t *testing.T) {
+	machine := &AWSMachine{
+		Spec: AWSMachineSpec{
+			ProviderID:               nil,
+			AdditionalTags:           nil,
+			AdditionalSecurityGroups: nil,
+		},
+	}
+
+	tests := []struct{
+		name string
+		cloudInit CloudInit
+		expectedSecretsBackend string
+	} {
+		{
+			name: "with insecure skip secrets manager unset",
+			cloudInit: CloudInit{InsecureSkipSecretsManager: false},
+			expectedSecretsBackend: "secrets-manager",
+		},
+		{
+			name: "with insecure skip secrets manager unset and secrets backend set",
+			cloudInit: CloudInit{InsecureSkipSecretsManager: false, SecureSecretsBackend: "ssm-parameter-store"},
+			expectedSecretsBackend: "ssm-parameter-store",
+		},
+		{
+			name: "with insecure skip secrets manager set",
+			cloudInit: CloudInit{InsecureSkipSecretsManager: true},
+			expectedSecretsBackend: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			machine.Spec.CloudInit = tt.cloudInit
+			machine.Default()
+			g := NewWithT(t)
+			g.Expect(machine.Spec.CloudInit.SecureSecretsBackend).To(Equal(SecretBackend(tt.expectedSecretsBackend)))
 		})
 	}
 }
