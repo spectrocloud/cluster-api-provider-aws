@@ -24,6 +24,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elb"
 	rgapi "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/pkg/errors"
@@ -34,6 +35,8 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/hash"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/util/conditions"
 )
 
 // ResourceGroups are filtered by ARN identifier: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html#arns-syntax
@@ -108,19 +111,6 @@ func (s *Service) ReconcileLoadbalancers() error {
 	return nil
 }
 
-// GetAPIServerDNSName returns the DNS name endpoint for the API server
-func (s *Service) GetAPIServerDNSName() (string, error) {
-	elbName, err := GenerateELBName(s.scope.Name())
-	if err != nil {
-		return "", err
-	}
-	apiELB, err := s.describeClassicELB(elbName)
-	if err != nil {
-		return "", err
-	}
-	return apiELB.DNSName, nil
-}
-
 // DeleteLoadbalancers deletes the load balancers for the given cluster.
 func (s *Service) DeleteLoadbalancers() error {
 	s.scope.V(2).Info("Deleting load balancers")
@@ -130,9 +120,21 @@ func (s *Service) DeleteLoadbalancers() error {
 		return err
 	}
 
+	elbName, err := GenerateELBName(s.scope.Name())
+	if err != nil {
+		return err
+	}
+	elbs = append(elbs, elbName)
+
+	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.LoadBalancerReadyCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
+	if err := s.scope.PatchObject(); err != nil {
+		return err
+	}
+
 	for _, elb := range elbs {
 		s.scope.V(3).Info("deleting load balancer", "arn", elb)
 		if err := s.deleteClassicELB(elb); err != nil {
+			conditions.MarkFalse(s.scope.InfraCluster(), infrav1.LoadBalancerReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, err.Error())
 			return err
 		}
 	}
@@ -143,11 +145,13 @@ func (s *Service) DeleteLoadbalancers() error {
 			return false, err
 		}
 
-		return len(elbs) == 0, nil
+		_, err = s.describeClassicELB(elbName)
+		done = len(elbs) == 0 && IsNotFound(err)
+		return done, nil
 	}); err != nil {
 		return errors.Wrapf(err, "failed to wait for %q ELB deletions", s.scope.Name())
 	}
-
+	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.LoadBalancerReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
 	s.scope.V(2).Info("Deleting load balancers completed successfully")
 	return nil
 }
@@ -335,24 +339,41 @@ func (s *Service) getAPIServerClassicELBSpec() (*infrav1.ClassicELB, error) {
 		Additional:  s.scope.AdditionalTags(),
 	})
 
-	// The load balancer APIs require us to only attach one subnet for each AZ.
-	subnets := s.scope.Subnets().FilterPrivate()
-
-	if s.scope.ControlPlaneLoadBalancerScheme() == infrav1.ClassicELBSchemeInternetFacing {
-		subnets = s.scope.Subnets().FilterPublic()
-	}
-
-subnetLoop:
-	for _, sn := range subnets {
-		for _, az := range res.AvailabilityZones {
-			if sn.AvailabilityZone == az {
-				// If we already attached another subnet in the same AZ, there is no need to
-				// add this subnet to the list of the ELB's subnets.
-				continue subnetLoop
-			}
+	// If subnet IDs have been specified for this load balancer
+	if s.scope.ControlPlaneLoadBalancer() != nil && len(s.scope.ControlPlaneLoadBalancer().Subnets) > 0 {
+		// This set of subnets may not match the subnets specified on the Cluster, so we may not have already discovered them
+		// We need to call out to AWS to describe them just in case
+		input := &ec2.DescribeSubnetsInput{
+			SubnetIds: aws.StringSlice(s.scope.ControlPlaneLoadBalancer().Subnets),
 		}
-		res.AvailabilityZones = append(res.AvailabilityZones, sn.AvailabilityZone)
-		res.SubnetIDs = append(res.SubnetIDs, sn.ID)
+		out, err := s.EC2Client.DescribeSubnets(input)
+		if err != nil {
+			return nil, err
+		}
+		for _, sn := range out.Subnets {
+			res.AvailabilityZones = append(res.AvailabilityZones, *sn.AvailabilityZone)
+			res.SubnetIDs = append(res.SubnetIDs, *sn.SubnetId)
+		}
+	} else {
+		// The load balancer APIs require us to only attach one subnet for each AZ.
+		subnets := s.scope.Subnets().FilterPrivate()
+
+		if s.scope.ControlPlaneLoadBalancerScheme() == infrav1.ClassicELBSchemeInternetFacing {
+			subnets = s.scope.Subnets().FilterPublic()
+		}
+
+	subnetLoop:
+		for _, sn := range subnets {
+			for _, az := range res.AvailabilityZones {
+				if sn.AvailabilityZone == az {
+					// If we already attached another subnet in the same AZ, there is no need to
+					// add this subnet to the list of the ELB's subnets.
+					continue subnetLoop
+				}
+			}
+			res.AvailabilityZones = append(res.AvailabilityZones, sn.AvailabilityZone)
+			res.SubnetIDs = append(res.SubnetIDs, sn.ID)
+		}
 	}
 
 	return res, nil
@@ -483,22 +504,51 @@ func (s *Service) listByTag(tag string) ([]string, error) {
 	return names, nil
 }
 
+func (s *Service) filterByOwnedTag(tagKey string) ([]string, error) {
+	var names []string
+	err := s.ELBClient.DescribeLoadBalancersPages(&elb.DescribeLoadBalancersInput{}, func(r *elb.DescribeLoadBalancersOutput, last bool) bool {
+		for _, lb := range r.LoadBalancerDescriptions {
+			names = append(names, *lb.LoadBalancerName)
+		}
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	output, err := s.ELBClient.DescribeTags(&elb.DescribeTagsInput{LoadBalancerNames: aws.StringSlice(names)})
+	if err != nil {
+		return nil, err
+	}
+	var ownedElbs []string
+	for _, tagDesc := range output.TagDescriptions {
+		for _, tag := range tagDesc.Tags {
+			if *tag.Key == tagKey && *tag.Value == string(infrav1.ResourceLifecycleOwned) {
+				ownedElbs = append(ownedElbs, *tagDesc.LoadBalancerName)
+			}
+		}
+	}
+
+	return ownedElbs, nil
+}
+
 func (s *Service) listOwnedELBs() ([]string, error) {
 	// k8s.io/cluster/<name>, created by k/k cloud provider
 	serviceTag := infrav1.ClusterAWSCloudProviderTagKey(s.scope.Name())
 	arns, err := s.listByTag(serviceTag)
 	if err != nil {
-		return nil, err
+		//retry by listing all ELBs as listByTag will fail in air-gapped environments
+		arns, err = s.filterByOwnedTag(serviceTag)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// sigs.k8s.io/cluster-api-provider-aws/cluster/<name>, created by CAPA
-	capaTag := infrav1.ClusterTagKey(s.scope.Name())
-	clusterArns, err := s.listByTag(capaTag)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(arns, clusterArns...), nil
+	return arns, nil
 }
 
 func (s *Service) describeClassicELB(name string) (*infrav1.ClassicELB, error) {
@@ -511,7 +561,7 @@ func (s *Service) describeClassicELB(name string) (*infrav1.ClassicELB, error) {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case elb.ErrCodeAccessPointNotFoundException:
-				return nil, errors.Wrapf(err, "no classic load balancer found with name: %q", name)
+				return nil, NewNotFound(fmt.Sprintf("no classic load balancer found with name: %q", name))
 			case elb.ErrCodeDependencyThrottleException:
 				return nil, errors.Wrap(err, "too many requests made to the ELB service")
 			default:
@@ -530,6 +580,14 @@ func (s *Service) describeClassicELB(name string) (*infrav1.ClassicELB, error) {
 		return nil, errors.Errorf(
 			"ELB names must be unique within a region: %q ELB already exists in this region in VPC %q",
 			name, *out.LoadBalancerDescriptions[0].VPCId)
+	}
+
+	if s.scope.ControlPlaneLoadBalancer() != nil &&
+		s.scope.ControlPlaneLoadBalancer().Scheme != nil &&
+		string(*s.scope.ControlPlaneLoadBalancer().Scheme) != aws.StringValue(out.LoadBalancerDescriptions[0].Scheme) {
+		return nil, errors.Errorf(
+			"ELB names must be unique within a region: %q ELB already exists in this region with a different scheme %q",
+			name, *out.LoadBalancerDescriptions[0].Scheme)
 	}
 
 	outAtt, err := s.ELBClient.DescribeLoadBalancerAttributes(&elb.DescribeLoadBalancerAttributesInput{

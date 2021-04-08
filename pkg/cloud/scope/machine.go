@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -187,7 +188,12 @@ func (m *MachineScope) UseSecretsManager() bool {
 	return !m.AWSMachine.Spec.CloudInit.InsecureSkipSecretsManager
 }
 
-// UserDataIsCompressed returns the computed value of whether or not
+// SecureSecretsBackend returns the chosen secret backend.
+func (m *MachineScope) SecureSecretsBackend() infrav1.SecretBackend {
+	return m.AWSMachine.Spec.CloudInit.SecureSecretsBackend
+}
+
+// UserDataIsUncompressed returns the computed value of whether or not
 // userdata should be compressed using gzip.
 func (m *MachineScope) UserDataIsUncompressed() bool {
 	return m.AWSMachine.Spec.UncompressedUserData != nil && *m.AWSMachine.Spec.UncompressedUserData
@@ -259,6 +265,23 @@ func (m *MachineScope) GetRawBootstrapData() ([]byte, error) {
 
 // PatchObject persists the machine spec and status.
 func (m *MachineScope) PatchObject() error {
+	// Always update the readyCondition by summarizing the state of other conditions.
+	// A step counter is added to represent progress during the provisioning process (instead we are hiding during the deletion process).
+	applicableConditions := []clusterv1.ConditionType{
+		infrav1.InstanceReadyCondition,
+		infrav1.SecurityGroupsReadyCondition,
+	}
+
+	if m.IsControlPlane() {
+		applicableConditions = append(applicableConditions, infrav1.ELBAttachedCondition)
+	}
+
+	conditions.SetSummary(m.AWSMachine,
+		conditions.WithConditions(applicableConditions...),
+		conditions.WithStepCounterIf(m.AWSMachine.ObjectMeta.DeletionTimestamp.IsZero()),
+		conditions.WithStepCounter(),
+	)
+
 	return m.patchHelper.Patch(
 		context.TODO(),
 		m.AWSMachine,
@@ -313,4 +336,11 @@ func (m *MachineScope) AWSMachineIsDeleted() bool {
 
 func (m *MachineScope) IsEKSManaged() bool {
 	return m.InfraCluster.InfraCluster().GetObjectKind().GroupVersionKind().Kind == "AWSManagedControlPlane"
+}
+
+// SetInterruptible sets the AWSMachine status Interruptible
+func (m *MachineScope) SetInterruptible() {
+	if m.AWSMachine.Spec.SpotMarketOptions != nil {
+		m.AWSMachine.Status.Interruptible = true
+	}
 }

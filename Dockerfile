@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.1-experimental
+
 # Copyright 2019 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +15,7 @@
 # limitations under the License.
 
 # Build the manager binary
-FROM golang:1.13.8 as builder
+FROM golang:1.13.15 as builder
 WORKDIR /workspace
 
 # Run this with docker build --build_arg $(go env GOPROXY) to override the goproxy
@@ -25,22 +27,25 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 # Cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+RUN  --mount=type=cache,target=/root/.local/share/golang \
+     --mount=type=cache,target=/go/pkg/mod \
+     go mod download
 
 # Copy the sources
 COPY ./ ./
 
 RUN wget --output-document /restart.sh --quiet https://raw.githubusercontent.com/windmilleng/rerun-process-wrapper/master/restart.sh  && \
-    wget --output-document /start.sh --quiet https://raw.githubusercontent.com/windmilleng/rerun-process-wrapper/master/start.sh && \
-    chmod +x /start.sh && chmod +x /restart.sh
+  wget --output-document /start.sh --quiet https://raw.githubusercontent.com/windmilleng/rerun-process-wrapper/master/start.sh && \
+  chmod +x /start.sh && chmod +x /restart.sh
 
 # Build
 ARG package=.
 ARG ARCH
 ARG LDFLAGS
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
-    go build -a -ldflags "${LDFLAGS} -extldflags '-static'" \
-    -o manager ${package}
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.local/share/golang \
+    CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -ldflags "${LDFLAGS} -extldflags '-static'"  -o manager ${package}
 ENTRYPOINT [ "/start.sh", "/workspace/manager" ]
 
 # Copy the controller-manager into a thin image

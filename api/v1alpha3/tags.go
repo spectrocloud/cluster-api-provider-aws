@@ -19,6 +19,9 @@ package v1alpha3
 import (
 	"fmt"
 	"reflect"
+
+	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 // Tags defines a map of tags.
@@ -104,6 +107,10 @@ const (
 	// dedicated to this cluster api provider implementation.
 	NameAWSClusterAPIRole = NameAWSProviderPrefix + "role"
 
+	NameAWSSubnetAssociation = NameAWSProviderPrefix + "association"
+
+	SecondarySubnetTagValue = "secondary"
+
 	// APIServerRoleTagValue describes the value for the apiserver role
 	APIServerRoleTagValue = "apiserver"
 
@@ -118,6 +125,9 @@ const (
 
 	// PrivateRoleTagValue describes the value for the private role
 	PrivateRoleTagValue = "private"
+
+	// MachineNameTagKey is the key for machine name
+	MachineNameTagKey = "MachineName"
 )
 
 // ClusterTagKey generates the key for resources associated with a cluster.
@@ -152,6 +162,20 @@ type BuildParams struct {
 	// Any additional tags to be added to the resource.
 	// +optional
 	Additional Tags
+}
+
+// WithMachineName tags the namespaced machine name
+// The machine name will be tagged with key "MachineName"
+func (b BuildParams) WithMachineName(m *clusterv1.Machine) BuildParams {
+	machineNamespacedName := types.NamespacedName{Namespace: m.Namespace, Name: m.Name}
+	b.Additional[MachineNameTagKey] = machineNamespacedName.String()
+	return b
+}
+
+// WithCloudProvider tags the cluster ownership for a resource
+func (b BuildParams) WithCloudProvider(name string) BuildParams {
+	b.Additional[ClusterAWSCloudProviderTagKey(name)] = string(ResourceLifecycleOwned)
+	return b
 }
 
 // Build builds tags including the cluster tag and returns them in map form.

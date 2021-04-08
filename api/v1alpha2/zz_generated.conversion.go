@@ -488,6 +488,7 @@ func Convert_v1alpha2_AWSLoadBalancerSpec_To_v1alpha3_AWSLoadBalancerSpec(in *AW
 func autoConvert_v1alpha3_AWSLoadBalancerSpec_To_v1alpha2_AWSLoadBalancerSpec(in *v1alpha3.AWSLoadBalancerSpec, out *AWSLoadBalancerSpec, s conversion.Scope) error {
 	out.Scheme = (*ClassicELBScheme)(unsafe.Pointer(in.Scheme))
 	// WARNING: in.CrossZoneLoadBalancing requires manual conversion: does not exist in peer-type
+	// WARNING: in.Subnets requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -611,6 +612,7 @@ func autoConvert_v1alpha3_AWSMachineSpec_To_v1alpha2_AWSMachineSpec(in *v1alpha3
 	// WARNING: in.UncompressedUserData requires manual conversion: does not exist in peer-type
 	// WARNING: in.CloudInit requires manual conversion: inconvertible types (sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3.CloudInit vs *sigs.k8s.io/cluster-api-provider-aws/api/v1alpha2.CloudInit)
 	// WARNING: in.SpotMarketOptions requires manual conversion: does not exist in peer-type
+	// WARNING: in.Tenancy requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -625,6 +627,7 @@ func autoConvert_v1alpha2_AWSMachineStatus_To_v1alpha3_AWSMachineStatus(in *AWSM
 
 func autoConvert_v1alpha3_AWSMachineStatus_To_v1alpha2_AWSMachineStatus(in *v1alpha3.AWSMachineStatus, out *AWSMachineStatus, s conversion.Scope) error {
 	out.Ready = in.Ready
+	// WARNING: in.Interruptible requires manual conversion: does not exist in peer-type
 	out.Addresses = *(*[]apiv1alpha2.MachineAddress)(unsafe.Pointer(&in.Addresses))
 	out.InstanceState = (*InstanceState)(unsafe.Pointer(in.InstanceState))
 	// WARNING: in.FailureReason requires manual conversion: does not exist in peer-type
@@ -920,6 +923,7 @@ func autoConvert_v1alpha3_CloudInit_To_v1alpha2_CloudInit(in *v1alpha3.CloudInit
 	// WARNING: in.InsecureSkipSecretsManager requires manual conversion: does not exist in peer-type
 	out.SecretCount = in.SecretCount
 	out.SecretPrefix = in.SecretPrefix
+	// WARNING: in.SecureSecretsBackend requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -1017,6 +1021,7 @@ func autoConvert_v1alpha3_Instance_To_v1alpha2_Instance(in *v1alpha3.Instance, o
 	out.Tags = *(*map[string]string)(unsafe.Pointer(&in.Tags))
 	// WARNING: in.AvailabilityZone requires manual conversion: does not exist in peer-type
 	// WARNING: in.SpotMarketOptions requires manual conversion: does not exist in peer-type
+	// WARNING: in.Tenancy requires manual conversion: does not exist in peer-type
 	return nil
 }
 

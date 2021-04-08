@@ -17,11 +17,55 @@ limitations under the License.
 package v1alpha3
 
 import (
+	"context"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
 	. "github.com/onsi/gomega"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
+
+func TestAWSCluster_ValidateCreate(t *testing.T) {
+	tests := []struct {
+		name    string
+		cluster *AWSCluster
+		wantErr bool
+	}{
+		{
+			name: "SSH key name is not valid",
+			cluster: &AWSCluster{
+				Spec: AWSClusterSpec{
+					SSHKeyName: aws.String("test-capi\t"),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "SSH key name should valid",
+			cluster: &AWSCluster{
+				Spec: AWSClusterSpec{
+					SSHKeyName: aws.String("test-capi"),
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := tt.cluster.DeepCopy()
+			cluster.ObjectMeta = metav1.ObjectMeta{
+				GenerateName: "cluster-",
+				Namespace:    "default",
+			}
+			ctx := context.TODO()
+			if err := testEnv.Create(ctx, cluster); (err != nil) != tt.wantErr {
+				t.Errorf("ValidateCreate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func TestAWSCluster_ValidateUpdate(t *testing.T) {
 	tests := []struct {
@@ -120,14 +164,30 @@ func TestAWSCluster_ValidateUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.newCluster.ValidateUpdate(tt.oldCluster); (err != nil) != tt.wantErr {
+			ctx := context.TODO()
+			cluster := tt.oldCluster.DeepCopy()
+			cluster.ObjectMeta = metav1.ObjectMeta{
+				GenerateName: "cluster-",
+				Namespace:    "default",
+			}
+			if err := testEnv.Create(ctx, cluster); err != nil {
+				t.Errorf("failed to create cluster: %v", err)
+			}
+			cluster.Spec = tt.newCluster.Spec
+			if err := testEnv.Update(ctx, cluster); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateUpdate() error = %v, wantErr %v", err, tt.wantErr)
 			}
-		})
+		},
+		)
 	}
 }
 
 func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
+	AZUsageLimit := 3
+	defaultVPCSpec := VPCSpec{
+		AvailabilityZoneUsageLimit: &AZUsageLimit,
+		AvailabilityZoneSelection:  &AZSelectionSchemeOrdered,
+	}
 	g := NewWithT(t)
 	tests := []struct {
 		name          string
@@ -142,6 +202,7 @@ func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
 			afterCluster: &AWSCluster{
 				Spec: AWSClusterSpec{
 					NetworkSpec: NetworkSpec{
+						VPC: defaultVPCSpec,
 						CNI: &CNISpec{
 							CNIIngressRules: CNIIngressRules{
 								{
@@ -167,6 +228,7 @@ func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
 			beforeCluster: &AWSCluster{
 				Spec: AWSClusterSpec{
 					NetworkSpec: NetworkSpec{
+						VPC: defaultVPCSpec,
 						CNI: &CNISpec{},
 					},
 				},
@@ -174,6 +236,7 @@ func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
 			afterCluster: &AWSCluster{
 				Spec: AWSClusterSpec{
 					NetworkSpec: NetworkSpec{
+						VPC: defaultVPCSpec,
 						CNI: &CNISpec{},
 					},
 				},
@@ -184,6 +247,7 @@ func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
 			beforeCluster: &AWSCluster{
 				Spec: AWSClusterSpec{
 					NetworkSpec: NetworkSpec{
+						VPC: defaultVPCSpec,
 						CNI: &CNISpec{
 							CNIIngressRules: CNIIngressRules{
 								{
@@ -200,6 +264,7 @@ func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
 			afterCluster: &AWSCluster{
 				Spec: AWSClusterSpec{
 					NetworkSpec: NetworkSpec{
+						VPC: defaultVPCSpec,
 						CNI: &CNISpec{
 							CNIIngressRules: CNIIngressRules{
 								{
@@ -218,8 +283,14 @@ func TestAWSCluster_DefaultCNIIngressRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.beforeCluster.Default()
-			g.Expect(tt.beforeCluster.Spec.NetworkSpec).To(Equal(tt.afterCluster.Spec.NetworkSpec))
+			ctx := context.TODO()
+			cluster := tt.beforeCluster.DeepCopy()
+			cluster.ObjectMeta = metav1.ObjectMeta{
+				GenerateName: "cluster-",
+				Namespace:    "default",
+			}
+			g.Expect(testEnv.Create(ctx, cluster)).To(Succeed())
+			g.Expect(cluster.Spec.NetworkSpec).To(Equal(tt.afterCluster.Spec.NetworkSpec))
 		})
 	}
 }
@@ -300,7 +371,13 @@ func TestAWSCluster_ValidateAllowedCIDRBlocks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.awsc.validateAllowedCIDRBlocks(); (err != nil) != tt.wantErr {
+			ctx := context.TODO()
+			cluster := tt.awsc.DeepCopy()
+			cluster.ObjectMeta = metav1.ObjectMeta{
+				GenerateName: "cluster-",
+				Namespace:    "default",
+			}
+			if err := testEnv.Create(ctx, cluster); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateAllowedCIDRBlocks() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -354,8 +431,14 @@ func TestAWSCluster_DefaultAllowedCIDRBlocks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.beforeCluster.Default()
-			g.Expect(tt.beforeCluster.Spec.Bastion).To(Equal(tt.afterCluster.Spec.Bastion))
+			ctx := context.TODO()
+			cluster := tt.beforeCluster.DeepCopy()
+			cluster.ObjectMeta = metav1.ObjectMeta{
+				GenerateName: "cluster-",
+				Namespace:    "default",
+			}
+			g.Expect(testEnv.Create(ctx, cluster)).To(Succeed())
+			g.Expect(cluster.Spec.Bastion).To(Equal(tt.afterCluster.Spec.Bastion))
 		})
 	}
 }

@@ -19,6 +19,10 @@ hybrid deployments of Kubernetes. It is built atop the lessons learned from
 previous cluster managers such as [kops][kops] and
 [kubicorn][kubicorn].
 
+## Documentation
+
+Please see our [book](https://cluster-api-aws.sigs.k8s.io) for in-depth documentation.
+
 ## Launching a Kubernetes cluster on AWS
 
 Check out the [Cluster API Quick Start](https://cluster-api.sigs.k8s.io/user/quick-start.html) for launching a
@@ -29,13 +33,13 @@ cluster on AWS.
 - Native Kubernetes manifests and API
 - Manages the bootstrapping of VPCs, gateways, security groups and instances.
 - Choice of Linux distribution between Amazon Linux 2, CentOS 7 and Ubuntu 18.04,
-  using [pre-baked AMIs](docs/amis.md).
+  using [pre-baked AMIs](/amis.md).
 - Deploys Kubernetes control planes into private subnets with a separate
   bastion server.
 - Doesn't use SSH for bootstrapping nodes.
 - Installs only the minimal components to bootstrap a control plane and workers.
 - Supports control planes on EC2 instances.
-- Experimental [EKS support](docs/eks.md)
+- Experimental [EKS support](topics/eks.md)
 
 ------
 
@@ -86,6 +90,7 @@ Note: These AMIs are not updated for security fixes and it is recommended to alw
 |                          | v1.16.8                 |
 |                          | v1.16.9                 |
 |                          | v1.16.14                |
+|                          | v1.16.15                |
 | v1.17                    | v1.17.0                 |
 |                          | v1.17.1                 |
 |                          | v1.17.2                 |
@@ -93,17 +98,17 @@ Note: These AMIs are not updated for security fixes and it is recommended to alw
 |                          | v1.17.4                 |
 |                          | v1.17.5                 |
 |                          | v1.17.11                |
+|                          | v1.17.12                |
 | v1.18                    | v1.18.0                 |
 |                          | v1.18.1                 |
 |                          | v1.18.2                 |
 |                          | v1.18.8                 |
+|                          | v1.18.9                 |
 | v1.19                    | v1.19.0                 |
+|                          | v1.19.1                 |
+|                          | v1.19.2                 |
 
 ------
-
-## Documentation
-
-Documentation is in the `/docs` directory, and the [index is here](docs/README.md).
 
 ## Getting involved and contributing
 

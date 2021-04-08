@@ -19,6 +19,8 @@ package scope
 import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/eks"
@@ -44,11 +46,27 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/version"
 )
 
+// NewASGClient creates a new ASG API client for a given session
+func NewASGClient(scopeUser cloud.ScopeUsage, session cloud.Session, target runtime.Object) autoscalingiface.AutoScalingAPI {
+	asgClient := autoscaling.New(session.Session())
+	asgClient.Handlers.Build.PushFrontNamed(getUserAgentHandler())
+	asgClient.Handlers.CompleteAttempt.PushFront(awsmetrics.CaptureRequestMetrics(scopeUser.ControllerName()))
+	asgClient.Handlers.Complete.PushBack(recordAWSPermissionsIssue(target))
+
+	return asgClient
+}
+
 // NewEC2Client creates a new EC2 API client for a given session
 func NewEC2Client(scopeUser cloud.ScopeUsage, session cloud.Session, target runtime.Object) ec2iface.EC2API {
 	ec2Client := ec2.New(session.Session())
 	ec2Client.Handlers.Build.PushFrontNamed(getUserAgentHandler())
+	if session.ServiceLimiter(ec2.ServiceID) != nil {
+		ec2Client.Handlers.Sign.PushFront(session.ServiceLimiter(ec2.ServiceID).LimitRequest)
+	}
 	ec2Client.Handlers.CompleteAttempt.PushFront(awsmetrics.CaptureRequestMetrics(scopeUser.ControllerName()))
+	if session.ServiceLimiter(ec2.ServiceID) != nil {
+		ec2Client.Handlers.CompleteAttempt.PushFront(session.ServiceLimiter(ec2.ServiceID).ReviewResponse)
+	}
 	ec2Client.Handlers.Complete.PushBack(recordAWSPermissionsIssue(target))
 
 	return ec2Client
@@ -58,7 +76,9 @@ func NewEC2Client(scopeUser cloud.ScopeUsage, session cloud.Session, target runt
 func NewELBClient(scopeUser cloud.ScopeUsage, session cloud.Session, target runtime.Object) elbiface.ELBAPI {
 	elbClient := elb.New(session.Session())
 	elbClient.Handlers.Build.PushFrontNamed(getUserAgentHandler())
+	elbClient.Handlers.Sign.PushFront(session.ServiceLimiter(elb.ServiceID).LimitRequest)
 	elbClient.Handlers.CompleteAttempt.PushFront(awsmetrics.CaptureRequestMetrics(scopeUser.ControllerName()))
+	elbClient.Handlers.CompleteAttempt.PushFront(session.ServiceLimiter(elb.ServiceID).ReviewResponse)
 	elbClient.Handlers.Complete.PushBack(recordAWSPermissionsIssue(target))
 
 	return elbClient
@@ -68,7 +88,9 @@ func NewELBClient(scopeUser cloud.ScopeUsage, session cloud.Session, target runt
 func NewResourgeTaggingClient(scopeUser cloud.ScopeUsage, session cloud.Session, target runtime.Object) resourcegroupstaggingapiiface.ResourceGroupsTaggingAPIAPI {
 	resourceTagging := resourcegroupstaggingapi.New(session.Session())
 	resourceTagging.Handlers.Build.PushFrontNamed(getUserAgentHandler())
+	resourceTagging.Handlers.Sign.PushFront(session.ServiceLimiter(resourceTagging.ServiceID).LimitRequest)
 	resourceTagging.Handlers.CompleteAttempt.PushFront(awsmetrics.CaptureRequestMetrics(scopeUser.ControllerName()))
+	resourceTagging.Handlers.CompleteAttempt.PushFront(session.ServiceLimiter(resourceTagging.ServiceID).ReviewResponse)
 	resourceTagging.Handlers.Complete.PushBack(recordAWSPermissionsIssue(target))
 
 	return resourceTagging
@@ -78,7 +100,9 @@ func NewResourgeTaggingClient(scopeUser cloud.ScopeUsage, session cloud.Session,
 func NewSecretsManagerClient(scopeUser cloud.ScopeUsage, session cloud.Session, target runtime.Object) secretsmanageriface.SecretsManagerAPI {
 	secretsClient := secretsmanager.New(session.Session())
 	secretsClient.Handlers.Build.PushFrontNamed(getUserAgentHandler())
+	secretsClient.Handlers.Sign.PushFront(session.ServiceLimiter(secretsClient.ServiceID).LimitRequest)
 	secretsClient.Handlers.CompleteAttempt.PushFront(awsmetrics.CaptureRequestMetrics(scopeUser.ControllerName()))
+	secretsClient.Handlers.CompleteAttempt.PushFront(session.ServiceLimiter(secretsClient.ServiceID).ReviewResponse)
 	secretsClient.Handlers.Complete.PushBack(recordAWSPermissionsIssue(target))
 
 	return secretsClient
@@ -140,4 +164,13 @@ func getUserAgentHandler() request.NamedHandler {
 		Name: "capa/user-agent",
 		Fn:   request.MakeAddToUserAgentHandler("aws.cluster.x-k8s.io", version.Get().String()),
 	}
+}
+
+// AWSClients contains all the aws clients used by the scopes.
+type AWSClients struct {
+	ASG             autoscalingiface.AutoScalingAPI
+	EC2             ec2iface.EC2API
+	ELB             elbiface.ELBAPI
+	SecretsManager  secretsmanageriface.SecretsManagerAPI
+	ResourceTagging resourcegroupstaggingapiiface.ResourceGroupsTaggingAPIAPI
 }

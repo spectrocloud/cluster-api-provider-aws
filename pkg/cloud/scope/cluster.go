@@ -26,7 +26,9 @@ import (
 	"k8s.io/klog/klogr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -38,6 +40,7 @@ type ClusterScopeParams struct {
 	Cluster        *clusterv1.Cluster
 	AWSCluster     *infrav1.AWSCluster
 	ControllerName string
+	Endpoints      []ServiceEndpoint
 	Session        awsclient.ConfigProvider
 }
 
@@ -55,7 +58,7 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 		params.Logger = klogr.New()
 	}
 
-	session, err := sessionForRegion(params.AWSCluster.Spec.Region)
+	session, serviceLimiters, err := sessionForRegion(params.AWSCluster.Spec.Region, params.Endpoints)
 	if err != nil {
 		return nil, errors.Errorf("failed to create aws session: %v", err)
 	}
@@ -65,13 +68,14 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
 	return &ClusterScope{
-		Logger:         params.Logger,
-		client:         params.Client,
-		Cluster:        params.Cluster,
-		AWSCluster:     params.AWSCluster,
-		patchHelper:    helper,
-		session:        session,
-		controllerName: params.ControllerName,
+		Logger:          params.Logger,
+		client:          params.Client,
+		Cluster:         params.Cluster,
+		AWSCluster:      params.AWSCluster,
+		patchHelper:     helper,
+		session:         session,
+		serviceLimiters: serviceLimiters,
+		controllerName:  params.ControllerName,
 	}, nil
 }
 
@@ -84,8 +88,9 @@ type ClusterScope struct {
 	Cluster    *clusterv1.Cluster
 	AWSCluster *infrav1.AWSCluster
 
-	session        awsclient.ConfigProvider
-	controllerName string
+	session         awsclient.ConfigProvider
+	serviceLimiters throttle.ServiceLimiters
+	controllerName  string
 }
 
 // Network returns the cluster network object.
@@ -119,6 +124,11 @@ func (s *ClusterScope) CNIIngressRules() infrav1.CNIIngressRules {
 // SecurityGroups returns the cluster security groups as a map, it creates the map if empty.
 func (s *ClusterScope) SecurityGroups() map[infrav1.SecurityGroupRole]infrav1.SecurityGroup {
 	return s.AWSCluster.Status.Network.SecurityGroups
+}
+
+// SecondaryCidrBlock is currently unimplemented for non-managed clusters
+func (s *ClusterScope) SecondaryCidrBlock() *string {
+	return nil
 }
 
 // Name returns the CAPI cluster name.
@@ -170,6 +180,32 @@ func (s *ClusterScope) ListOptionsLabelSelector() client.ListOption {
 
 // PatchObject persists the cluster configuration and status.
 func (s *ClusterScope) PatchObject() error {
+	// Always update the readyCondition by summarizing the state of other conditions.
+	// A step counter is added to represent progress during the provisioning process (instead we are hiding during the deletion process).
+	applicableConditions := []clusterv1.ConditionType{
+		infrav1.VpcReadyCondition,
+		infrav1.SubnetsReadyCondition,
+		infrav1.ClusterSecurityGroupsReadyCondition,
+		infrav1.LoadBalancerReadyCondition,
+	}
+
+	if s.VPC().IsManaged(s.Name()) {
+		applicableConditions = append(applicableConditions,
+			infrav1.InternetGatewayReadyCondition,
+			infrav1.NatGatewaysReadyCondition,
+			infrav1.RouteTablesReadyCondition)
+
+		if s.AWSCluster.Spec.Bastion.Enabled {
+			applicableConditions = append(applicableConditions, infrav1.BastionHostReadyCondition)
+		}
+	}
+
+	conditions.SetSummary(s.AWSCluster,
+		conditions.WithConditions(applicableConditions...),
+		conditions.WithStepCounterIf(s.AWSCluster.ObjectMeta.DeletionTimestamp.IsZero()),
+		conditions.WithStepCounter(),
+	)
+
 	return s.patchHelper.Patch(
 		context.TODO(),
 		s.AWSCluster,
@@ -224,6 +260,14 @@ func (s *ClusterScope) InfraCluster() cloud.ClusterObject {
 // Session returns the AWS SDK session. Used for creating clients
 func (s *ClusterScope) Session() awsclient.ConfigProvider {
 	return s.session
+}
+
+// ServiceLimiter returns the AWS SDK session. Used for creating clients
+func (s *ClusterScope) ServiceLimiter(service string) *throttle.ServiceLimiter {
+	if sl, ok := s.serviceLimiters[service]; ok {
+		return sl
+	}
+	return nil
 }
 
 // Bastion returns the bastion details.

@@ -28,6 +28,17 @@ const (
 	MachineFinalizer = "awsmachine.infrastructure.cluster.x-k8s.io"
 )
 
+// SecretBackend defines variants for backend secret storage.
+type SecretBackend string
+
+var (
+	// SecretBackendSSMParameterStore defines AWS Systems Manager Parameter Store as the secret backend
+	SecretBackendSSMParameterStore = SecretBackend("ssm-parameter-store")
+
+	// SecretBackendSecretsManager defines AWS Secrets Manager as the secret backend
+	SecretBackendSecretsManager = SecretBackend("secrets-manager")
+)
+
 // AWSMachineSpec defines the desired state of AWSMachine
 type AWSMachineSpec struct {
 	// ProviderID is the unique identifier as specified by the cloud provider.
@@ -127,13 +138,18 @@ type AWSMachineSpec struct {
 	// SpotMarketOptions allows users to configure instances to be run using AWS Spot instances.
 	// +optional
 	SpotMarketOptions *SpotMarketOptions `json:"spotMarketOptions,omitempty"`
+
+	// Tenancy indicates if instance should run on shared or single-tenant hardware.
+	// +optional
+	// +kubebuilder:validation:Enum:=default;dedicated;host
+	Tenancy string `json:"tenancy,omitempty"`
 }
 
 // CloudInit defines options related to the bootstrapping systems where
 // CloudInit is used.
 type CloudInit struct {
 	// InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager
-	// to ensure privacy of userdata.
+	// or AWS Systems Manager Parameter Store to ensure privacy of userdata.
 	// By default, a cloud-init boothook shell script is prepended to download
 	// the userdata from Secrets Manager and additionally delete the secret.
 	InsecureSkipSecretsManager bool `json:"insecureSkipSecretsManager,omitempty"`
@@ -147,6 +163,13 @@ type CloudInit struct {
 	// the workload cluster.
 	// +optional
 	SecretPrefix string `json:"secretPrefix,omitempty"`
+
+	// SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager
+	// Parameter Storage to distribute secrets. By default or with the value of secrets-manager,
+	// will use AWS Secrets Manager instead.
+	// +optional
+	// +kubebuilder:validation:Enum=secrets-manager;ssm-parameter-store
+	SecureSecretsBackend SecretBackend `json:"secureSecretsBackend,omitempty"`
 }
 
 // AWSMachineStatus defines the observed state of AWSMachine
@@ -154,6 +177,11 @@ type AWSMachineStatus struct {
 	// Ready is true when the provider resource is ready.
 	// +optional
 	Ready bool `json:"ready"`
+
+	// Interruptible reports that this machine is using spot instances and can therefore be interrupted by CAPI when it receives a notice that the spot instance is to be terminated by AWS.
+	// This will be set to true when SpotMarketOptions is not nil (i.e. this machine is using a spot instance).
+	// +optional
+	Interruptible bool `json:"interruptible,omitempty"`
 
 	// Addresses contains the AWS instance associated addresses.
 	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`

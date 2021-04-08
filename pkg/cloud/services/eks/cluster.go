@@ -36,7 +36,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 )
 
 func (s *Service) reconcileCluster(ctx context.Context) error {
@@ -115,6 +115,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 
 	if err := s.reconcileTags(cluster); err != nil {
 		return errors.Wrap(err, "failed updating cluster tags")
+	}
+
+	if err := s.reconcileOIDCProvider(cluster); err != nil {
+		return errors.Wrap(err, "failed reconciling OIDC provider for cluster")
 	}
 
 	return nil
@@ -200,7 +204,7 @@ func (s *Service) deleteClusterAndWait(cluster *eks.Cluster) error {
 	return nil
 }
 
-func makeEksEncryptionConfigs(encryptionConfig *infrav1exp.EncryptionConfig) []*eks.EncryptionConfig {
+func makeEksEncryptionConfigs(encryptionConfig *ekscontrolplanev1.EncryptionConfig) []*eks.EncryptionConfig {
 	if encryptionConfig == nil {
 		return []*eks.EncryptionConfig{}
 	}
@@ -212,7 +216,7 @@ func makeEksEncryptionConfigs(encryptionConfig *infrav1exp.EncryptionConfig) []*
 	}}
 }
 
-func makeVpcConfig(subnets infrav1.Subnets, endpointAccess infrav1exp.EndpointAccess) (*eks.VpcConfigRequest, error) {
+func makeVpcConfig(subnets infrav1.Subnets, endpointAccess ekscontrolplanev1.EndpointAccess) (*eks.VpcConfigRequest, error) {
 	// TODO: Do we need to just add the private subnets?
 	if len(subnets) < 2 {
 		return nil, awserrors.NewFailedDependency("at least 2 subnets is required")
@@ -251,7 +255,7 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess infrav1exp.EndpointAc
 	return vpcConfig, nil
 }
 
-func makeEksLogging(loggingSpec *infrav1exp.ControlPlaneLoggingSpec) *eks.Logging {
+func makeEksLogging(loggingSpec *ekscontrolplanev1.ControlPlaneLoggingSpec) *eks.Logging {
 	if loggingSpec == nil {
 		return nil
 	}
@@ -316,7 +320,7 @@ func (s *Service) createCluster(eksClusterName string) (*eks.Cluster, error) {
 		tags[k] = &tagValue
 	}
 
-	role, err := s.getIAMRole(*s.scope.ControlPlane.Spec.RoleName)
+	role, err := s.GetIAMRole(*s.scope.ControlPlane.Spec.RoleName)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error getting control plane iam role: %s", *s.scope.ControlPlane.Spec.RoleName)
 	}

@@ -18,9 +18,11 @@ package converters
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
+	"github.com/aws/aws-sdk-go/service/ssm"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 )
 
@@ -100,6 +102,33 @@ func MapToSecretsManagerTags(src infrav1.Tags) []*secretsmanager.Tag {
 		}
 
 		tags = append(tags, tag)
+	}
+
+	return tags
+}
+
+// MapToSSMTags converts a infrav1.Tags to a []*ssm.Tag
+func MapToSSMTags(src infrav1.Tags) []*ssm.Tag {
+	tags := make([]*ssm.Tag, 0, len(src))
+
+	for k, v := range src {
+		tag := &ssm.Tag{
+			Key:   aws.String(k),
+			Value: aws.String(v),
+		}
+
+		tags = append(tags, tag)
+	}
+
+	return tags
+}
+
+// ASGTagsToMap converts a []*autoscaling.TagDescription into a infrav1.Tags.
+func ASGTagsToMap(src []*autoscaling.TagDescription) infrav1.Tags {
+	tags := make(infrav1.Tags, len(src))
+
+	for _, t := range src {
+		tags[*t.Key] = *t.Value
 	}
 
 	return tags

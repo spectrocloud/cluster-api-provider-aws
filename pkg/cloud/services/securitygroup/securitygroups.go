@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/tags"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/util/conditions"
 )
 
@@ -94,6 +95,7 @@ func (s *Service) ReconcileSecurityGroups() error {
 		s.scope.SecurityGroups()[role] = existing
 
 		if s.isEKSOwned(existing) {
+			s.scope.V(2).Info("Security group is EKS owned", "role", role, "security-group", s.scope.SecurityGroups()[role])
 			continue
 		}
 
@@ -114,6 +116,7 @@ func (s *Service) ReconcileSecurityGroups() error {
 	// the specified ingress rules.
 	for i := range s.scope.SecurityGroups() {
 		sg := s.scope.SecurityGroups()[i]
+		s.scope.V(2).Info("second pass security group reconciliation", "group-id", sg.ID, "name", sg.Name, "role", i)
 		if sg.Tags.HasAWSCloudProviderOwned(s.scope.Name()) || s.isEKSOwned(sg) {
 			// skip rule reconciliation, as we expect the in-cluster cloud integration to manage them
 			continue
@@ -158,6 +161,11 @@ func (s *Service) ReconcileSecurityGroups() error {
 }
 
 func (s *Service) DeleteSecurityGroups() error {
+	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.ClusterSecurityGroupsReadyCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
+	if err := s.scope.PatchObject(); err != nil {
+		return err
+	}
+
 	for _, sg := range s.scope.SecurityGroups() {
 		current := sg.IngressRules
 
@@ -166,6 +174,7 @@ func (s *Service) DeleteSecurityGroups() error {
 		}
 
 		if err := s.revokeAllSecurityGroupIngressRules(sg.ID); awserrors.IsIgnorableSecurityGroupError(err) != nil {
+			conditions.MarkFalse(s.scope.InfraCluster(), infrav1.ClusterSecurityGroupsReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, err.Error())
 			return err
 		}
 
@@ -180,6 +189,7 @@ func (s *Service) DeleteSecurityGroups() error {
 		}
 
 		if err := s.deleteSecurityGroup(&sg, "managed"); err != nil {
+			conditions.MarkFalse(s.scope.InfraCluster(), infrav1.ClusterSecurityGroupsReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, err.Error())
 			return err
 		}
 	}
@@ -189,17 +199,18 @@ func (s *Service) DeleteSecurityGroups() error {
 		return err
 	}
 
-	errs := []error{}
 	for i := range clusterGroups {
 		sg := clusterGroups[i]
-		if err := s.deleteSecurityGroup(&sg, "cluster managed"); err != nil {
-			errs = append(errs, err)
+		if deleteErr := s.deleteSecurityGroup(&sg, "cluster managed"); deleteErr != nil {
+			err = errlist.NewAggregate([]error{err, deleteErr})
 		}
 	}
 
-	if len(errs) != 0 {
-		return errlist.NewAggregate(errs)
+	if err != nil {
+		conditions.MarkFalse(s.scope.InfraCluster(), infrav1.ClusterSecurityGroupsReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, err.Error())
+		return err
 	}
+	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.ClusterSecurityGroupsReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
 
 	return nil
 }
@@ -369,6 +380,8 @@ func (s *Service) defaultSSHIngressRule(sourceSecurityGroupID string) *infrav1.I
 
 func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (infrav1.IngressRules, error) {
 	// Set source of CNI ingress rules to be control plane and node security groups
+	s.scope.V(2).Info("getting security group ingress rules", "role", role)
+
 	cniRules := make(infrav1.IngressRules, len(s.scope.CNIIngressRules()))
 	for i, r := range s.scope.CNIIngressRules() {
 		cniRules[i] = &infrav1.IngressRule{
@@ -448,6 +461,10 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 			},
 		}
 		return append(cniRules, rules...), nil
+	case infrav1.SecurityGroupEKSNodeAdditional:
+		return infrav1.IngressRules{
+			s.defaultSSHIngressRule(s.scope.SecurityGroups()[infrav1.SecurityGroupBastion].ID),
+		}, nil
 	case infrav1.SecurityGroupAPIServerLB:
 		return infrav1.IngressRules{
 			{

@@ -26,6 +26,7 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"k8s.io/utils/pointer"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	"sigs.k8s.io/yaml"
 )
 
@@ -39,6 +40,27 @@ func Test_RenderCloudformation(t *testing.T) {
 		{
 			fixture:  "default",
 			template: NewTemplate,
+		},
+		{
+			fixture: "with_ssm_secret_backend",
+			template: func() Template {
+				t := NewTemplate()
+				t.Spec.SecureSecretsBackends = []infrav1.SecretBackend{
+					infrav1.SecretBackendSSMParameterStore,
+				}
+				return t
+			},
+		},
+		{
+			fixture: "with_all_secret_backends",
+			template: func() Template {
+				t := NewTemplate()
+				t.Spec.SecureSecretsBackends = []infrav1.SecretBackend{
+					infrav1.SecretBackendSecretsManager,
+					infrav1.SecretBackendSSMParameterStore,
+				}
+				return t
+			},
 		},
 		{
 			fixture: "customsuffix",
@@ -68,7 +90,8 @@ func Test_RenderCloudformation(t *testing.T) {
 			fixture: "with_eks_enable",
 			template: func() Template {
 				t := NewTemplate()
-				t.Spec.ClusterAPIControllers.EKS.Enable = true
+				t.Spec.EKS.Enable = true
+				t.Spec.Nodes.EC2ContainerRegistryReadOnly = true
 				return t
 			},
 		},
@@ -76,8 +99,10 @@ func Test_RenderCloudformation(t *testing.T) {
 			fixture: "with_eks_default_roles",
 			template: func() Template {
 				t := NewTemplate()
-				t.Spec.ClusterAPIControllers.EKS.Enable = true
-				t.Spec.ManagedControlPlane.Disable = false
+				t.Spec.EKS.Enable = true
+				t.Spec.Nodes.EC2ContainerRegistryReadOnly = true
+				t.Spec.EKS.DefaultControlPlaneRole.Disable = false
+				t.Spec.EKS.ManagedMachinePool.Disable = false
 				return t
 			},
 		},
@@ -119,6 +144,7 @@ func Test_RenderCloudformation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		ioutil.WriteFile("/tmp/tmp1", tData, 600)
 
 		if string(tData) != string(data) {
 			dmp := diffmatchpatch.New()

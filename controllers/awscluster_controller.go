@@ -52,8 +52,9 @@ import (
 // AWSClusterReconciler reconciles a AwsCluster object
 type AWSClusterReconciler struct {
 	client.Client
-	Recorder record.EventRecorder
-	Log      logr.Logger
+	Recorder  record.EventRecorder
+	Log       logr.Logger
+	Endpoints []scope.ServiceEndpoint
 }
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=awsclusters,verbs=get;list;watch;create;update;patch;delete
@@ -99,6 +100,7 @@ func (r *AWSClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 		Cluster:        cluster,
 		AWSCluster:     awsCluster,
 		ControllerName: "awscluster",
+		Endpoints:      r.Endpoints,
 	})
 	if err != nil {
 		return reconcile.Result{}, errors.Errorf("failed to create scope: %+v", err)
@@ -106,26 +108,6 @@ func (r *AWSClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 
 	// Always close the scope when exiting this function so we can persist any AWSCluster changes.
 	defer func() {
-		applicableConditions := []clusterv1.ConditionType{
-			infrav1.VpcReadyCondition,
-			infrav1.SubnetsReadyCondition,
-			infrav1.ClusterSecurityGroupsReadyCondition,
-			infrav1.LoadBalancerReadyCondition,
-		}
-
-		if clusterScope.VPC().IsManaged(clusterScope.Name()) {
-			applicableConditions = append(applicableConditions,
-				infrav1.InternetGatewayReadyCondition,
-				infrav1.NatGatewaysReadyCondition,
-				infrav1.RouteTablesReadyCondition)
-
-			if clusterScope.AWSCluster.Spec.Bastion.Enabled {
-				applicableConditions = append(applicableConditions, infrav1.BastionHostReadyCondition)
-			}
-		}
-
-		conditions.SetSummary(clusterScope.AWSCluster, conditions.WithConditions(applicableConditions...), conditions.WithStepCounter())
-
 		if err := clusterScope.Close(); err != nil && reterr == nil {
 			reterr = err
 		}
@@ -194,6 +176,11 @@ func reconcileNormal(clusterScope *scope.ClusterScope) (reconcile.Result, error)
 	if err := networkSvc.ReconcileNetwork(); err != nil {
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile network for AWSCluster %s/%s", awsCluster.Namespace, awsCluster.Name)
 	}
+
+	// CNI related security groups gets deleted from the AWSClusters created prior to networkSpec.cni defaulting (5.5) after upgrading controllers.
+	// https://github.com/kubernetes-sigs/cluster-api-provider-aws/issues/2084
+	// TODO: Remove this after v1aplha4
+	clusterScope.AWSCluster.Default()
 
 	if err := sgService.ReconcileSecurityGroups(); err != nil {
 		conditions.MarkFalse(awsCluster, infrav1.ClusterSecurityGroupsReadyCondition, infrav1.ClusterSecurityGroupReconciliationFailedReason, clusterv1.ConditionSeverityError, err.Error())
@@ -265,6 +252,9 @@ func (r *AWSClusterReconciler) SetupWithManager(mgr ctrl.Manager, options contro
 
 					oldCluster.Status = infrav1.AWSClusterStatus{}
 					newCluster.Status = infrav1.AWSClusterStatus{}
+
+					oldCluster.ObjectMeta.ResourceVersion = ""
+					newCluster.ObjectMeta.ResourceVersion = ""
 
 					return !reflect.DeepEqual(oldCluster, newCluster)
 				},

@@ -21,6 +21,7 @@ import (
 
 	"github.com/awslabs/goformation/v4/cloudformation"
 
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
 )
 
@@ -118,6 +119,40 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 				"elasticloadbalancing:RegisterInstancesWithLoadBalancer",
 				"elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
 				"elasticloadbalancing:RemoveTags",
+				"autoscaling:DescribeAutoScalingGroups",
+				"autoscaling:DescribeInstanceRefreshes",
+				"ec2:CreateLaunchTemplate",
+				"ec2:CreateLaunchTemplateVersion",
+				"ec2:DescribeLaunchTemplates",
+				"ec2:DescribeLaunchTemplateVersions",
+				"ec2:DeleteLaunchTemplate",
+				"ec2:DeleteLaunchTemplateVersions",
+			},
+		},
+		{
+			Effect: iamv1.EffectAllow,
+			Resource: iamv1.Resources{
+				"arn:aws:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*",
+			},
+			Action: iamv1.Actions{
+				"autoscaling:CreateAutoScalingGroup",
+				"autoscaling:UpdateAutoScalingGroup",
+				"autoscaling:CreateOrUpdateTags",
+				"autoscaling:StartInstanceRefresh",
+				"autoscaling:DeleteAutoScalingGroup",
+				"autoscaling:DeleteTags",
+			},
+		},
+		{
+			Effect: iamv1.EffectAllow,
+			Resource: iamv1.Resources{
+				"arn:*:iam::*:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling",
+			},
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
+			},
+			Condition: iamv1.Conditions{
+				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "autoscaling.amazonaws.com"},
 			},
 		},
 		{
@@ -133,25 +168,54 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 			},
 		},
 		{
+			Effect: iamv1.EffectAllow,
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
+			},
+			Resource: iamv1.Resources{
+				"arn:*:iam::*:role/aws-service-role/spot.amazonaws.com/AWSServiceRoleForEC2Spot",
+			},
+			Condition: iamv1.Conditions{
+				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "spot.amazonaws.com"},
+			},
+		},
+		{
 			Effect:   iamv1.EffectAllow,
 			Resource: t.allowedEC2InstanceProfiles(),
 			Action: iamv1.Actions{
 				"iam:PassRole",
 			},
 		},
-		{
-			Effect: iamv1.EffectAllow,
-			Resource: iamv1.Resources{
-				"arn:*:secretsmanager:*:*:secret:aws.cluster.x-k8s.io/*",
-			},
-			Action: iamv1.Actions{
-				"secretsmanager:CreateSecret",
-				"secretsmanager:DeleteSecret",
-				"secretsmanager:TagResource",
-			},
-		},
 	}
-	if t.Spec.ClusterAPIControllers.EKS.Enable {
+	for _, secureSecretBackend := range t.Spec.SecureSecretsBackends {
+		switch secureSecretBackend {
+		case infrav1.SecretBackendSecretsManager:
+			statement = append(statement, iamv1.StatementEntry{
+				Effect: iamv1.EffectAllow,
+				Resource: iamv1.Resources{
+					"arn:*:secretsmanager:*:*:secret:aws.cluster.x-k8s.io/*",
+				},
+				Action: iamv1.Actions{
+					"secretsmanager:CreateSecret",
+					"secretsmanager:DeleteSecret",
+					"secretsmanager:TagResource",
+				},
+			})
+		case infrav1.SecretBackendSSMParameterStore:
+			statement = append(statement, iamv1.StatementEntry{
+				Effect: iamv1.EffectAllow,
+				Resource: iamv1.Resources{
+					"arn:*:ssm:*:*:parameter/cluster.x-k8s.io/*",
+				},
+				Action: iamv1.Actions{
+					"ssm:PutParameter",
+					"ssm:DeleteParameter",
+					"ssm:AddTagsToResource",
+				},
+			})
+		}
+	}
+	if t.Spec.EKS.Enable {
 		allowedIAMActions := iamv1.Actions{
 			"iam:GetRole",
 			"iam:ListAttachedRolePolicies",
@@ -166,7 +230,33 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 			},
 		})
 
-		if t.Spec.ClusterAPIControllers.EKS.IAMRoleCreation {
+		statement = append(statement, iamv1.StatementEntry{
+			Effect: iamv1.EffectAllow,
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
+			},
+			Resource: iamv1.Resources{
+				"arn:aws:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
+			},
+			Condition: iamv1.Conditions{
+				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "eks.amazonaws.com"},
+			},
+		})
+
+		statement = append(statement, iamv1.StatementEntry{
+			Effect: iamv1.EffectAllow,
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
+			},
+			Resource: iamv1.Resources{
+				"arn:aws:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup",
+			},
+			Condition: iamv1.Conditions{
+				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "eks-nodegroup.amazonaws.com"},
+			},
+		})
+
+		if t.Spec.EKS.AllowIAMRoleCreation {
 			allowedIAMActions = append(allowedIAMActions, iamv1.Actions{
 				"iam:DetachRolePolicy",
 				"iam:DeleteRole",
@@ -174,6 +264,20 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 				"iam:TagRole",
 				"iam:AttachRolePolicy",
 			}...)
+
+			statement = append(statement, iamv1.StatementEntry{
+				Action: iamv1.Actions{
+					"iam:ListOpenIDConnectProviders",
+					"iam:CreateOpenIDConnectProvider",
+					"iam:AddClientIDToOpenIDConnectProvider",
+					"iam:UpdateOpenIDConnectProviderThumbprint",
+					"iam:DeleteOpenIDConnectProvider",
+				},
+				Resource: iamv1.Resources{
+					"*",
+				},
+				Effect: iamv1.EffectAllow,
+			})
 		}
 		statement = append(statement, []iamv1.StatementEntry{
 			{
@@ -187,7 +291,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"iam:GetPolicy",
 				},
 				Resource: iamv1.Resources{
-					"arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+					EKSClusterPolicy,
 				},
 				Effect: iamv1.EffectAllow,
 			}, {
@@ -200,9 +304,29 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"eks:DeleteCluster",
 					"eks:UpdateClusterConfig",
 					"eks:UntagResource",
+					"eks:UpdateNodegroupVersion",
+					"eks:DescribeNodegroup",
+					"eks:DeleteNodegroup",
+					"eks:UpdateNodegroupConfig",
+					"eks:CreateNodegroup",
 				},
 				Resource: iamv1.Resources{
 					"arn:aws:eks:*:*:cluster/*",
+					"arn:aws:eks:*:*:nodegroup/*/*/*",
+				},
+				Effect: iamv1.EffectAllow,
+			}, {
+				Action: iamv1.Actions{
+					"eks:ListAddons",
+					"eks:CreateAddon",
+					"eks:DescribeAddonVersions",
+					"eks:DescribeAddon",
+					"eks:DeleteAddon",
+					"eks:UpdateAddon",
+					"eks:TagResource",
+				},
+				Resource: iamv1.Resources{
+					"*",
 				},
 				Effect: iamv1.EffectAllow,
 			}, {
@@ -220,6 +344,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 				Effect: iamv1.EffectAllow,
 			},
 		}...)
+
 	}
 
 	return &iamv1.PolicyDocument{

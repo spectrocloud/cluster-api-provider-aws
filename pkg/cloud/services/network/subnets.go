@@ -73,6 +73,37 @@ func (s *Service) reconcileSubnets() error {
 			record.Warnf(s.scope.InfraCluster(), "FailedDefaultSubnets", "Failed getting default subnets: %v", err)
 			return errors.Wrap(err, "failed getting default subnets")
 		}
+		// Persist the new default subnets to AWSCluster
+		if err := s.scope.PatchObject(); err != nil {
+			return err
+		}
+	}
+
+	if s.scope.SecondaryCidrBlock() != nil {
+		subnetCIDRs, err := cidr.SplitIntoSubnetsIPv4(*s.scope.SecondaryCidrBlock(), *s.scope.VPC().AvailabilityZoneUsageLimit)
+		if err != nil {
+			return err
+		}
+
+		zones, err := s.getAvailableZones()
+		if err != nil {
+			return err
+		}
+
+		for i, sub := range subnetCIDRs {
+			secondarySub := &infrav1.SubnetSpec{
+				CidrBlock:        sub.String(),
+				AvailabilityZone: zones[i],
+				IsPublic:         false,
+				Tags: infrav1.Tags{
+					infrav1.NameAWSSubnetAssociation: infrav1.SecondarySubnetTagValue,
+				},
+			}
+			existingSubnet := existing.FindEqual(secondarySub)
+			if existingSubnet == nil {
+				subnets = append(subnets, secondarySub)
+			}
+		}
 	}
 
 	for _, sub := range subnets {
@@ -104,14 +135,21 @@ func (s *Service) reconcileSubnets() error {
 		}
 	}
 
-	// Check that we need at least 1 private and 1 public subnet after we have updated the metadata
-	if len(subnets.FilterPrivate()) < 1 {
-		record.Warnf(s.scope.InfraCluster(), "FailedNoPrivateSubnet", "Expected at least 1 private subnet but got 0")
-		return errors.New("expected at least 1 private subnet but got 0")
-	}
-	if len(subnets.FilterPublic()) < 1 {
-		record.Warnf(s.scope.InfraCluster(), "FailedNoPublicSubnet", "Expected at least 1 public subnet but got 0")
-		return errors.New("expected at least 1 public subnet but got 0")
+	if !unmanagedVPC {
+		// Check that we need at least 1 private and 1 public subnet after we have updated the metadata
+		if len(subnets.FilterPrivate()) < 1 {
+			record.Warnf(s.scope.InfraCluster(), "FailedNoPrivateSubnet", "Expected at least 1 private subnet but got 0")
+			return errors.New("expected at least 1 private subnet but got 0")
+		}
+		if len(subnets.FilterPublic()) < 1 {
+			record.Warnf(s.scope.InfraCluster(), "FailedNoPublicSubnet", "Expected at least 1 public subnet but got 0")
+			return errors.New("expected at least 1 public subnet but got 0")
+		}
+	} else if unmanagedVPC {
+		if len(subnets) < 1 {
+			record.Warnf(s.scope.InfraCluster(), "FailedNoSubnet", "Expected at least 1 subnet but got 0")
+			return errors.New("expected at least 1 subnet but got 0")
+		}
 	}
 
 	// Proceed to create the rest of the subnets that don't have an ID.

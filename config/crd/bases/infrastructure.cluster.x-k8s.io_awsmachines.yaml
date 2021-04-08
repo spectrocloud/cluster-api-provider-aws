@@ -314,7 +314,7 @@ spec:
                 description: CloudInit defines options related to the bootstrapping systems where CloudInit is used.
                 properties:
                   insecureSkipSecretsManager:
-                    description: InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager to ensure privacy of userdata. By default, a cloud-init boothook shell script is prepended to download the userdata from Secrets Manager and additionally delete the secret.
+                    description: InsecureSkipSecretsManager, when set to true will not use AWS Secrets Manager or AWS Systems Manager Parameter Store to ensure privacy of userdata. By default, a cloud-init boothook shell script is prepended to download the userdata from Secrets Manager and additionally delete the secret.
                     type: boolean
                   secretCount:
                     description: SecretCount is the number of secrets used to form the complete secret
@@ -322,6 +322,12 @@ spec:
                     type: integer
                   secretPrefix:
                     description: SecretPrefix is the prefix for the secret name. This is stored temporarily, and deleted when the machine registers as a node against the workload cluster.
+                    type: string
+                  secureSecretsBackend:
+                    description: SecureSecretsBackend, when set to parameter-store will utilize the AWS Systems Manager Parameter Storage to distribute secrets. By default or with the value of secrets-manager, will use AWS Secrets Manager instead.
+                    enum:
+                    - secrets-manager
+                    - ssm-parameter-store
                     type: string
                 type: object
               failureDomain:
@@ -351,7 +357,7 @@ spec:
               nonRootVolumes:
                 description: Configuration options for the non root storage volumes.
                 items:
-                  description: Volume encapsulates the configuration options for the root volume
+                  description: Volume encapsulates the configuration options for the storage device
                   properties:
                     deviceName:
                       description: Device name
@@ -367,12 +373,12 @@ spec:
                       format: int64
                       type: integer
                     size:
-                      description: Size specifies size (in Gi) of the root storage device. Must be greater than the image root snapshot size or 8 (whichever is greater).
+                      description: Size specifies size (in Gi) of the storage device. Must be greater than the image snapshot size or 8 (whichever is greater).
                       format: int64
                       minimum: 8
                       type: integer
                     type:
-                      description: Type is the type of the root volume (e.g. gp2, io1, etc...).
+                      description: Type is the type of the volume (e.g. gp2, io1, etc...).
                       type: string
                   required:
                   - size
@@ -401,12 +407,12 @@ spec:
                     format: int64
                     type: integer
                   size:
-                    description: Size specifies size (in Gi) of the root storage device. Must be greater than the image root snapshot size or 8 (whichever is greater).
+                    description: Size specifies size (in Gi) of the storage device. Must be greater than the image snapshot size or 8 (whichever is greater).
                     format: int64
                     minimum: 8
                     type: integer
                   type:
-                    description: Type is the type of the root volume (e.g. gp2, io1, etc...).
+                    description: Type is the type of the volume (e.g. gp2, io1, etc...).
                     type: string
                 required:
                 - size
@@ -449,6 +455,13 @@ spec:
                     description: ID of resource
                     type: string
                 type: object
+              tenancy:
+                description: Tenancy indicates if instance should run on shared or single-tenant hardware.
+                enum:
+                - default
+                - dedicated
+                - host
+                type: string
               uncompressedUserData:
                 description: UncompressedUserData specify whether the user data is gzip-compressed before it is sent to ec2 instance. cloud-init has built-in support for gzip-compressed user data user data stored in aws secret manager is always gzip-compressed.
                 type: boolean
@@ -510,6 +523,9 @@ spec:
               instanceState:
                 description: InstanceState is the state of the AWS instance for this machine.
                 type: string
+              interruptible:
+                description: Interruptible reports that this machine is using spot instances and can therefore be interrupted by CAPI when it receives a notice that the spot instance is to be terminated by AWS. This will be set to true when SpotMarketOptions is not nil (i.e. this machine is using a spot instance).
+                type: boolean
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean

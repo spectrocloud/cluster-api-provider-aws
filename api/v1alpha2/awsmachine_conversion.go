@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha2
 
 import (
+	"reflect"
+
 	apiconversion "k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/utils/pointer"
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
@@ -37,13 +39,15 @@ func (src *AWSMachine) ConvertTo(dstRaw conversion.Hub) error {
 	if ok, err := utilconversion.UnmarshalData(src, restored); err != nil || !ok {
 		return err
 	}
-	restoreAWSMachineSpec(&restored.Spec, &dst.Spec)
+	restoreAWSMachineSpec(&restored.Spec, &dst.Spec, &src.Spec)
+	restoreAWSMachineStatus(&restored.Status, &dst.Status)
+
 	// Manual conversion for conditions
 	dst.SetConditions(restored.GetConditions())
 	return nil
 }
 
-func restoreAWSMachineSpec(restored, dst *infrav1alpha3.AWSMachineSpec) {
+func restoreAWSMachineSpec(restored, dst *infrav1alpha3.AWSMachineSpec, src *AWSMachineSpec) {
 	dst.ImageLookupFormat = restored.ImageLookupFormat
 	dst.ImageLookupBaseOS = restored.ImageLookupBaseOS
 
@@ -70,6 +74,27 @@ func restoreAWSMachineSpec(restored, dst *infrav1alpha3.AWSMachineSpec) {
 			dst.NonRootVolumes = append(dst.NonRootVolumes, volume.DeepCopy())
 		}
 	}
+	if src.RootDeviceSize != 0 {
+		if dst.RootVolume == nil {
+			dst.RootVolume = &infrav1alpha3.Volume{
+				Size: src.RootDeviceSize,
+			}
+		} else {
+			dst.RootVolume.Size = src.RootDeviceSize
+		}
+	}
+
+	dst.Tenancy = restored.Tenancy
+
+	if restored.CloudInit.SecureSecretsBackend != "" {
+		if src.CloudInit != nil {
+			dst.CloudInit.SecureSecretsBackend = restored.CloudInit.SecureSecretsBackend
+		}
+	}
+}
+
+func restoreAWSMachineStatus(restored, dst *infrav1alpha3.AWSMachineStatus) {
+	dst.Interruptible = restored.Interruptible
 }
 
 // ConvertFrom converts from the Hub version (v1alpha3) to this version.
@@ -112,10 +137,10 @@ func Convert_v1alpha2_AWSMachineSpec_To_v1alpha3_AWSMachineSpec(in *AWSMachineSp
 	// Manually convert SSHKeyName
 	out.SSHKeyName = pointer.StringPtr(in.SSHKeyName)
 
-	if in.CloudInit == nil {
-		out.CloudInit.InsecureSkipSecretsManager = true
-	} else if err := Convert_v1alpha2_CloudInit_To_v1alpha3_CloudInit(in.CloudInit, &out.CloudInit, s); err != nil {
-		return err
+	if in.CloudInit != nil {
+		if err := Convert_v1alpha2_CloudInit_To_v1alpha3_CloudInit(in.CloudInit, &out.CloudInit, s); err != nil {
+			return err
+		}
 	}
 
 	// Manually convert RootDeviceSize. This may be overridden by restoring / upconverting from annotation.
@@ -142,9 +167,12 @@ func Convert_v1alpha3_AWSMachineSpec_To_v1alpha2_AWSMachineSpec(in *infrav1alpha
 	if in.SSHKeyName != nil {
 		out.SSHKeyName = *in.SSHKeyName
 	}
-	out.CloudInit = &CloudInit{}
-	if err := Convert_v1alpha3_CloudInit_To_v1alpha2_CloudInit(&in.CloudInit, out.CloudInit, s); err != nil {
-		return err
+
+	if !reflect.DeepEqual(in.CloudInit, infrav1alpha3.CloudInit{}) {
+		out.CloudInit = &CloudInit{}
+		if err := Convert_v1alpha3_CloudInit_To_v1alpha2_CloudInit(&in.CloudInit, out.CloudInit, s); err != nil {
+			return err
+		}
 	}
 
 	if in.RootVolume != nil {
@@ -188,7 +216,7 @@ func Convert_v1alpha2_Instance_To_v1alpha3_Instance(in *Instance, out *infrav1al
 		return err
 	}
 
-	// Manually convert RootDeviceSize.
+	// Manually convert RootDeviceSize. This may be overridden by restoring / upconverting from annotation.
 	if in.RootDeviceSize != 0 {
 		out.RootVolume = &infrav1alpha3.Volume{
 			Size: in.RootDeviceSize,

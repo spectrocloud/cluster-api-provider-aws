@@ -12,36 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ROOT_DIR_RELATIVE := .
+
+include $(ROOT_DIR_RELATIVE)/common.mk
+
 # If you update this file, please follow
 # https://suva.sh/posts/well-documented-makefiles
-
-# Ensure Make is run with bash shell as some syntax below is bash-specific
-SHELL:=/usr/bin/env bash
-
-.DEFAULT_GOAL:=help
-
-# Use GOPROXY environment variable if set
-GOPROXY := $(shell go env GOPROXY)
-ifeq ($(GOPROXY),)
-GOPROXY := https://proxy.golang.org
-endif
-export GOPROXY
-
-# Active module mode, as we use go modules to manage dependencies
-export GO111MODULE=on
 
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
 TOOLS_DIR := hack/tools
+TOOLS_DIR_DEPS := $(TOOLS_DIR)/go.sum $(TOOLS_DIR)/go.mod $(TOOLS_DIR)/Makefile
 TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
-TOOLS_SHARE_DIR := $(TOOLS_DIR)/share
+
 BIN_DIR := bin
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
+GH_REPO ?= kubernetes-sigs/cluster-api-provider-aws
 TEST_E2E_DIR := test/e2e
 
 # Files
 E2E_DATA_DIR ?= $(REPO_ROOT)/test/e2e/data
 E2E_CONF_PATH  ?= $(E2E_DATA_DIR)/e2e_conf.yaml
+E2E_EKS_CONF_PATH ?= $(E2E_DATA_DIR)/e2e_eks_conf.yaml
 KUBETEST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance.yaml)
 KUBETEST_FAST_CONF_PATH ?= $(abspath $(E2E_DATA_DIR)/kubetest/conformance-fast.yaml)
 CONFORMANCE_CI_TEMPLATE := $(ARTIFACTS)/templates/cluster-template-conformance-ci-artifacts.yaml
@@ -49,39 +41,66 @@ EXP_DIR := exp
 
 # Binaries.
 CLUSTERCTL := $(BIN_DIR)/clusterctl
-KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
-KIND := $(TOOLS_BIN_DIR)/kind
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
+CONVERSION_GEN := $(TOOLS_BIN_DIR)/conversion-gen
 DEFAULTER_GEN := $(TOOLS_BIN_DIR)/defaulter-gen
 ENVSUBST := $(TOOLS_BIN_DIR)/envsubst
-GOLANGCI_LINT := $(TOOLS_BIN_DIR)/golangci-lint
-MOCKGEN := $(TOOLS_BIN_DIR)/mockgen
-CONVERSION_GEN := $(TOOLS_BIN_DIR)/conversion-gen
-RELEASE_NOTES_BIN := bin/release-notes
-RELEASE_NOTES := $(TOOLS_DIR)/$(RELEASE_NOTES_BIN)
+GH := $(TOOLS_BIN_DIR)/gh
 GINKGO := $(TOOLS_BIN_DIR)/ginkgo
+GOJQ := $(TOOLS_BIN_DIR)/gojq
+GOLANGCI_LINT := $(TOOLS_BIN_DIR)/golangci-lint
+KIND := $(TOOLS_BIN_DIR)/kind
+KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
+MOCKGEN := $(TOOLS_BIN_DIR)/mockgen
+RELEASE_NOTES := $(TOOLS_BIN_DIR)/release-notes
 SSM_PLUGIN := $(TOOLS_BIN_DIR)/session-manager-plugin
 
-UNAME := $(shell uname -s)
 PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
+DOCKER_CLI_EXPERIMENTAL=enabled
+DOCKER_BUILDKIT=1
 
-export PATH
+# Release variables
 
-# Define Docker related variables. Releases should modify and double check these vars.
-
-# TODO this means anyone without a default gcloud project + gcloud binary will break on default `make docker-build` target, remove this gcloud dep if possible.
-REGISTRY ?= gcr.io/$(shell gcloud config get-value project)
-STAGING_REGISTRY := gcr.io/k8s-staging-cluster-api-aws
+STAGING_REGISTRY ?= gcr.io/k8s-staging-cluster-api-aws
+STAGING_BUCKET ?= artifacts.k8s-staging-cluster-api-aws.appspot.com
+BUCKET ?= $(STAGING_BUCKET)
 PROD_REGISTRY := us.gcr.io/k8s-artifacts-prod/cluster-api-aws
-IMAGE_NAME ?= cluster-api-aws-controller
-CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
+REGISTRY ?= $(STAGING_REGISTRY)
+RELEASE_TAG ?= $(shell git describe --abbrev=0 2>/dev/null)
+PULL_BASE_REF ?= $(RELEASE_TAG) # PULL_BASE_REF will be provided by Prow
+RELEASE_ALIAS_TAG ?= $(PULL_BASE_REF)
+RELEASE_DIR := out
+
 TAG ?= dev
 ARCH ?= amd64
-ALL_ARCH = amd64 arm arm64 ppc64le s390x
+ALL_ARCH ?= amd64 arm arm64 ppc64le s390x
+
+# main controller
+CORE_IMAGE_NAME ?= cluster-api-aws-controller
+CORE_CONTROLLER_IMG ?= $(REGISTRY)/$(CORE_IMAGE_NAME)
+CORE_CONTROLLER_ORIGINAL_IMG := gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller
+CORE_CONTROLLER_NAME := capa-controller-manager
+CORE_MANIFEST_FILE := infrastructure-components
+CORE_CONFIG_DIR := config
+CORE_NAMESPACE := capa-system
 
 # bootstrap
 EKS_BOOTSTRAP_IMAGE_NAME ?= eks-bootstrap-controller
 EKS_BOOTSTRAP_CONTROLLER_IMG ?= $(REGISTRY)/$(EKS_BOOTSTRAP_IMAGE_NAME)
+EKS_BOOTSTRAP_CONTROLLER_ORIGINAL_IMG := gcr.io/k8s-staging-cluster-api-aws/eks-bootstrap-controller
+EKS_BOOTSTRAP_CONTROLLER_NAME := capa-eks-bootstrap-controller-manager
+EKS_BOOTSTRAP_MANIFEST_FILE := eks-bootstrap-components
+EKS_BOOTSTRAP_CONFIG_DIR := bootstrap/eks/config
+EKS_BOOTSTRAP_NAMESPACE := capa-eks-bootstrap-system
+
+# bootstrap
+EKS_CONTROLPLANE_IMAGE_NAME ?= eks-controlplane-controller
+EKS_CONTROLPLANE_CONTROLLER_IMG ?= $(REGISTRY)/$(EKS_CONTROLPLANE_IMAGE_NAME)
+EKS_CONTROLPLANE_CONTROLLER_ORIGINAL_IMG := gcr.io/k8s-staging-cluster-api-aws/eks-controlplane-controller
+EKS_CONTROLPLANE_CONTROLLER_NAME := capa-eks-control-plane-controller-manager
+EKS_CONTROLPLANE_MANIFEST_FILE := eks-controlplane-components
+EKS_CONTROLPLANE_CONFIG_DIR := controlplane/eks/config
+EKS_CONTROLPLANE_NAMESPACE := capa-eks-control-plane-system
 
 # Allow overriding manifest generation destination directory
 MANIFEST_ROOT ?= config
@@ -92,31 +111,18 @@ RBAC_ROOT ?= $(MANIFEST_ROOT)/rbac
 # Allow overriding the imagePullPolicy
 PULL_POLICY ?= Always
 
-# Hosts running SELinux need :z added to volume mounts
-SELINUX_ENABLED := $(shell cat /sys/fs/selinux/enforce 2> /dev/null || echo 0)
-
-ifeq ($(SELINUX_ENABLED),1)
-  DOCKER_VOL_OPTS?=:z
-endif
-
 # Set build time variables including version details
 LDFLAGS := $(shell source ./hack/version.sh; version::ldflags)
 
-GOLANG_VERSION := 1.13.8
-
 # 'functional tests' as the ginkgo filter will run ALL tests ~ 2 hours @ 3 node concurrency.
-E2E_FOCUS ?= "functional tests"
+E2E_UNMANAGED_FOCUS ?= "functional tests - unmanaged"
 # Instead, you can run a quick smoke test, it should run fast (9 minutes)...
-# E2E_FOCUS := "Create cluster with name having"
+# E2E_UNMANAGED_FOCUS := "Create cluster with name having"
+# For running CAPI e2e tests: E2E_UNMANAGED_FOCUS := "Cluster API E2E tests"
+USE_EXISTING_CLUSTER ?= "false"
 
 GINKGO_NODES ?= 2
-
-## --------------------------------------
-## Help
-## --------------------------------------
-
-help:  ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+GINKGO_ARGS ?=
 
 ## --------------------------------------
 ## Testing
@@ -129,32 +135,31 @@ $(ARTIFACTS):
 test: ## Run tests
 	source ./scripts/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./...
 
-.PHONY: test-integration
-test-integration: ## Run integration tests
-	source ./scripts/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v -tags=integration ./test/integration/...
-
 .PHONY: test-e2e ## Run e2e tests using clusterctl
 test-e2e: $(GINKGO) $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run e2e tests
-	time $(GINKGO) -trace -progress -v -tags=e2e -focus=$(E2E_FOCUS) $(GINKGO_ARGS) ./test/e2e/... -- -config-path="$(E2E_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" $(E2E_ARGS)
+	time $(GINKGO) -trace -progress -v -tags=e2e -focus=$(E2E_UNMANAGED_FOCUS) $(GINKGO_ARGS) ./test/e2e/suites/unmanaged/... -- -config-path="$(E2E_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" --data-folder="$(E2E_DATA_DIR)" $(E2E_ARGS) -use-existing-cluster=$(USE_EXISTING_CLUSTER)
+
+.PHONY: test-e2e-eks ## Run EKS e2e tests using clusterctl
+test-e2e-eks: $(GINKGO) $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run eks e2e tests
+	time $(GINKGO) -trace -progress -v -tags=e2e $(GINKGO_ARGS) ./test/e2e/suites/managed/... -- -config-path="$(E2E_EKS_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" --data-folder="$(E2E_DATA_DIR)" --source-template="eks/cluster-template-eks-control-plane-only.yaml" --skip-eks-upgrade-tests $(E2E_ARGS)
 
 .PHONY: e2e-image
-e2e-image:
-ifndef FASTBUILD
-	docker build -f Dockerfile --tag="capa-manager:e2e" .
-else
-	$(MAKE) manager
-	docker build -f Dockerfile.fastbuild --tag="capa-manager:e2e" .
-endif
+e2e-image: docker-pull-prerequisites
+	docker build -f Dockerfile --tag="gcr.io/k8s-staging-cluster-api/capa-manager:e2e" .
+	docker build -f Dockerfile --tag="gcr.io/k8s-staging-cluster-api/capa-eks-bootstrap-manager:e2e" --build-arg package=./bootstrap/eks  .
+	docker build -f Dockerfile --tag="gcr.io/k8s-staging-cluster-api/capa-eks-controlplane-manager:e2e" --build-arg package=./controlplane/eks  .
 
+E2E_ARGS ?=
 CONFORMANCE_E2E_ARGS ?= -kubetest.config-file=$(KUBETEST_CONF_PATH)
 CONFORMANCE_E2E_ARGS += $(E2E_ARGS)
 CONFORMANCE_GINKGO_ARGS ?= -stream
 CONFORMANCE_GINKGO_ARGS += $(GINKGO_ARGS)
 .PHONY: test-conformance
-test-conformance: ## Run clusterctl based conformance test on workload cluster (requires Docker).
-	$(MAKE) test-e2e E2E_FOCUS="conformance" E2E_ARGS='$(CONFORMANCE_E2E_ARGS)' GINKGO_ARGS='$(CONFORMANCE_GINKGO_ARGS)'
+test-conformance: $(GINKGO) $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run clusterctl based conformance test on workload cluster (requires Docker).
+	time $(GINKGO) -trace -progress -v -tags=e2e -focus="conformance" $(CONFORMANCE_GINKGO_ARGS) ./test/e2e/suites/conformance/... -- -config-path="$(E2E_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" --data-folder="$(E2E_DATA_DIR)" $(CONFORMANCE_E2E_ARGS)
 
-test-conformance-fast: ## Run clusterctl based conformance test on workload cluster (requires Docker) using a subset of the conformance suite in parallel. Run with FASTBUILD=true to skip full CAPA rebuild.
+
+test-conformance-fast: ## Run clusterctl based conformance test on workload cluster (requires Docker) using a subset of the conformance suite in parallel.
 	$(MAKE) test-conformance CONFORMANCE_E2E_ARGS="-kubetest.config-file=$(KUBETEST_FAST_CONF_PATH) -kubetest.ginkgo-nodes=5 $(E2E_ARGS)"
 ## --------------------------------------
 ## Binaries
@@ -166,6 +171,7 @@ binaries: managers clusterawsadm ## Builds and installs all binaries
 managers:
 	$(MAKE) manager-aws-infrastructure
 	$(MAKE) manager-eks-bootstrap
+	$(MAKE) manager-eks-controlplane
 
 .PHONY: manager-aws-infrastructure
 manager-aws-infrastructure: ## Build manager binary.
@@ -175,80 +181,14 @@ manager-aws-infrastructure: ## Build manager binary.
 manager-eks-bootstrap:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/eks-bootstrap-manager sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks
 
+.PHONY: manager-eks-controlplane
+manager-eks-controlplane:
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/eks-controlplane-manager sigs.k8s.io/cluster-api-provider-aws/controlplane/eks
+
+
 .PHONY: clusterawsadm
 clusterawsadm: ## Build clusterawsadm binary.
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/clusterawsadm ./cmd/clusterawsadm
-
-## --------------------------------------
-## Tooling Binaries
-## --------------------------------------
-
-$(TOOLS_BIN_DIR):
-	mkdir -p $@
-
-$(TOOLS_SHARE_DIR):
-	mkdir -p $@
-
-$(CLUSTERCTL): go.mod ## Build clusterctl binary.
-	go build -o $(BIN_DIR)/clusterctl sigs.k8s.io/cluster-api/cmd/clusterctl
-
-$(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
-
-$(ENVSUBST): $(TOOLS_DIR)/go.mod # Build envsubst from tools folder.
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) github.com/a8m/envsubst/cmd/envsubst
-
-$(GOLANGCI_LINT): $(TOOLS_DIR)/go.mod # Build golangci-lint from tools folder.
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) github.com/golangci/golangci-lint/cmd/golangci-lint
-
-$(MOCKGEN): $(TOOLS_DIR)/go.mod # Build mockgen from tools folder.
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) github.com/golang/mock/mockgen
-
-$(CONVERSION_GEN): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) k8s.io/code-generator/cmd/conversion-gen
-
-$(DEFAULTER_GEN): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) k8s.io/code-generator/cmd/defaulter-gen
-
-$(KUSTOMIZE): $(TOOLS_DIR)/go.mod # Build kustomize from tools folder.
-	cd $(TOOLS_DIR); go build -tags=tools -o $(subst hack/tools/,,$@) sigs.k8s.io/kustomize/kustomize/v3
-
-$(RELEASE_NOTES) : $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR) && go build -tags tools -o $(subst hack/tools/,,$@) sigs.k8s.io/cluster-api/hack/tools/release
-
-$(KIND): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR) && go build -tags tools -o $(subst hack/tools/,,$@) sigs.k8s.io/kind
-
-$(GINKGO): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR) && go build -tags=tools -o $(subst hack/tools/,,$@) github.com/onsi/ginkgo/ginkgo
-
-## ------------------------------------------------------------------------------------------------
-## AWS Session Manager Plugin Installation. Currently support Linux and MacOS AMD64 architectures.
-## ------------------------------------------------------------------------------------------------
-
-SSM_SHARE := $(TOOLS_SHARE_DIR)/ssm
-
-$(SSM_SHARE): $(TOOLS_SHARE_DIR)
-	mkdir -p $@
-
-$(SSM_SHARE)/session-manager-plugin.deb: $(SSM_SHARE)
-	curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o $@
-
-$(SSM_SHARE)/sessionmanager-bundle.zip: $(SSM_SHARE)
-	curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/mac/sessionmanager-bundle.zip" -o $@
-
-$(SSM_SHARE)/data.tar.gz: $(SSM_SHARE)/session-manager-plugin.deb
-	cd $(SSM_SHARE) && ar x session-manager-plugin.deb data.tar.gz
-
-$(SSM_PLUGIN): $(TOOLS_BIN_DIR)
-ifeq ($(UNAME), Linux)
-	$(MAKE) $(SSM_SHARE)/data.tar.gz
-	cd $(TOOLS_BIN_DIR) && tar -xvf ../share/ssm/data.tar.gz usr/local/sessionmanagerplugin/bin/session-manager-plugin --strip-components 4 --directory $(TOOLS_BIN_DIR)
-endif
-ifeq ($(UNAME), Darwin)
-	$(MAKE) $(SSM_SHARE)/sessionmanager-bundle.zip
-	cd $(TOOLS_BIN_DIR) && unzip -j ../share/ssm/sessionmanager-bundle.zip sessionmanager-bundle/bin/session-manager-plugin
-endif
 
 ## --------------------------------------
 ## Linting
@@ -273,12 +213,15 @@ generate: ## Generate code
 	$(MAKE) generate-manifests
 
 .PHONY: generate-go
-generate-go:
+generate-go: $(MOCKGEN)
+	go generate ./...
 	$(MAKE) generate-go-core
 	$(MAKE) generate-go-eks-bootstrap
+	$(MAKE) generate-go-eks-controlplane
 
 .PHONY: generate-go-core
-generate-go-core: $(CONTROLLER_GEN) $(CONVERSION_GEN) $(MOCKGEN) $(DEFAULTER_GEN) ## Runs Go related generate targets
+generate-go-core: ## Runs Go related generate targets
+	$(MAKE) -B $(CONTROLLER_GEN) $(CONVERSION_GEN) $(DEFAULTER_GEN)
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		paths=./$(EXP_DIR)/api/... \
@@ -299,19 +242,25 @@ generate-go-core: $(CONTROLLER_GEN) $(CONVERSION_GEN) $(MOCKGEN) $(DEFAULTER_GEN
 		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
 
 .PHONY: generate-go-eks-bootstrap
-generate-go-eks-bootstrap: $(CONTROLLER_GEN) $(CONVERSION_GEN)
+generate-go-eks-bootstrap: $(CONTROLLER_GEN)
 	$(CONTROLLER_GEN) \
 		paths=./bootstrap/eks/api/... \
-		paths=./bootstrap/eks/types/... \
+		object:headerFile=./hack/boilerplate/boilerplate.generatego.txt
+
+.PHONY: generate-go-eks-controlplane
+generate-go-eks-controlplane: $(CONTROLLER_GEN) $(CONVERSION_GEN)
+	$(CONTROLLER_GEN) \
+		paths=./controlplane/eks/api/... \
 		object:headerFile=./hack/boilerplate/boilerplate.generatego.txt
 
 .PHONY: generate-manifests
 generate-manifests:
 	$(MAKE) generate-core-manifests
 	$(MAKE) generate-eks-bootstrap-manifests
+	$(MAKE) generate-eks-controlplane-manifests
 
 .PHONY: generate-core-manifests
-generate-core-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
+generate-core-manifests:$(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		paths=./$(EXP_DIR)/api/... \
@@ -337,6 +286,18 @@ generate-eks-bootstrap-manifests: $(CONTROLLER_GEN)
 		output:webhook:dir=./bootstrap/eks/config/webhook \
 		webhook
 
+.PHONY: generate-eks-controlplane-manifests
+generate-eks-controlplane-manifests: $(CONTROLLER_GEN)
+	$(CONTROLLER_GEN) \
+		paths=./controlplane/eks/api/... \
+		paths=./controlplane/eks/controllers/... \
+		crd:crdVersions=v1 \
+		rbac:roleName=manager-role \
+		output:crd:dir=./controlplane/eks/config/crd/bases \
+		output:rbac:dir=./controlplane/eks/config/rbac \
+		output:webhook:dir=./controlplane/eks/config/webhook \
+		webhook
+
 ## --------------------------------------
 ## Docker
 ## --------------------------------------
@@ -345,24 +306,31 @@ generate-eks-bootstrap-manifests: $(CONTROLLER_GEN)
 docker-build:
 	$(MAKE) ARCH=$(ARCH) docker-build-core
 	$(MAKE) ARCH=$(ARCH) docker-build-eks-bootstrap
+	$(MAKE) ARCH=$(ARCH) docker-build-eks-controlplane
 
 .PHONY: docker-build-core
-docker-build-core: ## Build the docker image for controller-manager
-	docker build --pull --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/manager/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/manager/manager_pull_policy.yaml"
+docker-build-core: docker-pull-prerequisites ## Build the docker image for controller-manager
+	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-build-eks-bootstrap
-docker-build-eks-bootstrap:
-	docker build --pull --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" --build-arg package=./bootstrap/eks . -t $(EKS_BOOTSTRAP_CONTROLLER_IMG)-$(ARCH):$(TAG)
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(EKS_BOOTSTRAP_CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./bootstrap/eks/config/manager/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./bootstrap/eks/config/manager/manager_pull_policy.yaml"
+docker-build-eks-bootstrap: docker-pull-prerequisites
+	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" --build-arg package=./bootstrap/eks . -t $(EKS_BOOTSTRAP_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
+.PHONY: docker-build-eks-controlplane
+docker-build-eks-controlplane: docker-pull-prerequisites
+	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" --build-arg package=./controlplane/eks . -t $(EKS_CONTROLPLANE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
-	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker push $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 	docker push $(EKS_BOOTSTRAP_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker push $(EKS_CONTROLPLANE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+
+.PHONY: docker-pull-prerequisites
+docker-pull-prerequisites:
+	docker pull docker.io/docker/dockerfile:1.1-experimental
+	docker pull docker.io/library/golang:$(GOLANG_VERSION)
+	docker pull gcr.io/distroless/static:latest
 
 ## --------------------------------------
 ## Docker — All ARCH
@@ -378,6 +346,7 @@ docker-build-%:
 docker-push-all: $(addprefix docker-push-,$(ALL_ARCH))
 	$(MAKE) docker-push-core-manifest
 	$(MAKE) docker-push-eks-bootstrap-manifest
+	$(MAKE) docker-push-eks-controlplane-manifest
 
 docker-push-%:
 	$(MAKE) ARCH=$* docker-push
@@ -385,66 +354,71 @@ docker-push-%:
 .PHONY: docker-push-core-manifest
 docker-push-core-manifest: ## Push the fat manifest docker image.
 	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
-	docker manifest create --amend $(CONTROLLER_IMG):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(CONTROLLER_IMG)\-&:$(TAG)~g")
-	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${CONTROLLER_IMG}:${TAG} ${CONTROLLER_IMG}-$${arch}:${TAG}; done
-	docker manifest push --purge ${CONTROLLER_IMG}:${TAG}
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./config/manager/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./config/manager/manager_pull_policy.yaml"
+	$(MAKE) docker-push-manifest CONTROLLER_IMG=$(CORE_CONTROLLER_IMG) MANIFEST_FILE=$(CORE_MANIFEST_FILE)
 
 .PHONY: docker-push-eks-bootstrap-manifest
 docker-push-eks-bootstrap-manifest: ## Push the fat manifest docker image.
 	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
-	docker manifest create --amend $(EKS_BOOTSTRAP_CONTROLLER_IMG):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(EKS_BOOTSTRAP_CONTROLLER_IMG)\-&:$(TAG)~g")
-	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${EKS_BOOTSTRAP_CONTROLLER_IMG}:${TAG} ${EKS_BOOTSTRAP_CONTROLLER_IMG}-$${arch}:${TAG}; done
-	docker manifest push --purge ${EKS_BOOTSTRAP_CONTROLLER_IMG}:${TAG}
-	$(MAKE) set-manifest-image MANIFEST_IMG=$(EKS_BOOTSTRAP_CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="./bootstrap/eks/config/manager/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy TARGET_RESOURCE="./bootstrap/eks/config/manager/manager_pull_policy.yaml"
+	$(MAKE) docker-push-manifest CONTROLLER_IMG=$(EKS_BOOTSTRAP_CONTROLLER_IMG) MANIFEST_FILE=$(EKS_BOOTSTRAP_MANIFEST_FILE)
 
-.PHONY: set-manifest-image
-set-manifest-image:
-	$(info Updating kustomize image patch file for manager resource)
-	sed -i'' -e 's@image: .*@image: '"${MANIFEST_IMG}:$(MANIFEST_TAG)"'@' $(TARGET_RESOURCE)
+.PHONY: docker-push-eks-controlplane-manifest
+docker-push-eks-controlplane-manifest: ## Push the fat manifest docker image.
+	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
+	$(MAKE) docker-push-manifest CONTROLLER_IMG=$(EKS_CONTROLPLANE_CONTROLLER_IMG) MANIFEST_FILE=$(EKS_CONTROLPLANE_MANIFEST_FILE)
 
-.PHONY: set-manifest-pull-policy
-set-manifest-pull-policy:
-	$(info Updating kustomize pull policy file for manager resources)
-	sed -i'' -e 's@imagePullPolicy: .*@imagePullPolicy: '"$(PULL_POLICY)"'@' $(TARGET_RESOURCE)
+.PHONY: docker-push-manifest
+docker-push-manifest:
+	docker manifest create --amend $(CONTROLLER_IMG):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(CONTROLLER_IMG)\-&:$(TAG)~g")
+	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${CONTROLLER_IMG}:${TAG} ${CONTROLLER_IMG}-$${arch}:${TAG}; done
+	docker manifest push --purge ${CONTROLLER_IMG}:${TAG}
+
+.PHONY: staging-manifests
+staging-manifests:
+	$(MAKE) $(RELEASE_DIR)/$(CORE_MANIFEST_FILE).yaml PULL_POLICY=IfNotPresent TAG=$(RELEASE_ALIAS_TAG)
+	$(MAKE) $(RELEASE_DIR)/$(EKS_BOOTSTRAP_MANIFEST_FILE).yaml PULL_POLICY=IfNotPresent TAG=$(RELEASE_ALIAS_TAG)
+	$(MAKE) $(RELEASE_DIR)/$(EKS_CONTROLPLANE_MANIFEST_FILE).yaml PULL_POLICY=IfNotPresent TAG=$(RELEASE_ALIAS_TAG)
 
 ## --------------------------------------
 ## Release
 ## --------------------------------------
 
-RELEASE_TAG := $(shell git describe --abbrev=0 2>/dev/null)
-RELEASE_DIR := out
-
 $(RELEASE_DIR):
 	mkdir -p $@
 
-.PHONY: release
-release: clean-release  ## Builds and push container images using the latest git tag for the commit.
+.PHONY: list-staging-releases
+list-staging-releases: ## List staging images for image promotion
+	@echo $(CORE_IMAGE_NAME):
+	$(MAKE) list-image RELEASE_TAG=$(RELEASE_TAG) IMAGE=$(CORE_IMAGE_NAME)
+	@echo $(EKS_BOOTSTRAP_IMAGE_NAME):
+	$(MAKE) list-image RELEASE_TAG=$(RELEASE_TAG) IMAGE=$(EKS_BOOTSTRAP_IMAGE_NAME)
+	@echo $(EKS_CONTROLPLANE_IMAGE_NAME):
+	$(MAKE) list-image RELEASE_TAG=$(RELEASE_TAG) IMAGE=$(EKS_CONTROLPLANE_IMAGE_NAME)
+
+list-image:
+	gcloud container images list-tags $(STAGING_REGISTRY)/$(IMAGE) --filter="tags=('$(RELEASE_TAG)')" --format=json
+
+.PHONY: check-release-tag
+check-release-tag:
 	@if [ -z "${RELEASE_TAG}" ]; then echo "RELEASE_TAG is not set"; exit 1; fi
 	@if ! [ -z "$$(git status --porcelain)" ]; then echo "Your local git repository contains uncommitted changes, use git clean before proceeding."; exit 1; fi
+
+.PHONY: release
+release: $(RELEASE_NOTES) clean-release check-release-tag $(RELEASE_DIR)  ## Builds and push container images using the latest git tag for the commit.
 	git checkout "${RELEASE_TAG}"
-	# Build binaries prior to marking the git tree as dirty
+	@if [ -z "${PREVIOUS_VERSION}" ]; then echo "PREVIOUS_VERSION is not set"; exit 1; fi
+	$(RELEASE_NOTES) --from $(PREVIOUS_VERSION) > $(RELEASE_DIR)/CHANGELOG.md
 	$(MAKE) release-binaries
-	# Set the manifest image to the production bucket.
-	$(MAKE) set-manifest-image \
-		MANIFEST_IMG=$(PROD_REGISTRY)/$(IMAGE_NAME) MANIFEST_TAG=$(RELEASE_TAG) \
-		TARGET_RESOURCE="./config/manager/manager_image_patch.yaml"
-	# Set manifest image for EKS bootstrap provider to the production bucket.
-	$(MAKE) set-manifest-image \
-		MANIFEST_IMG=$(PROD_REGISTRY)/$(EKS_BOOTSTRAP_IMAGE_NAME) MANIFEST_TAG=$(RELEASE_TAG) \
-		TARGET_RESOURCE="./bootstrap/eks/config/manager/manager_image_patch.yaml"
-	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent TARGET_RESOURCE="./config/manager/manager_pull_policy.yaml"
-	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent TARGET_RESOURCE="./bootstrap/eks/config/manager/manager_pull_policy.yaml"
+	$(MAKE) release-notes
 	$(MAKE) release-manifests
-	# Add metadata to the release artifacts
-	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
+	$(MAKE) release-templates
 
 .PHONY: release-manifests
-release-manifests: $(RELEASE_DIR) ## Builds the manifests to publish with a release
-	$(KUSTOMIZE) build config > $(RELEASE_DIR)/infrastructure-components.yaml
-	$(KUSTOMIZE) build bootstrap/eks/config > $(RELEASE_DIR)/eks-bootstrap-components.yaml
+release-manifests:
+	$(MAKE) $(RELEASE_DIR)/$(CORE_MANIFEST_FILE).yaml TAG=$(RELEASE_TAG) PULL_POLICY=IfNotPresent
+	$(MAKE) $(RELEASE_DIR)/$(EKS_BOOTSTRAP_MANIFEST_FILE).yaml TAG=$(RELEASE_TAG) PULL_POLICY=IfNotPresent
+	$(MAKE) $(RELEASE_DIR)/$(EKS_CONTROLPLANE_MANIFEST_FILE).yaml  TAG=$(RELEASE_TAG) PULL_POLICY=IfNotPresent
+	# Add metadata to the release artifacts
+	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
 
 .PHONY: release-binaries
 release-binaries: ## Builds the binaries to publish with a release
@@ -452,32 +426,128 @@ release-binaries: ## Builds the binaries to publish with a release
 	RELEASE_BINARY=./cmd/clusterawsadm GOOS=darwin GOARCH=amd64 $(MAKE) release-binary
 
 .PHONY: release-binary
-release-binary: $(RELEASE_DIR)
+release-binary: $(RELEASE_DIR) versions.mk
 	docker run \
 		--rm \
 		-e CGO_ENABLED=0 \
 		-e GOOS=$(GOOS) \
 		-e GOARCH=$(GOARCH) \
+		-v source=gocache,target=/root/.cache/go-build \
 		-v "$$(pwd):/workspace$(DOCKER_VOL_OPTS)" \
 		-w /workspace \
 		golang:$(GOLANG_VERSION) \
-		go build -a -ldflags '$(LDFLAGS) -extldflags "-static"' \
+		go build -ldflags '$(LDFLAGS) -extldflags "-static"' \
 		-o $(RELEASE_DIR)/$(notdir $(RELEASE_BINARY))-$(GOOS)-$(GOARCH) $(RELEASE_BINARY)
 
 .PHONY: release-staging
-release-staging: ## Builds and push container images to the staging bucket.
-	REGISTRY=$(STAGING_REGISTRY) $(MAKE) docker-build-all docker-push-all release-alias-tag
+release-staging: ## Builds and push container images and manifests to the staging bucket.
+	$(MAKE) docker-build-all
+	$(MAKE) docker-push-all
+	$(MAKE) release-alias-tag
+	$(MAKE) staging-manifests
+	$(MAKE) upload-staging-artifacts
 
-RELEASE_ALIAS_TAG=$(PULL_BASE_REF)
+.PHONY: upload-staging-artifacts
+upload-staging-artifacts: ## Upload release artifacts to the staging bucket
+	gsutil cp $(RELEASE_DIR)/* gs://$(BUCKET)/components/$(RELEASE_ALIAS_TAG)
+
+.PHONY: create-gh-release
+create-gh-release:$(GH) ## Create release on Github
+	$(GH) release create $(VERSION) -d -F $(RELEASE_DIR)/CHANGELOG.md -t $(VERSION) -R $(GH_REPO)
+
+.PHONY: upload-gh-artifacts
+upload-gh-artifacts: $(GH) ## Upload artifacts to Github release
+	$(GH) release upload $(VERSION) -R $(GH_REPO) --clobber  $(RELEASE_DIR)/*
 
 .PHONY: release-alias-tag
 release-alias-tag: # Adds the tag to the last build tag.
-	gcloud container images add-tag $(CONTROLLER_IMG):$(TAG) $(CONTROLLER_IMG):$(RELEASE_ALIAS_TAG)
-	gcloud container images add-tag $(EKS_BOOTSTRAP_CONTROLLER_IMG):$(TAG) $(EKS_BOOTSTRAP_CONTROLLER_IMG):$(RELEASE_ALIAS_TAG)
+	gcloud container images add-tag -q $(CORE_CONTROLLER_IMG):$(TAG) $(CORE_CONTROLLER_IMG):$(RELEASE_ALIAS_TAG)
+	gcloud container images add-tag -q $(EKS_BOOTSTRAP_CONTROLLER_IMG):$(TAG) $(EKS_BOOTSTRAP_CONTROLLER_IMG):$(RELEASE_ALIAS_TAG)
+	gcloud container images add-tag -q $(EKS_CONTROLPLANE_CONTROLLER_IMG):$(TAG) $(EKS_CONTROLPLANE_CONTROLLER_IMG):$(RELEASE_ALIAS_TAG)
 
 .PHONY: release-notes
-release-notes: $(RELEASE_NOTES)
+release-notes: $(RELEASE_NOTES) ## Generate release notes
 	$(RELEASE_NOTES) $(ARGS)
+
+.PHONY: release-templates
+release-templates: $(RELEASE_DIR) ## Generate release templates
+	cp templates/cluster-template*.yaml $(RELEASE_DIR)/
+
+IMAGE_PATCH_DIR := $(ARTIFACTS)/image-patch
+
+$(IMAGE_PATCH_DIR): $(ARTIFACTS)
+	mkdir -p $@
+
+.PHONY: $(RELEASE_DIR)/$(CORE_MANIFEST_FILE).yaml
+$(RELEASE_DIR)/$(CORE_MANIFEST_FILE).yaml:
+	$(MAKE) compiled-manifest \
+		PROVIDER=$(CORE_MANIFEST_FILE) \
+		OLD_IMG=$(CORE_CONTROLLER_ORIGINAL_IMG) \
+		MANIFEST_IMG=$(CORE_CONTROLLER_IMG) \
+		CONTROLLER_NAME=$(CORE_CONTROLLER_NAME) \
+		PROVIDER_CONFIG_DIR=$(CORE_CONFIG_DIR) \
+		NAMESPACE=$(CORE_NAMESPACE) \
+		WEBHOOK_ENABLED=true
+
+.PHONY: $(RELEASE_DIR)/$(EKS_BOOTSTRAP_MANIFEST_FILE).yaml
+$(RELEASE_DIR)/$(EKS_BOOTSTRAP_MANIFEST_FILE).yaml:
+	$(MAKE) compiled-manifest \
+		PROVIDER=$(EKS_BOOTSTRAP_MANIFEST_FILE) \
+		OLD_IMG=$(EKS_BOOTSTRAP_CONTROLLER_ORIGINAL_IMG) \
+		MANIFEST_IMG=$(EKS_BOOTSTRAP_CONTROLLER_IMG) \
+		CONTROLLER_NAME=$(EKS_BOOTSTRAP_CONTROLLER_NAME) \
+		PROVIDER_CONFIG_DIR=$(EKS_BOOTSTRAP_CONFIG_DIR) \
+		NAMESPACE=$(EKS_BOOTSTRAP_NAMESPACE)
+
+.PHONY: $(RELEASE_DIR)/$(EKS_CONTROLPLANE_MANIFEST_FILE).yaml
+$(RELEASE_DIR)/$(EKS_CONTROLPLANE_MANIFEST_FILE).yaml:
+	$(MAKE) compiled-manifest \
+	PROVIDER=$(EKS_CONTROLPLANE_MANIFEST_FILE) \
+	OLD_IMG=$(EKS_CONTROLPLANE_CONTROLLER_ORIGINAL_IMG) \
+	MANIFEST_IMG=$(EKS_CONTROLPLANE_CONTROLLER_IMG) \
+	CONTROLLER_NAME=$(EKS_CONTROLPLANE_CONTROLLER_NAME) \
+	PROVIDER_CONFIG_DIR=$(EKS_CONTROLPLANE_CONFIG_DIR) \
+	NAMESPACE=$(EKS_CONTROLPLANE_NAMESPACE) \
+	WEBHOOK_ENABLED=true
+
+.PHONY: compiled-manifest
+compiled-manifest: $(RELEASE_DIR) $(KUSTOMIZE)
+	$(MAKE) image-patch-source-manifest
+	$(MAKE) image-patch-pull-policy
+	$(MAKE) image-patch-kustomization
+	$(KUSTOMIZE) build $(IMAGE_PATCH_DIR)/$(PROVIDER) > $(RELEASE_DIR)/$(PROVIDER).yaml
+
+.PHONY: image-patch-source-manifest
+image-patch-source-manifest: $(IMAGE_PATCH_DIR) $(KUSTOMIZE)
+	mkdir -p $(IMAGE_PATCH_DIR)/$(PROVIDER)
+	$(KUSTOMIZE) build $(PROVIDER_CONFIG_DIR) > $(IMAGE_PATCH_DIR)/$(PROVIDER)/source-manifest.yaml
+
+.PHONY: image-patch-kustomization
+image-patch-kustomization: $(IMAGE_PATCH_DIR)
+	mkdir -p $(IMAGE_PATCH_DIR)/$(PROVIDER)
+	@if [ "${WEBHOOK_ENABLED}" = "true" ]; then \
+		$(MAKE) image-patch-kustomization-with-webhook;  else \
+		$(MAKE) image-patch-kustomization-without-webhook; \
+	fi
+
+.PHONY: image-patch-kustomization-with-webhook
+image-patch-kustomization-with-webhook: $(IMAGE_PATCH_DIR) $(GOJQ)
+	mkdir -p $(IMAGE_PATCH_DIR)/$(PROVIDER)
+	$(GOJQ) --yaml-input --yaml-output '.images[0]={"name":"$(OLD_IMG)","newName":"$(MANIFEST_IMG)","newTag":"$(TAG)"}|.patchesJson6902[0].target.name="$(CONTROLLER_NAME)"|.patchesJson6902[0].target.namespace="$(NAMESPACE)"|.patchesJson6902[1].target.name="$(CONTROLLER_NAME)"' \
+		"hack/image-patch/kustomization.yaml" > $(IMAGE_PATCH_DIR)/$(PROVIDER)/kustomization.yaml
+
+.PHONY: image-patch-kustomization-without-webhook
+image-patch-kustomization-without-webhook: $(IMAGE_PATCH_DIR) $(GOJQ)
+	mkdir -p $(IMAGE_PATCH_DIR)/$(PROVIDER)
+	$(GOJQ) --yaml-input --yaml-output '.images[0]={"name":"$(OLD_IMG)","newName":"$(MANIFEST_IMG)","newTag":"$(TAG)"}|del(.patchesJson6902[1])|.patchesJson6902[0].target.name="$(CONTROLLER_NAME)"|.patchesJson6902[0].target.namespace="$(NAMESPACE)"' \
+		"hack/image-patch/kustomization.yaml" > $(IMAGE_PATCH_DIR)/$(PROVIDER)/kustomization.yaml
+
+.PHONY: image-patch-pull-policy
+image-patch-pull-policy: $(IMAGE_PATCH_DIR) $(GOJQ)
+	mkdir -p $(IMAGE_PATCH_DIR)/$(PROVIDER)
+	echo Setting imagePullPolicy to $(PULL_POLICY)
+	$(GOJQ) --yaml-input --yaml-output '.[0].value="$(PULL_POLICY)"' "hack/image-patch/pull-policy-patch.yaml" > $(IMAGE_PATCH_DIR)/$(PROVIDER)/pull-policy-patch.yaml
+
 
 ## --------------------------------------
 ## Cleanup / Verification
@@ -485,13 +555,13 @@ release-notes: $(RELEASE_NOTES)
 
 .PHONY: clean
 clean: ## Remove all generated files
+	$(MAKE) -C hack/tools clean
 	$(MAKE) clean-bin
 	$(MAKE) clean-temporary
 
 .PHONY: clean-bin
 clean-bin: ## Remove all generated binaries
 	rm -rf bin
-	rm -rf hack/tools/bin
 
 .PHONY: clean-temporary
 clean-temporary: ## Remove all temporary files and folders
@@ -507,12 +577,16 @@ clean-temporary: ## Remove all temporary files and folders
 	rm -rf test/e2e/logs
 	rm -rf test/e2e/resources
 
+.PHONY: serve-book
+serve-book: ## Run a server with the documentation book
+	$(MAKE) -C docs/book serve
+
 .PHONY: clean-release
 clean-release: ## Remove the release folder
 	rm -rf $(RELEASE_DIR)
 
 .PHONY: verify
-verify: verify-boilerplate verify-modules verify-gen
+verify: verify-boilerplate verify-modules verify-gen release-manifests
 
 .PHONY: verify-boilerplate
 verify-boilerplate:
@@ -531,6 +605,8 @@ verify-gen: generate
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
 
-.PHONY: docs
-docs: ## Build all documents and diagrams
-	$(MAKE) -C docs docs
+.PHONY: compile-e2e
+compile-e2e: ## Test e2e compilation
+	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/unmanaged
+	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/conformance
+	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/managed

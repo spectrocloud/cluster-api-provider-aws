@@ -36,9 +36,11 @@ import (
 
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
 	bootstrapv1controllers "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/controllers"
+	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/version"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -54,6 +56,8 @@ func init() {
 	_ = clusterv1.AddToScheme(scheme)
 	_ = bootstrapv1.AddToScheme(scheme)
 	_ = expinfrav1.AddToScheme(scheme)
+	_ = expclusterv1.AddToScheme(scheme)
+	_ = controlplanev1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
