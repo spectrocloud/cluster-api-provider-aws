@@ -8,16 +8,17 @@ In order to have Cluster API consume existing AWS infrastructure, you will need 
 
 * A VPC
 * One or more private subnets (subnets that do not have a route to an Internet gateway)
-* A public subnet in the same Availability Zone (AZ) for each private subnet (this is required for NAT gateways to function properly)
-* A NAT gateway for each private subnet, along with associated Elastic IP addresses
-* An Internet gateway for all public subnets
+* A NAT gateway for each private subnet, along with associated Elastic IP addresses (only needed if the nodes require access to the Internet, i.e. pulling public images)
+  * A public subnet in the same Availability Zone (AZ) for each private subnet (this is required for NAT gateways to function properly)
+* An Internet gateway for all public subnets (only required if the workload cluster is set to use an Internet facing load balancer or one or more NAT gateways exist in the VPC)
 * Route table associations that provide connectivity to the Internet through a NAT gateway (for private subnets) or the Internet gateway (for public subnets)
-
-Note that a public subnet (and associated Internet gateway) are required even if the control plane of the workload cluster is set to use an internal load balancer.
+* VPC endpoints for `ec2`, `elasticloadbalancing`, `secretsmanager` an `autoscaling` (if using MachinePools) when the private Subnets do not have a NAT gateway
 
 You will need the ID of the VPC and subnet IDs that Cluster API should use. This information is available via the AWS Management Console or the AWS CLI.
 
-Note that there is no need to create an Elastic Load Balancer (ELB), security groups, or EC2 instances; Cluster API will take care of these items.
+Note that there is no need to create an Elastic Load Balancer (ELB), security groups, or EC2 instances; Cluster API will take care of these items. 
+
+If you want to use existing security groups, these can be specified and new ones will not be created. 
 
 ## Tagging AWS Resources
 
@@ -54,7 +55,7 @@ spec:
     - id: subnet-0fdcccba78668e013
 ```
 
-When you use `kubectl apply` to apply the Cluster and AWSCluster specifications to the management cluster, Cluster API will use the specified VPC ID, will discover the associated subnet IDs, and will not create a new VPC, new subnets, or other associated resources. It _will_, however, create a new ELB and new security groups.
+When you use `kubectl apply` to apply the Cluster and AWSCluster specifications to the management cluster, Cluster API will use the specified VPC ID and subnet IDs, and will not create a new VPC, new subnets, or other associated resources. It _will_, however, create a new ELB and new security groups.
 
 ## Placing EC2 Instances in Specific AZs
 
@@ -99,6 +100,33 @@ spec:
 ```
 
 Users may either specify `failureDomain` on the Machine or MachineDeployment objects, _or_ users may explicitly specify subnet IDs on the AWSMachine or AWSMachineTemplate objects. If both are specified, the subnet ID is used and the `failureDomain` is ignored.
+
+## Security Groups
+
+To use existing security groups for instances for a cluster, add this to the AWSCluster specification:
+
+```yaml
+spec:
+  networkSpec:
+    securityGroupOverrides:
+      bastion: sg-0350a3507a5ad2c5c8c3
+      controlplane: sg-0350a3507a5ad2c5c8c3
+      apiserver-lb: sg-0200a3507a5ad2c5c8c3
+      node: sg-04e870a3507a5ad2c5c8c3
+      lb: sg-00a3507a5ad2c5c8c3
+```
+
+Any additional security groups specified in an AWSMachineTemplate will be applied in addition to these overriden security groups.
+
+To specify additional security groups for the control plane load balancer for a cluster, add this to the AWSCluster specification:
+
+```yaml
+spec:
+  controlPlaneLoadBalancer:
+    AdditionalsecurityGroups:
+    - sg-0200a3507a5ad2c5c8c3
+    - ...   
+```
 
 ## Caveats/Notes
 

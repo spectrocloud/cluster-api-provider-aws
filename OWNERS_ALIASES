@@ -20,12 +20,11 @@ aliases:
     - justinsb
     - vincepri
   cluster-api-aws-maintainers:
-    - detiber
     - randomvariable
     - richardcase
     - rudoi
     - vincepri
+    - sedefsavas
   cluster-api-aws-reviewers:
     - michaelbeaumont
-    - sedefsavas
     - dthorsen

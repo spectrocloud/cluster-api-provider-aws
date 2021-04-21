@@ -28,6 +28,8 @@ const (
 	DefaultBootstrapUserName = "bootstrapper.cluster-api-provider-aws.sigs.k8s.io"
 	// DefaultStackName is the default CloudFormation stack name.
 	DefaultStackName = "cluster-api-provider-aws-sigs-k8s-io"
+	// DefaultParittionName is the default security partition for AWS ARNs.
+	DefaultPartitionName = "aws"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -36,13 +38,18 @@ func addDefaultingFuncs(scheme *runtime.Scheme) error {
 
 // SetDefaults_BootstrapUser is used by defaulter-gen
 func SetDefaults_BootstrapUser(obj *BootstrapUser) { //nolint:golint,stylecheck
-	obj.UserName = DefaultBootstrapUserName
+	if obj != nil && obj.UserName == "" {
+		obj.UserName = DefaultBootstrapUserName
+	}
 }
 
 // SetDefaults_AWSIAMConfigurationSpec is used by defaulter-gen
 func SetDefaults_AWSIAMConfigurationSpec(obj *AWSIAMConfigurationSpec) { //nolint:golint,stylecheck
 	if obj.NameSuffix == nil {
 		obj.NameSuffix = utilpointer.StringPtr(infrav1.DefaultNameSuffix)
+	}
+	if obj.Partition == "" {
+		obj.Partition = DefaultPartitionName
 	}
 	if obj.StackName == "" {
 		obj.StackName = DefaultStackName
@@ -58,8 +65,18 @@ func SetDefaults_AWSIAMConfigurationSpec(obj *AWSIAMConfigurationSpec) { //nolin
 	} else if obj.EKS.Enable {
 		obj.Nodes.EC2ContainerRegistryReadOnly = true
 	}
+	if obj.EventBridge == nil {
+		obj.EventBridge = &EventBridgeConfig{
+			Enable: false,
+		}
+	}
 	if obj.EKS.ManagedMachinePool == nil {
 		obj.EKS.ManagedMachinePool = &AWSIAMRoleSpec{
+			Disable: true,
+		}
+	}
+	if obj.EKS.Fargate == nil {
+		obj.EKS.Fargate = &AWSIAMRoleSpec{
 			Disable: true,
 		}
 	}

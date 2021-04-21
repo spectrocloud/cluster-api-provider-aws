@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	EKSClusterPolicy = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+	eksClusterPolicyName = "AmazonEKSClusterPolicy"
 )
 
 func (t Template) controllersPolicyGroups() []string {
@@ -56,7 +56,7 @@ func (t Template) controllersTrustPolicy() *iamv1.PolicyDocument {
 	return policyDocument
 }
 
-func (t Template) controllersPolicy() *iamv1.PolicyDocument {
+func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 	statement := []iamv1.StatementEntry{
 		{
 			Effect:   iamv1.EffectAllow,
@@ -114,6 +114,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 				"elasticloadbalancing:DeleteLoadBalancer",
 				"elasticloadbalancing:DescribeLoadBalancers",
 				"elasticloadbalancing:DescribeLoadBalancerAttributes",
+				"elasticloadbalancing:ApplySecurityGroupsToLoadBalancer",
 				"elasticloadbalancing:DescribeTags",
 				"elasticloadbalancing:ModifyLoadBalancerAttributes",
 				"elasticloadbalancing:RegisterInstancesWithLoadBalancer",
@@ -132,7 +133,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 		{
 			Effect: iamv1.EffectAllow,
 			Resource: iamv1.Resources{
-				"arn:aws:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*",
+				"arn:*:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*",
 			},
 			Action: iamv1.Actions{
 				"autoscaling:CreateAutoScalingGroup",
@@ -223,7 +224,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 		statement = append(statement, iamv1.StatementEntry{
 			Effect: iamv1.EffectAllow,
 			Resource: iamv1.Resources{
-				"arn:aws:ssm:*:*:parameter/aws/service/eks/optimized-ami/*",
+				"arn:*:ssm:*:*:parameter/aws/service/eks/optimized-ami/*",
 			},
 			Action: iamv1.Actions{
 				"ssm:GetParameter",
@@ -236,7 +237,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 				"iam:CreateServiceLinkedRole",
 			},
 			Resource: iamv1.Resources{
-				"arn:aws:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
+				"arn:*:iam::*:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS",
 			},
 			Condition: iamv1.Conditions{
 				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "eks.amazonaws.com"},
@@ -249,10 +250,23 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 				"iam:CreateServiceLinkedRole",
 			},
 			Resource: iamv1.Resources{
-				"arn:aws:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup",
+				"arn:*:iam::*:role/aws-service-role/eks-nodegroup.amazonaws.com/AWSServiceRoleForAmazonEKSNodegroup",
 			},
 			Condition: iamv1.Conditions{
 				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "eks-nodegroup.amazonaws.com"},
+			},
+		})
+
+		statement = append(statement, iamv1.StatementEntry{
+			Effect: iamv1.EffectAllow,
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
+			},
+			Resource: iamv1.Resources{
+				"arn:aws:iam::*:role/aws-service-role/eks-fargate-pods.amazonaws.com/AWSServiceRoleForAmazonEKSForFargate",
+			},
+			Condition: iamv1.Conditions{
+				iamv1.StringLike: map[string]string{"iam:AWSServiceName": "eks-fargate.amazonaws.com"},
 			},
 		})
 
@@ -283,7 +297,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 			{
 				Action: allowedIAMActions,
 				Resource: iamv1.Resources{
-					"arn:aws:iam::*:role/*",
+					"arn:*:iam::*:role/*",
 				},
 				Effect: iamv1.EffectAllow,
 			}, {
@@ -291,7 +305,7 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"iam:GetPolicy",
 				},
 				Resource: iamv1.Resources{
-					EKSClusterPolicy,
+					t.generateAWSManagedPolicyARN(eksClusterPolicyName),
 				},
 				Effect: iamv1.EffectAllow,
 			}, {
@@ -311,8 +325,8 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"eks:CreateNodegroup",
 				},
 				Resource: iamv1.Resources{
-					"arn:aws:eks:*:*:cluster/*",
-					"arn:aws:eks:*:*:nodegroup/*/*/*",
+					"arn:*:eks:*:*:cluster/*",
+					"arn:*:eks:*:*:nodegroup/*/*/*",
 				},
 				Effect: iamv1.EffectAllow,
 			}, {
@@ -324,6 +338,9 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 					"eks:DeleteAddon",
 					"eks:UpdateAddon",
 					"eks:TagResource",
+					"eks:DescribeFargateProfile",
+					"eks:CreateFargateProfile",
+					"eks:DeleteFargateProfile",
 				},
 				Resource: iamv1.Resources{
 					"*",
@@ -345,6 +362,28 @@ func (t Template) controllersPolicy() *iamv1.PolicyDocument {
 			},
 		}...)
 
+	}
+
+	if t.Spec.EventBridge.Enable {
+		statement = append(statement, iamv1.StatementEntry{
+			Effect:   iamv1.EffectAllow,
+			Resource: iamv1.Resources{iamv1.Any},
+			Action: iamv1.Actions{
+				"events:DeleteRule",
+				"events:DescribeRule",
+				"events:ListTargetsByRule",
+				"events:PutRule",
+				"events:PutTargets",
+				"events:RemoveTargets",
+				"sqs:CreateQueue",
+				"sqs:DeleteMessage",
+				"sqs:DeleteQueue",
+				"sqs:GetQueueAttributes",
+				"sqs:GetQueueUrl",
+				"sqs:ReceiveMessage",
+				"sqs:SetQueueAttributes",
+			},
+		})
 	}
 
 	return &iamv1.PolicyDocument{

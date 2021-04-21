@@ -17,6 +17,7 @@ limitations under the License.
 package asg
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -37,9 +38,10 @@ func (s *Service) SDKToAutoScalingGroup(v *autoscaling.Group) (*expinfrav1.AutoS
 		ID:   aws.StringValue(v.AutoScalingGroupARN),
 		Name: aws.StringValue(v.AutoScalingGroupName),
 		// TODO(rudoi): this is just terrible
-		DesiredCapacity: aws.Int32(int32(aws.Int64Value(v.DesiredCapacity))),
-		MaxSize:         int32(aws.Int64Value(v.MaxSize)),
-		MinSize:         int32(aws.Int64Value(v.MinSize)),
+		DesiredCapacity:   aws.Int32(int32(aws.Int64Value(v.DesiredCapacity))),
+		MaxSize:           int32(aws.Int64Value(v.MaxSize)),
+		MinSize:           int32(aws.Int64Value(v.MinSize)),
+		CapacityRebalance: aws.BoolValue(v.CapacityRebalance),
 		//TODO: determine what additional values go here and what else should be in the struct
 	}
 
@@ -142,23 +144,18 @@ func (s *Service) GetASGByName(scope *scope.MachinePoolScope) (*expinfrav1.AutoS
 
 // CreateASG runs an autoscaling group.
 func (s *Service) CreateASG(scope *scope.MachinePoolScope) (*expinfrav1.AutoScalingGroup, error) {
-	subnetIDs := make([]string, len(scope.AWSMachinePool.Spec.Subnets))
-	for i, v := range scope.AWSMachinePool.Spec.Subnets {
-		subnetIDs[i] = aws.StringValue(v.ID)
-	}
-
-	if len(subnetIDs) == 0 {
-		for _, subnet := range scope.InfraCluster.Subnets() {
-			subnetIDs = append(subnetIDs, subnet.ID)
-		}
+	subnets, err := scope.SubnetIDs()
+	if err != nil {
+		return nil, fmt.Errorf("getting subnets for ASG: %w", err)
 	}
 
 	input := &expinfrav1.AutoScalingGroup{
 		Name:                 scope.Name(),
 		MaxSize:              scope.AWSMachinePool.Spec.MaxSize,
 		MinSize:              scope.AWSMachinePool.Spec.MinSize,
-		Subnets:              subnetIDs,
+		Subnets:              subnets,
 		DefaultCoolDown:      scope.AWSMachinePool.Spec.DefaultCoolDown,
+		CapacityRebalance:    scope.AWSMachinePool.Spec.CapacityRebalance,
 		MixedInstancesPolicy: scope.AWSMachinePool.Spec.MixedInstancesPolicy,
 	}
 
@@ -205,6 +202,7 @@ func (s *Service) runPool(i *expinfrav1.AutoScalingGroup, launchTemplateID strin
 		MinSize:              aws.Int64(int64(i.MinSize)),
 		VPCZoneIdentifier:    aws.String(strings.Join(i.Subnets, ", ")),
 		DefaultCooldown:      aws.Int64(int64(i.DefaultCoolDown.Duration.Seconds())),
+		CapacityRebalance:    aws.Bool(i.CapacityRebalance),
 	}
 
 	if i.DesiredCapacity != nil {
@@ -283,6 +281,7 @@ func (s *Service) UpdateASG(scope *scope.MachinePoolScope) error {
 		MaxSize:              aws.Int64(int64(scope.AWSMachinePool.Spec.MaxSize)),
 		MinSize:              aws.Int64(int64(scope.AWSMachinePool.Spec.MinSize)),
 		VPCZoneIdentifier:    aws.String(strings.Join(subnetIDs, ", ")),
+		CapacityRebalance:    aws.Bool(scope.AWSMachinePool.Spec.CapacityRebalance),
 	}
 
 	if scope.MachinePool.Spec.Replicas != nil {

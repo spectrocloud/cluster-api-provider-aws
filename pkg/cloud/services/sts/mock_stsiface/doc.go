@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Kubernetes Authors.
+Copyright 2020 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,6 @@ limitations under the License.
 */
 
 // Run go generate to regenerate this mock.
-//go:generate ../../../../../hack/tools/bin/mockgen -destination eksapi_mock.go -package mock_eksiface github.com/aws/aws-sdk-go/service/eks/eksiface EKSAPI
-//go:generate /usr/bin/env bash -c "cat ../../../../../hack/boilerplate/boilerplate.generatego.txt eksapi_mock.go > _eksapi_mock.go && mv _eksapi_mock.go eksapi_mock.go"
-package mock_eksiface //nolint
+//go:generate ../../../../../hack/tools/bin/mockgen -destination stsiface_mock.go -package mock_stsiface github.com/aws/aws-sdk-go/service/sts/stsiface STSAPI
+//go:generate /usr/bin/env bash -c "cat ../../../../../hack/boilerplate/boilerplate.generatego.txt stsiface_mock.go > _stsiface_mock.go && mv _stsiface_mock.go stsiface_mock.go"
+package mock_stsiface //nolint

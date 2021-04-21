@@ -18,11 +18,12 @@ package scope
 
 import (
 	"context"
+	"fmt"
 
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -65,7 +66,14 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 		params.Logger = klogr.New()
 	}
 
-	session, serviceLimiters, err := sessionForRegion(params.ControlPlane.Spec.Region, params.Endpoints)
+	managedScope := &ManagedControlPlaneScope{
+		Logger:         params.Logger,
+		Client:         params.Client,
+		Cluster:        params.Cluster,
+		ControlPlane:   params.ControlPlane,
+		controllerName: params.ControllerName,
+	}
+	session, serviceLimiters, err := sessionForClusterWithRegion(params.Client, managedScope, params.ControlPlane.Spec.Region, params.Endpoints, params.Logger)
 	if err != nil {
 		return nil, errors.Errorf("failed to create aws session: %v", err)
 	}
@@ -131,6 +139,11 @@ func (s *ManagedMachinePoolScope) EnableIAM() bool {
 	return s.enableIAM
 }
 
+// IdentityRef returns the cluster identityRef.
+func (s *ManagedMachinePoolScope) IdentityRef() *infrav1.AWSIdentityReference {
+	return s.ControlPlane.Spec.IdentityRef
+}
+
 // AdditionalTags returns AdditionalTags from the scope's ManagedMachinePool
 // The returned value will never be nil.
 func (s *ManagedMachinePoolScope) AdditionalTags() infrav1.Tags {
@@ -157,8 +170,18 @@ func (s *ManagedMachinePoolScope) ControlPlaneSubnets() infrav1.Subnets {
 }
 
 // SubnetIDs returns the machine pool subnet IDs.
-func (s *ManagedMachinePoolScope) SubnetIDs() []string {
-	return s.ManagedMachinePool.Spec.SubnetIDs
+func (s *ManagedMachinePoolScope) SubnetIDs() ([]string, error) {
+	strategy, err := newDefaultSubnetPlacementStrategy(s.Logger)
+	if err != nil {
+		return []string{}, fmt.Errorf("getting subnet placement strategy: %w", err)
+	}
+
+	return strategy.Place(&placementInput{
+		SpecSubnetIDs:           s.ManagedMachinePool.Spec.SubnetIDs,
+		SpecAvailabilityZones:   s.ManagedMachinePool.Spec.AvailabilityZones,
+		ParentAvailabilityZones: s.MachinePool.Spec.FailureDomains,
+		ControlplaneSubnets:     s.ControlPlaneSubnets(),
+	})
 }
 
 // NodegroupReadyFalse marks the ready condition false using warning if error isn't

@@ -82,7 +82,7 @@ type AWSIAMRoleSpec struct {
 	// ExtraStatements are additional IAM statements to be included inline for the role.
 	ExtraStatements []iamv1.StatementEntry `json:"extraStatements,omitempty"`
 
-	// TrustStatements is an IAM PolicyDocument defining what principals are allowed to assume this role.
+	// TrustStatements is an IAM PolicyDocument defining what identities are allowed to assume this role.
 	// See "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1" for more documentation.
 	TrustStatements []iamv1.StatementEntry `json:"trustStatements,omitempty"`
 
@@ -105,6 +105,16 @@ type EKSConfig struct {
 	// ManagedMachinePool controls the configuration of the AWS IAM role for
 	// used by EKS managed machine pools.
 	ManagedMachinePool *AWSIAMRoleSpec `json:"managedMachinePool,omitempty"`
+	// Fargate controls the configuration of the AWS IAM role for
+	// used by EKS managed machine pools.
+	Fargate *AWSIAMRoleSpec `json:"fargate,omitempty"`
+}
+
+// EventBridgeConfig represents configuration for enabling experimental feature to consume
+// EventBridge EC2 events
+type EventBridgeConfig struct {
+	// Enable controls whether permissions are granted to consume EC2 events
+	Enable bool `json:"enable,omitempty"`
 }
 
 // ClusterAPIControllers controls the configuration of the AWS IAM role for
@@ -173,6 +183,12 @@ type AWSIAMConfigurationSpec struct {
 	// EKS controls the configuration related to EKS. Settings in here affect the control plane
 	// and nodes roles
 	EKS *EKSConfig `json:"eks,omitempty"`
+
+	// EventBridge controls configuration for consuming EventBridge events
+	EventBridge *EventBridgeConfig `json:"eventBridge,omitempty"`
+
+	// Partition is the AWS security partition being used. Defaults to "aws"
+	Partition string `json:"partition,omitempty"`
 
 	// SecureSecretsBackend, when set to parameter-store will create AWS Systems Manager
 	// Parameter Storage policies. By default or with the value of secrets-manager,

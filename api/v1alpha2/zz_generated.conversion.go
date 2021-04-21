@@ -451,6 +451,7 @@ func autoConvert_v1alpha3_AWSClusterSpec_To_v1alpha2_AWSClusterSpec(in *v1alpha3
 	// WARNING: in.ImageLookupOrg requires manual conversion: does not exist in peer-type
 	// WARNING: in.ImageLookupBaseOS requires manual conversion: does not exist in peer-type
 	// WARNING: in.Bastion requires manual conversion: does not exist in peer-type
+	// WARNING: in.IdentityRef requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -489,6 +490,7 @@ func autoConvert_v1alpha3_AWSLoadBalancerSpec_To_v1alpha2_AWSLoadBalancerSpec(in
 	out.Scheme = (*ClassicELBScheme)(unsafe.Pointer(in.Scheme))
 	// WARNING: in.CrossZoneLoadBalancing requires manual conversion: does not exist in peer-type
 	// WARNING: in.Subnets requires manual conversion: does not exist in peer-type
+	// WARNING: in.AdditionalSecurityGroups requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -590,6 +592,7 @@ func autoConvert_v1alpha2_AWSMachineSpec_To_v1alpha3_AWSMachineSpec(in *AWSMachi
 
 func autoConvert_v1alpha3_AWSMachineSpec_To_v1alpha2_AWSMachineSpec(in *v1alpha3.AWSMachineSpec, out *AWSMachineSpec, s conversion.Scope) error {
 	out.ProviderID = (*string)(unsafe.Pointer(in.ProviderID))
+	// WARNING: in.InstanceID requires manual conversion: does not exist in peer-type
 	if err := Convert_v1alpha3_AWSResourceReference_To_v1alpha2_AWSResourceReference(&in.AMI, &out.AMI, s); err != nil {
 		return err
 	}
@@ -1070,6 +1073,7 @@ func autoConvert_v1alpha3_NetworkSpec_To_v1alpha2_NetworkSpec(in *v1alpha3.Netwo
 	}
 	out.Subnets = *(*Subnets)(unsafe.Pointer(&in.Subnets))
 	// WARNING: in.CNI requires manual conversion: does not exist in peer-type
+	// WARNING: in.SecurityGroupOverrides requires manual conversion: does not exist in peer-type
 	return nil
 }
 

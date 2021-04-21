@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/pointer"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -142,6 +142,11 @@ func (m *MachineScope) GetProviderID() string {
 func (m *MachineScope) SetProviderID(instanceID, availabilityZone string) {
 	providerID := fmt.Sprintf("aws:///%s/%s", availabilityZone, instanceID)
 	m.AWSMachine.Spec.ProviderID = pointer.StringPtr(providerID)
+}
+
+// SetInstanceID sets the AWSMachine instanceID in spec.
+func (m *MachineScope) SetInstanceID(instanceID string) {
+	m.AWSMachine.Spec.InstanceID = pointer.StringPtr(instanceID)
 }
 
 // GetInstanceState returns the AWSMachine instance state from the status.

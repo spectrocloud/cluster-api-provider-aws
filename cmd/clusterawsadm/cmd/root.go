@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -29,6 +30,11 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/cmd/eks"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/cmd/version"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
+	logf "sigs.k8s.io/cluster-api/cmd/clusterctl/log"
+)
+
+var (
+	verbosity *int
 )
 
 // RootCmd is the Cobra root command
@@ -76,10 +82,23 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, "")
 		os.Exit(1)
 	}
+
 	if err := RootCmd().Execute(); err != nil {
 		os.Exit(1)
 	}
+}
 
-	// Honor glog flags for verbosity control
+func init() {
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	verbosity := flag.CommandLine.Int("v", 2, "Set the log level verbosity.")
+	_ = flag.Set("v", strconv.Itoa(*verbosity))
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+}
+
+func init() {
+	cobra.OnInitialize(initConfig)
+}
+
+func initConfig() {
+	logf.SetLogger(logf.NewLogger(logf.WithThreshold(verbosity)))
 }

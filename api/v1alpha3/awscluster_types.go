@@ -25,6 +25,9 @@ const (
 	// ClusterFinalizer allows ReconcileAWSCluster to clean up AWS resources associated with AWSCluster before
 	// removing it from the apiserver.
 	ClusterFinalizer = "awscluster.infrastructure.cluster.x-k8s.io"
+
+	// AWSClusterControllerIdentityName is the name of the AWSClusterControllerIdentity singleton
+	AWSClusterControllerIdentityName = "default"
 )
 
 // AWSClusterSpec defines the desired state of AWSCluster
@@ -82,6 +85,34 @@ type AWSClusterSpec struct {
 	// Bastion contains options to configure the bastion host.
 	// +optional
 	Bastion Bastion `json:"bastion"`
+
+	// IdentityRef is a reference to a identity to be used when reconciling this cluster
+	// +optional
+	IdentityRef *AWSIdentityReference `json:"identityRef,omitempty"`
+}
+
+type AWSIdentityKind string
+
+var (
+	// ControllerIdentityKind defines identity reference kind as AWSClusterControllerIdentity
+	ControllerIdentityKind = AWSIdentityKind("AWSClusterControllerIdentity")
+
+	// ClusterRoleIdentityKind defines identity reference kind as AWSClusterRoleIdentity
+	ClusterRoleIdentityKind = AWSIdentityKind("AWSClusterRoleIdentity")
+
+	// ClusterStaticIdentityKind defines identity reference kind as AWSClusterStaticIdentity
+	ClusterStaticIdentityKind = AWSIdentityKind("AWSClusterStaticIdentity")
+)
+
+// AWSIdentityReference specifies a identity.
+type AWSIdentityReference struct {
+	// Name of the identity.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Kind of the identity.
+	// +kubebuilder:validation:Enum=AWSClusterControllerIdentity;AWSClusterRoleIdentity;AWSClusterStaticIdentity
+	Kind AWSIdentityKind `json:"kind"`
 }
 
 type Bastion struct {
@@ -114,6 +145,8 @@ type Bastion struct {
 // AWSLoadBalancerSpec defines the desired state of an AWS load balancer
 type AWSLoadBalancerSpec struct {
 	// Scheme sets the scheme of the load balancer (defaults to Internet-facing)
+	// +kubebuilder:default=Internet-facing
+	// +kubebuilder:validation:Enum=Internet-facing;internal
 	// +optional
 	Scheme *ClassicELBScheme `json:"scheme,omitempty"`
 
@@ -131,6 +164,11 @@ type AWSLoadBalancerSpec struct {
 	// Subnets sets the subnets that should be applied to the control plane load balancer (defaults to discovered subnets for managed VPCs or an empty set for unmanaged VPCs)
 	// +optional
 	Subnets []string `json:"subnets,omitempty"`
+
+	// AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs.
+	// This is optional - if not provided new security groups will be created for the load balancer
+	// +optional
+	AdditionalSecurityGroups []string `json:"additionalSecurityGroups,omitempty"`
 }
 
 // AWSClusterStatus defines the observed state of AWSCluster

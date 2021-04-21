@@ -48,7 +48,7 @@ superseded-by: []
     - [Controller Changes](#controller-changes)
     - [Clusterctl changes](#clusterctl-changes)
       - [Validating webhook changes](#validating-webhook-changes)
-      - [Principal Type Credential Provider Behaviour](#principal-type-credential-provider-behaviour)
+      - [Identity Type Credential Provider Behaviour](#identity-type-credential-provider-behaviour)
     - [Security Model](#security-model)
       - [Roles](#roles)
     - [RBAC](#rbac)
@@ -57,7 +57,7 @@ superseded-by: []
     - [CAPA Controller Requirements](#capa-controller-requirements)
     - [Alternative Approaches Considered](#alternative-approaches-considered)
       - [Using only secrets or RoleARN field on AWSCluster](#using-only-secrets-or-rolearn-field-on-awscluster)
-      - [1:1 mapping one namespace to one AWSPrincipal](#11-mapping-one-namespace-to-one-awsprincipal)
+      - [1:1 mapping one namespace to one AWSIdentity](#11-mapping-one-namespace-to-one-awsidentity)
     - [Risks and Mitigations](#risks-and-mitigations)
       - [Network assumptions are made explicit](#network-assumptions-are-made-explicit)
       - [Caching and handling refresh of credentials](#caching-and-handling-refresh-of-credentials)
@@ -74,7 +74,7 @@ superseded-by: []
 
 ## Glossary
 
-* Principal Type - One of several ways to provide a form of identity that is ultimately resolved to an AWS access key ID,
+* Identity Type - One of several ways to provide a form of identity that is ultimately resolved to an AWS access key ID,
   secret access key and optional session token tuple.
 * Credential Provider - An implementation of the interface specified in the [AWS SDK for
   Go][aws-sdk-go-credential-provider].
@@ -108,8 +108,8 @@ the existing behavior with no changes to user configuration required.
 For large organizations, especially highly-regulated organizations, there is a need to be able to perform separate
 duties at various levels of infrastructure - permissions, networks and accounts. VPC sharing is a model which provides
 separation at the AWS account level. Within this model it is appropriate for tooling running within the 'management' account
-to manage infrastructure within the 'workload' accounts, which requires a principal in the management account which can
-assume a principal within a workload account. For CAPA to be most useful within these organizations it will need to
+to manage infrastructure within the 'workload' accounts, which requires a identity in the management account which can
+assume a identity within a workload account. For CAPA to be most useful within these organizations it will need to
 support multi-account models.
 
 Some organizations may also delegate the management of clusters to another third-party. In that case, the boundary
@@ -117,9 +117,6 @@ between organizations needs to be secured, and issues such as confused deputy sc
 
 Because a single deployment of the CAPA operator may reconcile many different clusters in its lifetime, it is necessary
 to modify the CAPA operator to scope its AWS client instances to within the reconciliation process.
-
-It follows that an organization may wish to provision control planes and worker groups in separate accounts (including
-each worker group in a separate account). There is a desire to support this configuration also.
 
 AWS provides a number of mechanisms for assume roles across account boundaries:
 
@@ -140,8 +137,9 @@ per instance of CAPA.
 
 ### Non-Goals/Future Work
 
-- Enabling Machines to be provisioned in AWS accounts different than their control planes. This would require adding
+- To enable Machines to be provisioned in AWS accounts different than their control planes. This would require adding
   various AWS infrastructure specification to the AWSMachineTemplate type which currently does not exist.
+- To enable control plane and worker machines to be provisioned in separate accounts.
 
 ## Proposal
 
@@ -157,7 +155,7 @@ clusters in dedicated AWS accounts.
 The current configuration exists: AWS Account 'management':
 * Vpc, subnets shared with 'workload' AWS Account
 * EC2 instance profile linked to the IAM role 'ClusterAPI-Mgmt'
-* A management Kubernetes cluster running Cluster API Provider AWS controllers using the 'ClusterAPI-Owner' IAM principal.
+* A management Kubernetes cluster running Cluster API Provider AWS controllers using the 'ClusterAPI-Owner' IAM identity.
 
 AWS Account 'workload':
 * Vpc and subnets provided by 'Owner' AWS Account
@@ -199,9 +197,9 @@ a single instance of CAPA to cover multiple organisations.
 <a name="FR4">FR4.</a> CAPA MUST prevent privilege escalation allowing users to create clusters in AWS accounts they should
   not be able to.
 
-<a name="FR5">FR5.</a> CAPA SHOULD support credential refreshing when principal data is modified.
+<a name="FR5">FR5.</a> CAPA SHOULD support credential refreshing when identity data is modified.
 
-<a name="FR6">FR6.</a> CAPA SHOULD provide validation for principal data submitted by users.
+<a name="FR6">FR6.</a> CAPA SHOULD provide validation for identity data submitted by users.
 
 <a name="FR7">FR7.</a> CAPA COULD support role assumption using OIDC projected volume service account tokens.
 
@@ -275,36 +273,37 @@ AWS accounts whilst preventing privilege escalation as per [FR4](#FR4). Reasons 
 
 <em>Cluster scoped resources</em>
 
-* `AWSClusterStaticPrincipal` represents a static AWS tuple of credentials.
-* `AWSClusterRolePrincipal` represents an intent to assume an AWS role for cluster management.
+* `AWSClusterControllerIdentity` represents an intent to use Cluster API Provider AWS Controller credentials for management cluster.
+* `AWSClusterStaticIdentity` represents a static AWS tuple of credentials.
+* `AWSClusterRoleIdentity` represents an intent to assume an AWS role for cluster management.
 
 <em>Namespace scoped resources</em>
 
-* `AWSServiceAccountPrincipal` represents the use of a Kubernetes service account for access
+* `AWSServiceAccountIdentity` represents the use of a Kubernetes service account for access
   to AWS using federated identity.
 
 <strong><em>Changes to AWSCluster</em></strong>
 
-A new field is added to the `AWSClusterSpec` to reference a principal. We intend to use `corev1.LocalObjectReference` in
+A new field is added to the `AWSClusterSpec` to reference a identity. We intend to use `corev1.LocalObjectReference` in
 order to ensure that the only objects that can be references are either in the same namespace or are scoped to the
 entire cluster.
 
 ```go
-// AWSPrincipalKind defines allowed AWS principal types
-type AWSPrincipalKind string
+// AWSIdentityKind defines allowed AWS identity types
+type AWSIdentityKind string
 
-type AWSPrincipalRef struct {
-  Kind AWSPrincipalKind `json:"kind"`
+type AWSIdentityRef struct {
+  Kind AWSIdentityKind `json:"kind"`
   Name string `json:"name"`
 }
 
 type  AWSClusterSpec  struct {
   ...
   // +optional
-  PrincipalRef *AWSPrincipalRef `json:"principalRef,omitempty"`
+  IdentityRef *AWSIdentityRef `json:"identityRef,omitempty"`
   // AccountID is the AWS Account ID for this cluster
   // +optional
-  AccountID *string `json:"principalRef,omitempty"`
+  AccountID *string `json:"identityRef,omitempty"`
 ```
 
 An example usage would be:
@@ -318,45 +317,60 @@ metadata:
   namespace: "test"
 spec:
   region: "eu-west-1"
-  principalRef:
-    kind: AWSClusterRolePrincipal
+  identityRef:
+    kind: AWSClusterRoleIdentity
     name: test-account-role
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: AWSClusterRolePrincipal
+kind: AWSClusterRoleIdentity
 metadata:
   name: "test-account-role"
 spec:
 ...
 ```
 
-The `PrincipalRef` field will be mutable in order to support `clusterctl move`
+The `IdentityRef` field will be mutable in order to support `clusterctl move`
 scenarios where a user instantiates a cluster on their laptop and then makes
 the cluster self-managed.
 
-<strong><em>Principal CRDs</em></strong>
+<strong><em>Identity CRDs</em></strong>
 
 <em>Common elements</em>
 
-All AWSCluster*Principal types will have Spec structs with an `AllowedNamespaces`
+All AWSCluster*Identity types will have Spec structs with an `AllowedNamespaces`
 field as follows:
 
 ```go
-type AWSClusterPrincipalSpec struct {
-  // AllowedNamespaces is a selector of namespaces that AWSClusters can
-  // use this ClusterPrincipal from. This is a standard Kubernetes LabelSelector,
-  // a label query over a set of resources. The result of matchLabels and
-  // matchExpressions are ANDed. Controllers must not support AWSClusters in
-  // namespaces outside this selector.
-  //
-  // An empty selector (default) indicates that AWSClusters can use this
-  // AWSClusterPrincipal from any namespace. This field is intentionally not a
-  // pointer because the nil behavior (no namespaces) is undesirable here.
-  //
-  //
-  // +optional
-  AllowedNamespaces metav1.LabelSelector `json:"allowedNamespaces"`
+
+type AWSClusterIdentitySpec struct {
+// AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
+// Namespaces can be selected either using an array of namespaces or with label selector.
+// An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+// If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
+// A namespace should be either in the NamespaceList or match with Selector to use the identity.
+//
+// +optional
+AllowedNamespaces *AllowedNamespaces `json:"allowedNamespaces"`
 }
+
+type AllowedNamespaces struct {
+// An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
+//
+// +optional
+// +nullable
+NamespaceList []string `json:"list"`
+
+// AllowedNamespaces is a selector of namespaces that AWSClusters can
+// use this ClusterIdentity from. This is a standard Kubernetes LabelSelector,
+// a label query over a set of resources. The result of matchLabels and
+// matchExpressions are ANDed.
+//
+// An empty selector indicates that AWSClusters cannot use this
+// AWSClusterIdentity from any namespace.
+// +optional
+Selector metav1.LabelSelector `json:"selector"`
+}
+
 ```
 
 All identities based around AWS roles will have the following fields in their
@@ -386,20 +400,68 @@ type AWSRoleSpec struct {
 }
 ```
 
-<em>AWSClusterStaticPrincipal</em>
+<em>AWSClusterControllerIdentity</em>
+
+Supporting [FR4](#FR4) by restricting the usage of controller credentials only from `allowedNamespaces`.
+`AWSClusterControllerIdentity` resource will be a singleton and this will be enforced by OpenAPI checks.
+This instance's creation is automated by a controller for not affecting existing AWSClusters. For details, see [Upgrade Strategy](#upgrade-strategy)
+
+```go
+
+// AWSClusterControllerIdentity represents an intent to use Cluster API Provider AWS Controller credentials for management cluster
+// and restricts the usage of it by namespaces.
+
+type AWSClusterControllerIdentity struct {
+  metav1.TypeMeta   `json:",inline"`
+  metav1.ObjectMeta `json:"metadata,omitempty"`
+
+  // Spec for this AWSClusterControllerIdentity.
+  Spec AWSClusterControllerIdentitySpec `json:"spec,omitempty""`
+}
+
+type AWSClusterControllerIdentitySpec struct {
+  AWSClusterIdentitySpec
+}
+```
+
+Example:
+
+```yaml
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: AWSCluster
+metadata:
+  name: "test"
+  namespace: "test"
+spec:
+  region: "eu-west-1"
+  identityRef:
+    kind: AWSClusterControllerIdentity
+    name: default
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: AWSClusterControllerIdentity
+metadata:
+  name: "default"
+spec:
+  allowedNamespaces:{}  # matches all namespaces
+```
+
+
+<em>AWSClusterStaticIdentity</em>
 
 Supporting [FR3](#FR3).
 
 ```go
 
-// AWSClusterStaticPrincipal represents a reference to an AWS access key ID and
+// AWSClusterStaticIdentity represents a reference to an AWS access key ID and
 // secret access key, stored in a secret.
-type AWSClusterStaticPrincipal struct {
+type AWSClusterStaticIdentity struct {
   metav1.TypeMeta   `json:",inline"`
   metav1.ObjectMeta `json:"metadata,omitempty"`
 
-  // Spec for this AWSClusterStaticPrincipal.
-  Spec AWSClusterStaticPrincipalSpec `json:"spec,omitempty""`
+  // Spec for this AWSClusterStaticIdentity.
+  Spec AWSClusterStaticIdentitySpec `json:"spec,omitempty""`
 }
 
 type AWSClusterSecretReference struct {
@@ -409,8 +471,8 @@ type AWSClusterSecretReference struct {
   Name string `json:"name"`
 }
 
-type AWSClusterStaticPrincipalSpec struct {
-  AWSClusterPrincipalSpec
+type AWSClusterStaticIdentitySpec struct {
+  AWSClusterIdentitySpec
   // Reference to a secret containing the credentials. The secret should
   // contain the following data keys:
   //  AccessKeyID: AKIAIOSFODNN7EXAMPLE
@@ -431,20 +493,30 @@ metadata:
   namespace: "test"
 spec:
   region: "eu-west-1"
-  principalRef:
-    kind: AWSClusterStaticPrincipal
+  identityRef:
+    kind: AWSClusterStaticIdentity
     name: test-account
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: AWSClusterStaticPrincipal
+kind: AWSClusterStaticIdentity
 metadata:
   name: "test-account"
 spec:
   secretRef:
     name: test-account-creds
     namespace: capa-system
+      clusterSelector:
   allowedNamespaces:
-  - "test"
+    selector:
+      matchLabels:
+        ns: "testlabel"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    cluster.x-k8s.io/ns: "testlabel"
+  name: "test"
 ---
 apiVersion: v1
 kind: Secret
@@ -456,30 +528,30 @@ stringData:
  secretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
-<em>AWSClusterRolePrincipal</em>
+<em>AWSClusterRoleIdentity</em>
 
-`AWSClusterRolePrincipal` allows CAPA to assume a role either in the same
+`AWSClusterRoleIdentity` allows CAPA to assume a role either in the same
 or another AWS account, using the STS::AssumeRole API, meeting [FR 1](#FR1).
 
 ```go
-type AWSClusterRolePrincipal struct {
+type AWSClusterRoleIdentity struct {
   metav1.TypeMeta   `json:",inline"`
   metav1.ObjectMeta `json:"metadata,omitempty"`
 
-  // Spec for this AWSClusterRolePrincipal.
-  Spec AWSClusterRolePrincipalSpec `json:"spec,omitempty""`
+  // Spec for this AWSClusterRoleIdentity.
+  Spec AWSClusterRoleIdentitySpec `json:"spec,omitempty""`
 }
 
-// AWSClusterPrincipalKind defines allowed cluster-scoped AWS principal types
-type AWSClusterPrincipalKind AWSPrincipalKind
+// AWSClusterIdentityKind defines allowed cluster-scoped AWS identity types
+type AWSClusterIdentityKind AWSIdentityKind
 
-type AWSClusterPrincipalReference struct {
-  Kind AWSClusterPrincipalKind `json:"kind"`
+type AWSClusterIdentityReference struct {
+  Kind AWSClusterIdentityKind `json:"kind"`
   Name string `json:"name"`
 }
 
-type AWSClusterRolePrincipalSpec struct {
-  AWSClusterPrincipalSpec
+type AWSClusterRoleIdentitySpec struct {
+  AWSClusterIdentitySpec
   AWSRoleSpec
   // A unique identifier that might be required when you assume a role in another account.
   // If the administrator of the account to which the role belongs provided you with an
@@ -494,9 +566,9 @@ type AWSClusterRolePrincipalSpec struct {
   // +kubebuilder:validation:Pattern:=[\w+=,.@:\/-]*
   ExternalID *string `json:"externalID,omitempty"`
 
-  // SourcePrincipalRef is a reference to another principal which will be chained to do
+  // SourceIdentityRef is a reference to another identity which will be chained to do
   // role assumption.
-  SourcePrincipalRef AWSClusterPrincipalReference `json:"sourcePrincipalRef,omitempty"`
+  SourceIdentityRef AWSClusterIdentityReference `json:"sourceIdentityRef,omitempty"`
 }
 
 ```
@@ -514,17 +586,18 @@ metadata:
   namespace: "test"
 spec:
   region: "eu-west-1"
-  principalRef:
-    kind: AWSClusterRolePrincipal
+  identityRef:
+    kind: AWSClusterRoleIdentity
     name: test-account-role
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: AWSClusterRolePrincipal
+kind: AWSClusterRoleIdentity
 metadata:
   name: "test-account-role"
 spec:
   allowedNamespaces:
-  - "test"
+    list: # allows only "test" namespace to use this identity
+      "test"
   roleARN: "arn:aws:iam::123456789:role/CAPARole"
   # Optional settings
   sessionName: "cluster-spinner.acme.com"
@@ -533,12 +606,12 @@ spec:
   inlinePolicy: '{"Version": "2012-10-17","Statement":[...]}'
   tags: '["company": "acme industries", "product": "cluster-spinner"]'
   transitiveTags: '["company", "product"]'
-  sourcePrincipalRef:
-    kind: AWSClusterStaticPrincipal
+  sourceIdentityRef:
+    kind: AWSClusterStaticIdentity
     name: test-account-creds
 ```
 
-<em>Future implementation: AWSServiceAccountPrincipal</em>
+<em>Future implementation: AWSServiceAccountIdentity</em>
 
 This would not be implemented in the first instance, but opens the possibility to use Kubernetes service accounts
 together with `STS::AssumeRoleWithWebIdentity`, supporting [FR7](#FR7).
@@ -546,15 +619,15 @@ together with `STS::AssumeRoleWithWebIdentity`, supporting [FR7](#FR7).
 Definition:
 
 ```go
-type AWSServiceAccountPrincipal struct {
+type AWSServiceAccountIdentity struct {
   metav1.TypeMeta   `json:",inline"`
   metav1.ObjectMeta `json:"metadata,omitempty"`
 
-  // Spec for this AWSServiceAccountPrincipal.
-  Spec AWSServiceAccountPrincipalSpec `json:"spec,omitempty""`
+  // Spec for this AWSServiceAccountIdentity.
+  Spec AWSServiceAccountIdentitySpec `json:"spec,omitempty""`
 }
 
-type AWSServiceAccountPrincipalSpec struct {
+type AWSServiceAccountIdentitySpec struct {
   AWSRoleSpec
 
   // Audience is the intended audience of the token. A recipient of a token
@@ -586,7 +659,7 @@ The account owner would be expected to set up an appropriate IAM role with the f
   "Statement": [
     {
       "Effect": "Allow",
-      "Principal": {
+      "Identity": {
         "Federated": "<Provider ARN for the management cluster OIDC configuration>"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
@@ -612,12 +685,12 @@ metadata:
   namespace: "test"
 spec:
   region: "eu-west-1"
-  principalRef:
-    kind: AWSServiceAccountPrincipal
+  identityRef:
+    kind: AWSServiceAccountIdentity
     name: test-service-account
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: AWSServiceAccountPrincipal
+kind: AWSServiceAccountIdentity
 metadata:
   name: "test-service-account"
   namespace: "test"
@@ -633,10 +706,11 @@ with the requisite parameters and receive a new JWT token to use with `STS::Assu
 
 ### Controller Changes
 
-* If principalRef is specified, the CRD is fetched and unmarshalled into a  AWS SDK credential.Provider for the principal type.
+* If identityRef is specified, the CRD is fetched and unmarshalled into a  AWS SDK credential.Provider for the identity type.
 * The controller will compare the hash of the credential provider against the same secret’s provider in a cache ([NFR 8](#NFR8)).
 * The controller will take the newer of the two and instantiate AWSClients with the selected credential provider.
-* The controller will set an the principal resource as one of the OwnerReferences of the AWSCluster.
+* The controller will set an the identity resource as one of the OwnerReferences of the AWSCluster.
+* The controller and defaulting webhook will default `nil` `identityRef` field in AWSClusters to `AWSClusterControllerIdentity`.
 
 This flow is shown below:
 
@@ -647,19 +721,20 @@ This flow is shown below:
 Today, `clusterctl move` operates by tracking objectreferences within the same namespace, since we are now proposing to
 use cluster-scoped resources, we will need to add requisite support to clusterctl's object graph to track ownerReferences
 pointing at cluster-scoped resources, and ensure they are moved. We will naively not delete cluster-scoped resources
-during a move, as they maybe referenced across namespaces. Because we will be tracking the AWS Account ID for a given principal, it is expected, that for this proposal, this provides sufficient protection against the possibility of a cluster-scoped
-principal after one move, and being copied again.
+during a move, as they maybe referenced across namespaces. Because we will be tracking the AWS Account ID for a given identity, it is expected, that for this proposal, this provides sufficient protection against the possibility of a cluster-scoped
+identity after one move, and being copied again.
 
 
 #### Validating webhook changes
 
 A validating webhook could potentially handle some of the cross-resource validation necessary for the [security
 model](#security-model) and provide more immediate feedback to end users. However, it would be imperfect. For example, a
-change to a `AWSCluster*Principal` could affect the validity of corresponding AWSCluster.
+change to a `AWSCluster*Identity` could affect the validity of corresponding AWSCluster.
+The singleton `AWSClusterControllerIdentity` resource will be immutable to avoid any unwanted overrides to the allowed namespaces, especially during upgrading clusters.
 
-#### Principal Type Credential Provider Behaviour
+#### Identity Type Credential Provider Behaviour
 
-Implementations for all principal types will implement the `credentials.Provider` interface in the AWS SDK to support [FR5](#FR5) as well as an
+Implementations for all identity types will implement the `credentials.Provider` interface in the AWS SDK to support [FR5](#FR5) as well as an
 additional function signature to support caching:
 
 ```go
@@ -673,10 +748,10 @@ type Provider interface {
  IsExpired() bool
 }
 
-type AWSPrincipalTypeProvider interface {
+type AWSIdentityTypeProvider interface {
  credentials.Provider
  // Hash returns a unique hash of the data forming the credentials
- // for this principal
+ // for this identity
  Hash() (string, error)
 }
 ```
@@ -696,7 +771,7 @@ forcing a refresh.
 
 The authors have implemented a similar mechanism [based on the Ruby AWS SDK][aws-assume-role].
 
-This could be further optimised by having the controller maintain a watch on all Secrets matching the principal types.
+This could be further optimised by having the controller maintain a watch on all Secrets matching the identity types.
 Upon receiving an update event, the controller will update lookup the key in the cache and update the relevant provider.
 This may be implemented as its own interface. Mutexes will ensure in-flight updates are completed prior to SDK calls are
 made. This would require changes to RBAC, and maintaining a watch on secrets of a specific type will require further
@@ -730,11 +805,11 @@ defined above. In most cases, it will be desirable to have all resources be
 readable by most roles, so instead we'll focus on write access for this model.
 
 ##### Write Permissions
-|                              | AWSCluster*Principal | AWSServiceAccountPrincipal | AWS IAM API | Cluster |
-| ---------------------------- | -------------------- | -------------------------- | ----------- | ------- |
-| Infrastructure Provider      | Yes                  | Yes                        | Yes         | Yes     |
-| Management Cluster Operators | Yes                  | Yes                        | Yes         | Yes     |
-| Workload Cluster Operator    | No                   | Yes                        | No          | Yes     |
+|                              | AWSCluster*Identity | AWSServiceAccountIdentity | AWS IAM API | Cluster |
+| ---------------------------- | ------------------- | ------------------------- | ----------- | ------- |
+| Infrastructure Provider      | Yes                 | Yes                       | Yes         | Yes     |
+| Management Cluster Operators | Yes                 | Yes                       | Yes         | Yes     |
+| Workload Cluster Operator    | No                  | Yes                       | No          | Yes     |
 
 Because Kubernetes service accounts necessarily encode the namespace into the JWT subject, we can allow workload cluster
 operators to create their own `AWSServiceAccountIdentities`. Whether they have actual permissions on AWS IAM to set up
@@ -746,11 +821,11 @@ The extra configuration options are not possible to control with RBAC. Instead,
 they will be controlled with configuration fields on GatewayClasses:
 
 * **allowedNamespaces**: This field is a selector of namespaces that
-  Gateways can use this `AWSCluster*Principal` from. This is a standard Kubernetes
+  Gateways can use this `AWSCluster*Identity` from. This is a standard Kubernetes
   LabelSelector, a label query over a set of resources. The result of
   matchLabels and matchExpressions are ANDed. CAPA will not support
   AWSClusters in namespaces outside this selector. An empty selector (default)
-  indicates that AWSCluster can use this `AWSCluster*Principal` from any namespace. This
+  indicates that AWSCluster can use this `AWSCluster*Identity` from any namespace. This
   field is intentionally not a pointer because the nil behavior (no namespaces)
   is undesirable here.
 
@@ -759,10 +834,10 @@ they will be controlled with configuration fields on GatewayClasses:
 The CAPA controller will need to:
 
 * Populate condition fields on AWSClusters and indicate if it is
-  compatible with `AWS*Principal`.
-* Not implement invalid configuration. Fore example, if a `AWSCluster*Principal` is referenced in
+  compatible with `AWS*Identity`.
+* Not implement invalid configuration. Fore example, if a `AWSCluster*Identity` is referenced in
   an invalid namespace for it, it should be ignored.
-* Respond to changes in `AWS*Principal` configuration that may change.
+* Respond to changes in `AWS*Identity` configuration that may change.
 
 ### Alternative Approaches Considered
 
@@ -787,13 +862,13 @@ API server KMS.
 
 **Downsides**
 
-By allowing workload cluster operators to create the various principals, or referencing them directly in the
+By allowing workload cluster operators to create the various identitys, or referencing them directly in the
 AWSCluster as a field they could potentially escalate privilege when assuming role across AWS accounts as the CAPA
 controller itself may be running with privileged trust.
 
-#### 1:1 mapping one namespace to one AWSPrincipal
+#### 1:1 mapping one namespace to one AWSIdentity
 
-The mapping of a singular AWSPrincipal to a single namespace such that there is a 1:1 mapping
+The mapping of a singular AWSIdentity to a single namespace such that there is a 1:1 mapping
 was considered, via either some implicitly named secret or other metadata on the namespace.
 
 **Benefits**
@@ -844,9 +919,12 @@ different namespaces do not break the AWS Cloud Provider.
 
 ## Upgrade Strategy
 
-The data changes are additive and optional, so existing AWSCluster specifications will continue to reconcile as before.
-These changes will only come into play when an IAM role is provided in the new field in AWSClusterSpec. Upgrades to
-versions with this new field will be broken
+The data changes are additive and optional, except `AWSClusterControllerIdentity`.
+`AWSClusterControllerIdentity` singleton instance restricts the usage of controller credentials only from `allowedNamespaces`.
+AWSClusters that do not have an assigned `IdentityRef` is defaulted to use `AWSClusterControllerIdentity`, hence existing clusters needs to have
+`AWSClusterControllerIdentity` instance. In order to make existing AWSClusters to continue to reconcile as before, a new controller is added as experimental feature
+and gated with **Feature gate:** AutoControllerIdentityCreator=true. By default, this feature is enabled. This controller creates `AWSClusterControllerIdentity` singleton instance (if missing) that allows all namespaces to use the identity.
+During v1alpha4 releases, since breaking changes will be allowed, this feature will become obsolete.
 
 ## Additional Details
 
@@ -857,7 +935,7 @@ versions with this new field will be broken
 * Propose performing an initial sts:AssumeRole call and fail pre-flight if this fails.
 * e2e test for role assumption ([NFR12](#NFR12)).
 * If it can be supported in Prow environment, additional e2e test for OIDC-based role assumption.
-* clusterctl e2e test with a move of a self-hosted cluster using a principalRef.
+* clusterctl e2e test with a move of a self-hosted cluster using a identityRef.
 
 ### Graduation Criteria
 

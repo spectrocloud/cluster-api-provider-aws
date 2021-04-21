@@ -44,6 +44,9 @@ type AWSMachineSpec struct {
 	// ProviderID is the unique identifier as specified by the cloud provider.
 	ProviderID *string `json:"providerID,omitempty"`
 
+	// InstanceID is the EC2 instance ID for this machine.
+	InstanceID *string `json:"instanceID,omitempty"`
+
 	// AMI is the reference to the AMI from which to create the machine instance.
 	AMI AWSResourceReference `json:"ami,omitempty"`
 
@@ -91,7 +94,8 @@ type AWSMachineSpec struct {
 
 	// AdditionalSecurityGroups is an array of references to security groups that should be applied to the
 	// instance. These security groups would be set in addition to any security groups defined
-	// at the cluster level or in the actuator.
+	// at the cluster level or in the actuator. It is possible to specify either IDs of Filters. Using Filters
+	// will cause additional requests to AWS API and if tags change the attached security groups might change too.
 	// +optional
 	AdditionalSecurityGroups []AWSResourceReference `json:"additionalSecurityGroups,omitempty"`
 

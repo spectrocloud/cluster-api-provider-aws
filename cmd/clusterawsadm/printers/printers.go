@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -108,7 +108,7 @@ type jsonPrinter struct {
 }
 
 func (p *jsonPrinter) Print(in interface{}) error {
-	data, err := json.Marshal(in)
+	data, err := json.MarshalIndent(in, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshalling object as json: %w", err)
 	}

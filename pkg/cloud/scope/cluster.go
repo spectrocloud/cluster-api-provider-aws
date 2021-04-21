@@ -23,7 +23,7 @@ import (
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
@@ -58,7 +58,15 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 		params.Logger = klogr.New()
 	}
 
-	session, serviceLimiters, err := sessionForRegion(params.AWSCluster.Spec.Region, params.Endpoints)
+	clusterScope := &ClusterScope{
+		Logger:         params.Logger,
+		client:         params.Client,
+		Cluster:        params.Cluster,
+		AWSCluster:     params.AWSCluster,
+		controllerName: params.ControllerName,
+	}
+
+	session, serviceLimiters, err := sessionForClusterWithRegion(params.Client, clusterScope, params.AWSCluster.Spec.Region, params.Endpoints, params.Logger)
 	if err != nil {
 		return nil, errors.Errorf("failed to create aws session: %v", err)
 	}
@@ -67,16 +75,12 @@ func NewClusterScope(params ClusterScopeParams) (*ClusterScope, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
-	return &ClusterScope{
-		Logger:          params.Logger,
-		client:          params.Client,
-		Cluster:         params.Cluster,
-		AWSCluster:      params.AWSCluster,
-		patchHelper:     helper,
-		session:         session,
-		serviceLimiters: serviceLimiters,
-		controllerName:  params.ControllerName,
-	}, nil
+
+	clusterScope.patchHelper = helper
+	clusterScope.session = session
+	clusterScope.serviceLimiters = serviceLimiters
+
+	return clusterScope, nil
 }
 
 // ClusterScope defines the basic context for an actuator to operate upon.
@@ -108,6 +112,11 @@ func (s *ClusterScope) Subnets() infrav1.Subnets {
 	return s.AWSCluster.Spec.NetworkSpec.Subnets
 }
 
+// IdentityRef returns the cluster identityRef.
+func (s *ClusterScope) IdentityRef() *infrav1.AWSIdentityReference {
+	return s.AWSCluster.Spec.IdentityRef
+}
+
 // SetSubnets updates the clusters subnets.
 func (s *ClusterScope) SetSubnets(subnets infrav1.Subnets) {
 	s.AWSCluster.Spec.NetworkSpec.Subnets = subnets
@@ -119,6 +128,11 @@ func (s *ClusterScope) CNIIngressRules() infrav1.CNIIngressRules {
 		return s.AWSCluster.Spec.NetworkSpec.CNI.CNIIngressRules
 	}
 	return infrav1.CNIIngressRules{}
+}
+
+// SecurityGroupOverrides returns the cluster security group overrides
+func (s *ClusterScope) SecurityGroupOverrides() map[infrav1.SecurityGroupRole]string {
+	return s.AWSCluster.Spec.NetworkSpec.SecurityGroupOverrides
 }
 
 // SecurityGroups returns the cluster security groups as a map, it creates the map if empty.
@@ -139,6 +153,11 @@ func (s *ClusterScope) Name() string {
 // Namespace returns the cluster namespace.
 func (s *ClusterScope) Namespace() string {
 	return s.Cluster.Namespace
+}
+
+// Name returns the AWS cluster name.
+func (s *ClusterScope) InfraClusterName() string {
+	return s.AWSCluster.Name
 }
 
 // Region returns the cluster region.
@@ -219,6 +238,7 @@ func (s *ClusterScope) PatchObject() error {
 			infrav1.ClusterSecurityGroupsReadyCondition,
 			infrav1.BastionHostReadyCondition,
 			infrav1.LoadBalancerReadyCondition,
+			infrav1.PrincipalUsageAllowedCondition,
 		}})
 }
 

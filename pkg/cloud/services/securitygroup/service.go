@@ -34,6 +34,9 @@ type Scope interface {
 	// SecurityGroups returns the cluster security groups as a map, it creates the map if empty.
 	SecurityGroups() map[infrav1.SecurityGroupRole]infrav1.SecurityGroup
 
+	// SecurityGroupOverrides returns the security groups that are overridden in the cluster spec
+	SecurityGroupOverrides() map[infrav1.SecurityGroupRole]string
+
 	// VPC returns the cluster VPC.
 	VPC() *infrav1.VPCSpec
 
@@ -58,7 +61,7 @@ func NewService(sgScope Scope) *Service {
 	return &Service{
 		scope:     sgScope,
 		roles:     defaultRoles,
-		EC2Client: scope.NewEC2Client(sgScope, sgScope, sgScope.InfraCluster()),
+		EC2Client: scope.NewEC2Client(sgScope, sgScope, sgScope, sgScope.InfraCluster()),
 	}
 }
 
@@ -68,6 +71,6 @@ func NewServiceWithRoles(sgScope Scope, roles []infrav1.SecurityGroupRole) *Serv
 	return &Service{
 		scope:     sgScope,
 		roles:     roles,
-		EC2Client: scope.NewEC2Client(sgScope, sgScope, sgScope.InfraCluster()),
+		EC2Client: scope.NewEC2Client(sgScope, sgScope, sgScope, sgScope.InfraCluster()),
 	}
 }

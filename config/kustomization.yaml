@@ -31,5 +31,5 @@ patchesJson6902:
     group: apiextensions.k8s.io
     version: v1
     kind: CustomResourceDefinition
-    name: awsmanagedcontrolplanes.infrastructure.cluster.x-k8s.io
+    name: awsclustercontrolleridentities.infrastructure.cluster.x-k8s.io
   path: patch_crd_webhook_namespace.yaml

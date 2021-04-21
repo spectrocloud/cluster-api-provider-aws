@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,24 +32,7 @@ func TestAWSCluster_ValidateCreate(t *testing.T) {
 		cluster *AWSCluster
 		wantErr bool
 	}{
-		{
-			name: "SSH key name is not valid",
-			cluster: &AWSCluster{
-				Spec: AWSClusterSpec{
-					SSHKeyName: aws.String("test-capi\t"),
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "SSH key name should valid",
-			cluster: &AWSCluster{
-				Spec: AWSClusterSpec{
-					SSHKeyName: aws.String("test-capi"),
-				},
-			},
-			wantErr: false,
-		},
+		// The SSHKeyName tests were moved to sshkeyname_test.go
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

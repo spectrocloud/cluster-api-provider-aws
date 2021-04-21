@@ -28,12 +28,16 @@ const (
 )
 
 // AWSManagedControlPlaneSpec defines the desired state of AWSManagedControlPlane
-type AWSManagedControlPlaneSpec struct {
+type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// EKSClusterName allows you to specify the name of the EKS cluster in
 	// AWS. If you don't specify a name then a default name will be created
 	// based on the namespace and name of the managed control plane.
 	// +optional
 	EKSClusterName string `json:"eksClusterName,omitempty"`
+
+	// IdentityRef is a reference to a identity to be used when reconciling the managed control plane.
+	// +optional
+	IdentityRef *infrav1.AWSIdentityReference `json:"identityRef,omitempty"`
 
 	// NetworkSpec encapsulates all things related to AWS network.
 	NetworkSpec infrav1.NetworkSpec `json:"networkSpec,omitempty"`
@@ -148,6 +152,14 @@ type AWSManagedControlPlaneSpec struct {
 	// Addons defines the EKS addons to enable with the EKS cluster.
 	// +optional
 	Addons *[]Addon `json:"addons,omitempty"`
+
+	// DisableVPCCNI indcates the the Amazon VPC CNI should be disabled. With EKS clusters that
+	// the Amazon VPC CNI is automatically installed into the cluster. For clusters where you want
+	// to use an alternate CNI this option provides a way to specify that the Amazon VPC CNI
+	// should be deleted. You cannot set this to true if you are using the
+	// Amazon VPC CNI addon or if you have specified a secondary CIDR block.
+	// +kubebuilder:default=false
+	DisableVPCCNI bool `json:"disableVPCCNI,omitempty"`
 }
 
 // EndpointAccess specifies how control plane endpoints are accessible

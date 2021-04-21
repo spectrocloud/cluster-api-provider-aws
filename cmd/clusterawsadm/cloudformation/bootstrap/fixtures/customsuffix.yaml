@@ -186,6 +186,7 @@ Resources:
           - elasticloadbalancing:DeleteLoadBalancer
           - elasticloadbalancing:DescribeLoadBalancers
           - elasticloadbalancing:DescribeLoadBalancerAttributes
+          - elasticloadbalancing:ApplySecurityGroupsToLoadBalancer
           - elasticloadbalancing:DescribeTags
           - elasticloadbalancing:ModifyLoadBalancerAttributes
           - elasticloadbalancing:RegisterInstancesWithLoadBalancer
@@ -211,7 +212,7 @@ Resources:
           - autoscaling:DeleteTags
           Effect: Allow
           Resource:
-          - arn:aws:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*
+          - arn:*:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*
         - Action:
           - iam:CreateServiceLinkedRole
           Condition:

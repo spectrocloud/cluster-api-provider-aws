@@ -27,7 +27,9 @@ TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
 
 BIN_DIR := bin
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
-GH_REPO ?= kubernetes-sigs/cluster-api-provider-aws
+GH_ORG_NAME ?= kubernetes-sigs
+GH_REPO_NAME ?= cluster-api-provider-aws
+GH_REPO ?= $(GH_ORG_NAME)/$(GH_REPO_NAME)
 TEST_E2E_DIR := test/e2e
 
 # Files
@@ -40,6 +42,7 @@ CONFORMANCE_CI_TEMPLATE := $(ARTIFACTS)/templates/cluster-template-conformance-c
 EXP_DIR := exp
 
 # Binaries.
+GO_APIDIFF := $(TOOLS_BIN_DIR)/go-apidiff
 CLUSTERCTL := $(BIN_DIR)/clusterctl
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
 CONVERSION_GEN := $(TOOLS_BIN_DIR)/conversion-gen
@@ -54,10 +57,16 @@ KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
 MOCKGEN := $(TOOLS_BIN_DIR)/mockgen
 RELEASE_NOTES := $(TOOLS_BIN_DIR)/release-notes
 SSM_PLUGIN := $(TOOLS_BIN_DIR)/session-manager-plugin
+CLUSTERAWSADM_SRCS := $(call rwildcard,.,cmd/clusterawsadm/*.*)
 
 PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
 DOCKER_CLI_EXPERIMENTAL=enabled
 DOCKER_BUILDKIT=1
+
+# Set --output-base for conversion-gen if we are not within GOPATH
+ifneq ($(abspath $(REPO_ROOT)),$(shell go env GOPATH)/src/sigs.k8s.io/cluster-api-provider-aws)
+	GEN_OUTPUT_BASE := --output-base=$(REPO_ROOT)
+endif
 
 # Release variables
 
@@ -70,6 +79,8 @@ RELEASE_TAG ?= $(shell git describe --abbrev=0 2>/dev/null)
 PULL_BASE_REF ?= $(RELEASE_TAG) # PULL_BASE_REF will be provided by Prow
 RELEASE_ALIAS_TAG ?= $(PULL_BASE_REF)
 RELEASE_DIR := out
+RELEASE_POLICIES := $(RELEASE_DIR)/AWSIAMManagedPolicyControllers.json $(RELEASE_DIR)/AWSIAMManagedPolicyControllersWithEKS.json $(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderControlPlane.json $(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderNodes.json
+
 
 TAG ?= dev
 ARCH ?= amd64
@@ -161,6 +172,12 @@ test-conformance: $(GINKGO) $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run 
 
 test-conformance-fast: ## Run clusterctl based conformance test on workload cluster (requires Docker) using a subset of the conformance suite in parallel.
 	$(MAKE) test-conformance CONFORMANCE_E2E_ARGS="-kubetest.config-file=$(KUBETEST_FAST_CONF_PATH) -kubetest.ginkgo-nodes=5 $(E2E_ARGS)"
+
+.PHONY: test-cover
+test-cover: ## Run tests with code coverage and code generate  reports
+	source ./scripts/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v -coverprofile=out/coverage.out ./... $(TEST_ARGS)
+	go tool cover -func=out/coverage.out -o out/coverage.txt
+	go tool cover -html=out/coverage.out -o out/coverage.html
 ## --------------------------------------
 ## Binaries
 ## --------------------------------------
@@ -233,12 +250,12 @@ generate-go-core: ## Runs Go related generate targets
 
 	$(DEFAULTER_GEN) \
 		--input-dirs=./cmd/clusterawsadm/api/bootstrap/v1alpha1,./cmd/clusterawsadm/api/iam/v1alpha1 \
-		--v=0 \
+		--v=0 $(GEN_OUTPUT_BASE) \
 		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
 
 	$(CONVERSION_GEN) \
 		--input-dirs=./api/v1alpha2 \
-		--output-file-base=zz_generated.conversion \
+		--output-file-base=zz_generated.conversion $(GEN_OUTPUT_BASE) \
 		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
 
 .PHONY: generate-go-eks-bootstrap
@@ -402,15 +419,37 @@ check-release-tag:
 	@if [ -z "${RELEASE_TAG}" ]; then echo "RELEASE_TAG is not set"; exit 1; fi
 	@if ! [ -z "$$(git status --porcelain)" ]; then echo "Your local git repository contains uncommitted changes, use git clean before proceeding."; exit 1; fi
 
+.PHONY: check-previous-release-tag
+check-previous-release-tag:
+	@if [ -z "${PREVIOUS_VERSION}" ]; then echo "PREVIOUS_VERSION is not set"; exit 1; fi
+
+.PHONY: check-github-token
+check-github-token:
+	@if [ -z "${GITHUB_TOKEN}" ]; then echo "GITHUB_TOKEN is not set"; exit 1; fi
+
 .PHONY: release
 release: $(RELEASE_NOTES) clean-release check-release-tag $(RELEASE_DIR)  ## Builds and push container images using the latest git tag for the commit.
 	git checkout "${RELEASE_TAG}"
-	@if [ -z "${PREVIOUS_VERSION}" ]; then echo "PREVIOUS_VERSION is not set"; exit 1; fi
-	$(RELEASE_NOTES) --from $(PREVIOUS_VERSION) > $(RELEASE_DIR)/CHANGELOG.md
+	$(MAKE) release-changelog
 	$(MAKE) release-binaries
 	$(MAKE) release-notes
 	$(MAKE) release-manifests
 	$(MAKE) release-templates
+	$(MAKE) release-policies
+
+release-policies: $(RELEASE_POLICIES)
+
+$(RELEASE_DIR)/AWSIAMManagedPolicyControllers.json: $(RELEASE_DIR) $(CLUSTERAWSADM_SRCS)
+	go run ./cmd/clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyControllers > $@
+
+$(RELEASE_DIR)/AWSIAMManagedPolicyControllersWithEKS.json: $(RELEASE_DIR) $(CLUSTERAWSADM_SRCS)
+	go run ./cmd/clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyControllers --config hack/eks-clusterawsadm-config.yaml > $@
+
+$(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderControlPlane.json: $(RELEASE_DIR) $(CLUSTERAWSADM_SRCS)
+	go run ./cmd/clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyCloudProviderControlPlane > $(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderControlPlane.json
+
+$(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderNodes.json: $(RELEASE_DIR) $(CLUSTERAWSADM_SRCS)
+	go run ./cmd/clusterawsadm bootstrap iam print-policy --document AWSIAMManagedPolicyCloudProviderNodes > $(RELEASE_DIR)/AWSIAMManagedPolicyCloudProviderNodes.json
 
 .PHONY: release-manifests
 release-manifests:
@@ -419,6 +458,10 @@ release-manifests:
 	$(MAKE) $(RELEASE_DIR)/$(EKS_CONTROLPLANE_MANIFEST_FILE).yaml  TAG=$(RELEASE_TAG) PULL_POLICY=IfNotPresent
 	# Add metadata to the release artifacts
 	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
+
+.PHONY: release-changelog
+release-changelog: $(RELEASE_NOTES) check-release-tag check-previous-release-tag check-github-token $(RELEASE_DIR) ## Builds the changelog for a release
+	$(RELEASE_NOTES) --debug --org $(GH_ORG_NAME) --repo $(GH_REPO_NAME) --start-sha $(shell git rev-list -n 1 ${PREVIOUS_VERSION}) --end-sha $(shell git rev-list -n 1 ${RELEASE_TAG}) --output $(RELEASE_DIR)/CHANGELOG.md --go-template go-template:$(REPO_ROOT)/hack/changelog.tpl --dependencies=false
 
 .PHONY: release-binaries
 release-binaries: ## Builds the binaries to publish with a release

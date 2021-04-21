@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/aws/amazon-vpc-cni-k8s v1.7.5
+	github.com/aws/aws-lambda-go v1.23.0
 	github.com/aws/aws-sdk-go v1.36.26
 	github.com/awslabs/goformation/v4 v4.15.0
 	github.com/blang/semver v3.5.1+incompatible
@@ -30,9 +31,10 @@ require (
 	k8s.io/client-go v0.17.9
 	k8s.io/component-base v0.17.9
 	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.0.0
 	k8s.io/utils v0.0.0-20200912215256-4140de9c8800
 	sigs.k8s.io/aws-iam-authenticator v0.5.1
-	sigs.k8s.io/cluster-api v0.3.12
+	sigs.k8s.io/cluster-api v0.3.15-0.20210309173700-34de71aaaac8
 	sigs.k8s.io/controller-runtime v0.5.14
 	sigs.k8s.io/yaml v1.2.0
 )

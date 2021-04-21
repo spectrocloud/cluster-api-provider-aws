@@ -199,6 +199,11 @@ type NetworkSpec struct {
 	// CNI configuration
 	// +optional
 	CNI *CNISpec `json:"cni,omitempty"`
+
+	// SecurityGroupOverrides is an optional set of security groups to use for cluster instances
+	// This is optional - if not provided new security groups will be created for the cluster
+	// +optional
+	SecurityGroupOverrides map[SecurityGroupRole]string `json:"securityGroupOverrides,omitempty"`
 }
 
 // VPCSpec configures an AWS VPC.
@@ -291,6 +296,15 @@ func (s Subnets) ToMap() map[string]*SubnetSpec {
 	res := make(map[string]*SubnetSpec)
 	for _, x := range s {
 		res[x.ID] = x
+	}
+	return res
+}
+
+// IDs returns a slice of the subnet ids
+func (s Subnets) IDs() []string {
+	res := []string{}
+	for _, subnet := range s {
+		res = append(res, subnet.ID)
 	}
 	return res
 }
@@ -549,7 +563,7 @@ var (
 	// InstanceStatePending is the string representing an instance in a pending state
 	InstanceStatePending = InstanceState("pending")
 
-	// InstanceStateRunning is the string representing an instance in a pending state
+	// InstanceStateRunning is the string representing an instance in a running state
 	InstanceStateRunning = InstanceState("running")
 
 	// InstanceStateShuttingDown is the string representing an instance shutting down

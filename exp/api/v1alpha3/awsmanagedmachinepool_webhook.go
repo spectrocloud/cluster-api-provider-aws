@@ -33,6 +33,10 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
 )
 
+const (
+	maxNodegroupNameLength = 100
+)
+
 // log is for logging in this package.
 var mmpLog = logf.Log.WithName("awsmanagedmachinepool-resource")
 
@@ -74,6 +78,25 @@ func (r *AWSManagedMachinePool) validateScaling() field.ErrorList {
 	return allErrs
 }
 
+func (r *AWSManagedMachinePool) validateRemoteAccess() field.ErrorList {
+	var allErrs field.ErrorList
+	if r.Spec.RemoteAccess == nil {
+		return allErrs
+	}
+	remoteAccessPath := field.NewPath("spec", "remoteAccess")
+	sourceSecurityGroups := r.Spec.RemoteAccess.SourceSecurityGroups
+	public := r.Spec.RemoteAccess.Public
+
+	if public && len(sourceSecurityGroups) > 0 {
+		allErrs = append(
+			allErrs,
+			field.Invalid(remoteAccessPath.Child("sourceSecurityGroups"), sourceSecurityGroups, "must be empty if public is set"),
+		)
+	}
+
+	return allErrs
+}
+
 // ValidateCreate will do any extra validation when creating a AWSManagedMachinePool
 func (r *AWSManagedMachinePool) ValidateCreate() error {
 	mmpLog.Info("AWSManagedMachinePool validate create", "name", r.Name)
@@ -84,6 +107,9 @@ func (r *AWSManagedMachinePool) ValidateCreate() error {
 		allErrs = append(allErrs, field.Required(field.NewPath("spec.eksNodegroupName"), "eksNodegroupName is required"))
 	}
 	if errs := r.validateScaling(); errs != nil || len(errs) == 0 {
+		allErrs = append(allErrs, errs...)
+	}
+	if errs := r.validateRemoteAccess(); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
 
@@ -169,7 +195,7 @@ func (r *AWSManagedMachinePool) Default() {
 
 	if r.Spec.EKSNodegroupName == "" {
 		mmpLog.Info("EKSNodegroupName is empty, generating name")
-		name, err := eks.GenerateEKSName(r.Name, r.Namespace)
+		name, err := eks.GenerateEKSName(r.Name, r.Namespace, maxNodegroupNameLength)
 		if err != nil {
 			mmpLog.Error(err, "failed to create EKS nodegroup name")
 			return

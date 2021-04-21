@@ -42,13 +42,13 @@ const (
 	// when looking up machine AMIs
 	defaultMachineAMILookupBaseOS = "ubuntu-18.04"
 
-	// defaultAmiNameFormat is defined in the build/ directory of this project.
+	// DefaultAmiNameFormat is defined in the build/ directory of this project.
 	// The pattern is:
 	// 1. the string value `capa-ami-`
 	// 2. the baseOS of the AMI, for example: ubuntu-18.04, centos-7, amazon-2
 	// 3. the kubernetes version as defined by the packages produced by kubernetes/release with or without v as a prefix, for example: 1.13.0, 1.12.5-mybuild.1, v1.17.3
 	// 4. a `-` followed by any additional characters
-	defaultAmiNameFormat = "capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-*"
+	DefaultAmiNameFormat = "capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-*"
 
 	// Amazon's AMI timestamp format
 	createDateTimestampFormat = "2006-01-02T15:04:05.000Z"
@@ -63,11 +63,11 @@ type AMILookup struct {
 	K8sVersion string
 }
 
-func amiName(amiNameFormat, baseOS, kubernetesVersion string) (string, error) {
+func GenerateAmiName(amiNameFormat, baseOS, kubernetesVersion string) (string, error) {
 	amiNameParameters := AMILookup{baseOS, strings.TrimPrefix(kubernetesVersion, "v")}
 	// revert to default if not specified
 	if amiNameFormat == "" {
-		amiNameFormat = defaultAmiNameFormat
+		amiNameFormat = DefaultAmiNameFormat
 	}
 	var templateBytes bytes.Buffer
 	template, err := template.New("amiName").Parse(amiNameFormat)
@@ -83,7 +83,7 @@ func amiName(amiNameFormat, baseOS, kubernetesVersion string) (string, error) {
 
 func DefaultAMILookup(ec2Client ec2iface.EC2API, ownerID, baseOS, kubernetesVersion, amiNameFormat string) (*ec2.Image, error) {
 	if amiNameFormat == "" {
-		amiNameFormat = defaultAmiNameFormat
+		amiNameFormat = DefaultAmiNameFormat
 	}
 	if ownerID == "" {
 		ownerID = DefaultMachineAMIOwnerID
@@ -92,7 +92,7 @@ func DefaultAMILookup(ec2Client ec2iface.EC2API, ownerID, baseOS, kubernetesVers
 		baseOS = defaultMachineAMILookupBaseOS
 	}
 
-	amiName, err := amiName(amiNameFormat, baseOS, kubernetesVersion)
+	amiName, err := GenerateAmiName(amiNameFormat, baseOS, kubernetesVersion)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to process ami format: %q", amiNameFormat)
 	}
@@ -128,7 +128,7 @@ func DefaultAMILookup(ec2Client ec2iface.EC2API, ownerID, baseOS, kubernetesVers
 	if len(out.Images) == 0 {
 		return nil, errors.Errorf("found no AMIs with the name: %q", amiName)
 	}
-	latestImage, err := getLatestImage(out.Images)
+	latestImage, err := GetLatestImage(out.Images)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func DefaultAMILookup(ec2Client ec2iface.EC2API, ownerID, baseOS, kubernetesVers
 func (s *Service) defaultAMIIDLookup(amiNameFormat, ownerID, baseOS, kubernetesVersion string) (string, error) {
 	latestImage, err := DefaultAMILookup(s.EC2Client, ownerID, baseOS, kubernetesVersion, amiNameFormat)
 	if err != nil {
-		record.Eventf(s.scope.InfraCluster(), "FailedDescribeImages", "Failed to find ami %q: %v", amiName, err)
+		record.Eventf(s.scope.InfraCluster(), "FailedDescribeImages", "Failed to find ami for OS=%s and Kubernetes-version=%s: %v", baseOS, kubernetesVersion, err)
 		return "", errors.Wrapf(err, "failed to find ami")
 	}
 
@@ -169,8 +169,8 @@ func (i images) Swap(k, j int) {
 	i[k], i[j] = i[j], i[k]
 }
 
-// getLatestImage assumes imgs is not empty. Responsibility of the caller to check.
-func getLatestImage(imgs []*ec2.Image) (*ec2.Image, error) {
+// GetLatestImage assumes imgs is not empty. Responsibility of the caller to check.
+func GetLatestImage(imgs []*ec2.Image) (*ec2.Image, error) {
 	for _, img := range imgs {
 		if _, err := time.Parse(createDateTimestampFormat, aws.StringValue(img.CreationDate)); err != nil {
 			return nil, err
@@ -184,39 +184,39 @@ func getLatestImage(imgs []*ec2.Image) (*ec2.Image, error) {
 func (s *Service) defaultBastionAMILookup(region string) string {
 	switch region {
 	case "ap-northeast-1":
-		return "ami-02b658ac34935766f"
+		return "ami-09b86f9709b3c33d4"
 	case "ap-northeast-2":
-		return "ami-064ab8637cf33f1bb"
+		return "ami-044057cb1bc4ce527"
 	case "ap-south-1":
-		return "ami-03f0fd1a2ba530e75"
+		return "ami-0cda377a1b884a1bc"
 	case "ap-southeast-1":
-		return "ami-0c8e97a27be37adfd"
+		return "ami-093da183b859d5a4b"
 	case "ap-southeast-2":
-		return "ami-099c1869f33464fde"
+		return "ami-0f158b0f26f18e619"
 	case "ca-central-1":
-		return "ami-0c27a26eca5dc74fc"
+		return "ami-0edab43b6fa892279"
 	case "eu-central-1":
-		return "ami-092391a11f8aa4b7b"
+		return "ami-0c960b947cbb2dd16"
 	case "eu-west-1":
-		return "ami-0823c236601fef765"
+		return "ami-06fd8a495a537da8b"
 	case "eu-west-2":
-		return "ami-09a1e275e350acf38"
+		return "ami-05c424d59413a2876"
 	case "eu-west-3":
-		return "ami-014d8dccd70fd2632"
+		return "ami-078db6d55a16afc82"
 	case "sa-east-1":
-		return "ami-0fd2c3d373788b726"
+		return "ami-02dc8ad50da58fffd"
 	case "us-east-1":
-		return "ami-0817d428a6fb68645"
+		return "ami-0dba2cb6798deb6d8"
 	case "us-east-2":
-		return "ami-0e82959d4ed12de3f"
+		return "ami-07efac79022b86107"
 	case "us-west-1":
-		return "ami-03fac5402e10ea93b"
+		return "ami-021809d9177640a20"
 	case "us-west-2":
-		return "ami-07a29e5e945228fa1"
+		return "ami-06e54d05255faf8f6"
 	case "eu-north-1":
-		return "ami-0ede7f804d699ea83"
+		return "ami-008dea09a148cea39"
 	case "eu-south-1":
-		return "ami-06a72c0e11b785451"
+		return "ami-01eec6bdfa20f008e"
 	default:
 		return "unknown region"
 	}

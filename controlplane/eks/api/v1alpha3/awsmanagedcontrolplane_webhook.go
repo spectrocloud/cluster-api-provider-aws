@@ -22,22 +22,20 @@ import (
 
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/pkg/errors"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/util/version"
-
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
 )
 
 const (
-	minAddonVersion = "v1.18.0"
+	minAddonVersion      = "v1.18.0"
+	maxClusterNameLength = 100
 )
 
 // log is for logging in this package.
@@ -46,6 +44,7 @@ var mcpLog = logf.Log.WithName("awsmanagedcontrolplane-resource")
 const (
 	cidrSizeMax = 65536
 	cidrSizeMin = 16
+	vpcCniAddon = "vpc-cni"
 )
 
 // SetupWebhookWithManager will setup the webhooks for the AWSManagedControlPlane
@@ -93,6 +92,7 @@ func (r *AWSManagedControlPlane) ValidateCreate() error {
 	allErrs = append(allErrs, r.validateIAMAuthConfig()...)
 	allErrs = append(allErrs, r.validateSecondaryCIDR()...)
 	allErrs = append(allErrs, r.validateEKSAddons()...)
+	allErrs = append(allErrs, r.validateDisableVPCCNI()...)
 
 	if len(allErrs) == 0 {
 		return nil
@@ -123,10 +123,19 @@ func (r *AWSManagedControlPlane) ValidateUpdate(old runtime.Object) error {
 	allErrs = append(allErrs, r.validateIAMAuthConfig()...)
 	allErrs = append(allErrs, r.validateSecondaryCIDR()...)
 	allErrs = append(allErrs, r.validateEKSAddons()...)
+	allErrs = append(allErrs, r.validateDisableVPCCNI()...)
 
 	if r.Spec.Region != oldAWSManagedControlplane.Spec.Region {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "region"), r.Spec.Region, "field is immutable"),
+		)
+	}
+
+	// If a identityRef is already set, do not allow removal of it.
+	if oldAWSManagedControlplane.Spec.IdentityRef != nil && r.Spec.IdentityRef == nil {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "identityRef"),
+				r.Spec.IdentityRef, "field cannot be set to nil"),
 		)
 	}
 
@@ -269,7 +278,32 @@ func (r *AWSManagedControlPlane) validateSecondaryCIDR() field.ErrorList {
 		if (!validRange1.Contains(start) || !validRange1.Contains(end)) && (!validRange2.Contains(start) || !validRange2.Contains(end)) {
 			allErrs = append(allErrs, field.Invalid(cidrField, *r.Spec.SecondaryCidrBlock, "must be within the 100.64.0.0/10 or 198.19.0.0/16 range"))
 		}
+	}
 
+	if len(allErrs) == 0 {
+		return nil
+	}
+	return allErrs
+}
+
+func (r *AWSManagedControlPlane) validateDisableVPCCNI() field.ErrorList {
+	var allErrs field.ErrorList
+
+	if r.Spec.DisableVPCCNI {
+		disableField := field.NewPath("spec", "disableVPCCNI")
+
+		if r.Spec.SecondaryCidrBlock != nil {
+			allErrs = append(allErrs, field.Invalid(disableField, r.Spec.DisableVPCCNI, "cannot disable vpc cni if a secondary cidr is specified"))
+		}
+
+		if r.Spec.Addons != nil {
+			for _, addon := range *r.Spec.Addons {
+				if addon.Name == vpcCniAddon {
+					allErrs = append(allErrs, field.Invalid(disableField, r.Spec.DisableVPCCNI, "cannot disable vpc cni if the vpc-cni addon is specified"))
+					break
+				}
+			}
+		}
 	}
 
 	if len(allErrs) == 0 {
@@ -284,7 +318,7 @@ func (r *AWSManagedControlPlane) Default() {
 
 	if r.Spec.EKSClusterName == "" {
 		mcpLog.Info("EKSClusterName is empty, generating name")
-		name, err := eks.GenerateEKSName(r.Name, r.Namespace)
+		name, err := eks.GenerateEKSName(r.Name, r.Namespace, maxClusterNameLength)
 		if err != nil {
 			mcpLog.Error(err, "failed to create EKS cluster name")
 			return
@@ -292,6 +326,13 @@ func (r *AWSManagedControlPlane) Default() {
 
 		mcpLog.Info("defaulting EKS cluster name", "cluster-name", name)
 		r.Spec.EKSClusterName = name
+	}
+
+	if r.Spec.IdentityRef == nil {
+		r.Spec.IdentityRef = &infrav1.AWSIdentityReference{
+			Kind: infrav1.ControllerIdentityKind,
+			Name: infrav1.AWSClusterControllerIdentityName,
+		}
 	}
 
 	// Normalize version (i.e. remove patch, add "v" prefix) if necessary

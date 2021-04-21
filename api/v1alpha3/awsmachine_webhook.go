@@ -52,7 +52,7 @@ func (r *AWSMachine) ValidateCreate() error {
 	allErrs = append(allErrs, r.validateCloudInitSecret()...)
 	allErrs = append(allErrs, r.validateRootVolume()...)
 	allErrs = append(allErrs, r.validateNonRootVolumes()...)
-	allErrs = append(allErrs, isValidSSHKey(r.Spec.SSHKeyName)...)
+	allErrs = append(allErrs, r.validateSSHKeyName()...)
 	allErrs = append(allErrs, r.validateAdditionalSecurityGroups()...)
 
 	return aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
@@ -83,6 +83,10 @@ func (r *AWSMachine) ValidateUpdate(old runtime.Object) error {
 	// allow changes to providerID
 	delete(oldAWSMachineSpec, "providerID")
 	delete(newAWSMachineSpec, "providerID")
+
+	// allow changes to instanceID
+	delete(oldAWSMachineSpec, "instanceID")
+	delete(newAWSMachineSpec, "instanceID")
 
 	// allow changes to additionalTags
 	delete(oldAWSMachineSpec, "additionalTags")
@@ -188,10 +192,14 @@ func (r *AWSMachine) Default() {
 func (r *AWSMachine) validateAdditionalSecurityGroups() field.ErrorList {
 	var allErrs field.ErrorList
 
-	for _, additionalSecurityGroups := range r.Spec.AdditionalSecurityGroups {
-		if len(additionalSecurityGroups.Filters) > 0 {
-			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.additionalSecurityGroups"), "filters are not implemented for security groups and will be removed in a future release"))
+	for _, additionalSecurityGroup := range r.Spec.AdditionalSecurityGroups {
+		if len(additionalSecurityGroup.Filters) > 0 && additionalSecurityGroup.ID != nil {
+			allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.additionalSecurityGroups"), "only one of ID or Filters may be specified, specifying both is forbidden"))
 		}
 	}
 	return allErrs
+}
+
+func (r *AWSMachine) validateSSHKeyName() field.ErrorList {
+	return validateSSHKeyName(r.Spec.SSHKeyName)
 }

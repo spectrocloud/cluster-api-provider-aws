@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/version"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	controlplanev1exp "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
@@ -81,19 +82,6 @@ func (s *NodegroupService) scalingConfig() *eks.NodegroupScalingConfig {
 	return &cfg
 }
 
-func (s *NodegroupService) subnets() []string {
-	subnetIDs := s.scope.SubnetIDs()
-	// If not specified, use all
-	if len(subnetIDs) == 0 {
-		subnetIDs := []string{}
-		for _, subnet := range s.scope.ControlPlaneSubnets() {
-			subnetIDs = append(subnetIDs, subnet.ID)
-		}
-		return subnetIDs
-	}
-	return subnetIDs
-}
-
 func (s *NodegroupService) roleArn() (*string, error) {
 	var role *iam.Role
 	if s.scope.RoleName() != "" {
@@ -119,17 +107,33 @@ func (s *NodegroupService) remoteAccess() (*eks.RemoteAccessConfig, error) {
 	}
 
 	controlPlane := s.scope.ControlPlane
-	sSGs := pool.RemoteAccess.SourceSecurityGroups
 
-	if controlPlane.Spec.Bastion.Enabled {
-		additionalSG, ok := controlPlane.Status.Network.SecurityGroups[infrav1.SecurityGroupEKSNodeAdditional]
+	// SourceSecurityGroups is validated to be empty if PublicAccess is true
+	// but just in case we use an empty list to take advantage of the documented
+	// API behavior
+	var sSGs = []string{}
+
+	if !pool.RemoteAccess.Public {
+		sSGs = pool.RemoteAccess.SourceSecurityGroups
+		// We add the EKS created cluster security group to the allowed security
+		// groups by default to prevent the API default of 0.0.0.0/0 from taking effect
+		// in case SourceSecurityGroups is empty
+		clusterSG, ok := controlPlane.Status.Network.SecurityGroups[controlplanev1exp.SecurityGroupCluster]
 		if !ok {
-			return nil, errors.Errorf("%s security group not found on control plane", infrav1.SecurityGroupEKSNodeAdditional)
+			return nil, errors.Errorf("%s security group not found on control plane", controlplanev1exp.SecurityGroupCluster)
 		}
-		sSGs = append(
-			sSGs,
-			additionalSG.ID,
-		)
+		sSGs = append(sSGs, clusterSG.ID)
+
+		if controlPlane.Spec.Bastion.Enabled {
+			additionalSG, ok := controlPlane.Status.Network.SecurityGroups[infrav1.SecurityGroupEKSNodeAdditional]
+			if !ok {
+				return nil, errors.Errorf("%s security group not found on control plane", infrav1.SecurityGroupEKSNodeAdditional)
+			}
+			sSGs = append(
+				sSGs,
+				additionalSG.ID,
+			)
+		}
 	}
 
 	sshKeyName := pool.RemoteAccess.SSHKeyName
@@ -159,11 +163,16 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 		return nil, errors.Wrap(err, "failed to create remote access configuration")
 	}
 
+	subnets, err := s.scope.SubnetIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed getting nodegroup subnets: %w", err)
+	}
+
 	input := &eks.CreateNodegroupInput{
 		ScalingConfig: s.scalingConfig(),
 		ClusterName:   aws.String(eksClusterName),
 		NodegroupName: aws.String(nodegroupName),
-		Subnets:       aws.StringSlice(s.subnets()),
+		Subnets:       aws.StringSlice(subnets),
 		NodeRole:      roleArn,
 		Labels:        aws.StringMap(managedPool.Labels),
 		Tags:          aws.StringMap(tags),

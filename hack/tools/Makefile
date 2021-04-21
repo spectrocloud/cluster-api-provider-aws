@@ -58,6 +58,11 @@ $(SHARE_DIR):
 $(GTAR):
 	@$(GTAR) --version > /dev/null || (echo Install GNU Tar with brew install gnu-tar && exit -1)
 
+
+GO_APIDIFF := $(BIN_DIR)/go-apidiff
+$(GO_APIDIFF): $(BIN_DIR) go.mod go.sum
+	go build -tags=tools -o $@ github.com/joelanford/go-apidiff
+
 CONTROLLER_GEN := $(BIN_DIR)/controller-gen
 $(CONTROLLER_GEN): $(BIN_DIR) go.mod go.sum # Build controller-gen from tools folder.
 	go build -tags=tools -o $@ sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -74,6 +79,10 @@ ENVSUBST := $(BIN_DIR)/envsubst
 $(ENVSUBST): $(BIN_DIR) go.mod go.sum # Build envsubst from tools folder.
 	go build -tags=tools -o $@ github.com/a8m/envsubst/cmd/envsubst
 
+GENCRDAPIREFERENCEDOCS := $(BIN_DIR)/gen-crd-api-reference-docs
+$(GENCRDAPIREFERENCEDOCS): $(BIN_DIR) go.mod go.sum # Build gen-crd-api-reference-docs from tools folder.
+	go build -tags=tools -o $@ github.com/ahmetb/gen-crd-api-reference-docs
+
 GH_SHARE := $(SHARE_DIR)/gh
 
 $(GH_SHARE): $(SHARE_DIR)
@@ -83,7 +92,7 @@ $(GH_SHARE)/gh.tar.gz: $(GH_SHARE)
 	curl -L "https://github.com/cli/cli/releases/download/v$(GH_VERSION)/gh_$(GH_VERSION)_$(GH_ARCH_SUFFIX).tar.gz" -o $@
 
 GH := $(BIN_DIR)/gh
-$(GH): $(GH_SHARE)/gh.tar.gz
+GH: $(GTAR) $(GH_SHARE)/gh.tar.gz
 	$(GTAR) -xvf share/gh/gh.tar.gz gh_$(GH_VERSION)_$(GH_ARCH_SUFFIX)/bin/gh --strip-components 1 --directory $(BIN_DIR)
 	chmod +x $@
 	touch -m $@
@@ -136,7 +145,7 @@ $(MOCKGEN): $(BIN_DIR) go.mod go.sum # Build mockgen from tools folder.
 
 RELEASE_NOTES := $(BIN_DIR)/release-notes
 $(RELEASE_NOTES): $(BIN_DIR) go.mod go.sum
-	go build -tags tools -o $@ sigs.k8s.io/cluster-api/hack/tools/release
+	go build -tags tools -o $@ k8s.io/release/cmd/release-notes
 
 PLANTUML := $(BIN_DIR)/plantuml-sentinal
 $(PLANTUML): plantuml.Dockerfile ../../versions.mk
