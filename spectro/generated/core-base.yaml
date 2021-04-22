@@ -3,7 +3,72 @@ kind: Namespace
 metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: controller-manager
+  name: capa-eks-control-plane-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
   name: capa-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    ${AWS_CONTROLLER_IAM_ROLE/#arn/eks.amazonaws.com/role-arn: arn}
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: controller-manager
+  name: capa-eks-control-plane-controller-manager
+  namespace: capa-eks-control-plane-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    ${AWS_CONTROLLER_IAM_ROLE/#arn/eks.amazonaws.com/role-arn: arn}
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: controller-manager
+  name: capa-controller-manager
+  namespace: capa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-leader-election-role
+  namespace: capa-eks-control-plane-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -33,6 +98,132 @@ rules:
   - get
   - update
   - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  - clusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - controlplane.cluster.x-k8s.io
+  resources:
+  - awsmanagedcontrolplanes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - controlplane.cluster.x-k8s.io
+  resources:
+  - awsmanagedcontrolplanes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclustercontrolleridentities
+  - awsclusterroleidentities
+  - awsclusterstaticidentities
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinepools
+  - awsmachinepools/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachines
+  - awsmachines/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmanagedclusters
+  - awsmanagedclusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmanagedmachinepools
+  - awsmanagedmachinepools/status
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -84,6 +275,15 @@ rules:
   - list
   - watch
 - apiGroups:
+  - controlplane.cluster.x-k8s.io
+  resources:
+  - awsmanagedcontrolplanes
+  - awsmanagedcontrolplanes/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ""
   resources:
   - events
@@ -92,6 +292,33 @@ rules:
   - get
   - list
   - patch
+  - watch
+- apiGroups:
+  - exp.cluster.x-k8s.io
+  resources:
+  - machinepools
+  - machinepools/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclustercontrolleridentities
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusterroleidentities
+  - awsclusterstaticidentities
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
@@ -109,6 +336,46 @@ rules:
   - infrastructure.cluster.x-k8s.io
   resources:
   - awsclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsfargateprofiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsfargateprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinepools/status
   verbs:
   - get
   - patch
@@ -156,7 +423,7 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - awsmanagedcontrolplanes
+  - awsmanagedmachinepools
   verbs:
   - create
   - delete
@@ -168,7 +435,7 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - awsmanagedcontrolplanes/status
+  - awsmanagedmachinepools/status
   verbs:
   - get
   - patch
@@ -199,6 +466,22 @@ kind: RoleBinding
 metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-leader-election-rolebinding
+  namespace: capa-eks-control-plane-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: capa-eks-control-plane-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: capa-eks-control-plane-controller-manager
+  namespace: capa-eks-control-plane-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
   name: capa-leader-election-rolebinding
   namespace: capa-system
 roleRef:
@@ -207,8 +490,38 @@ roleRef:
   name: capa-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: capa-controller-manager
   namespace: capa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capa-eks-control-plane-manager-role
+subjects:
+- kind: ServiceAccount
+  name: capa-eks-control-plane-controller-manager
+  namespace: capa-eks-control-plane-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capa-eks-control-plane-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: capa-eks-control-plane-controller-manager
+  namespace: capa-eks-control-plane-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -222,7 +535,7 @@ roleRef:
   name: capa-manager-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: capa-controller-manager
   namespace: capa-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -237,8 +550,19 @@ roleRef:
   name: capa-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: capa-controller-manager
   namespace: capa-system
+---
+apiVersion: v1
+data:
+  credentials: ${AWS_B64ENCODED_CREDENTIALS}
+kind: Secret
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-eks-control-plane-controlplane-manager-bootstrap-credentials
+  namespace: capa-eks-control-plane-system
+type: Opaque
 ---
 apiVersion: v1
 data:
@@ -250,6 +574,23 @@ metadata:
   name: capa-manager-bootstrap-credentials
   namespace: capa-system
 type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: controller-manager
+  name: capa-eks-control-plane-controller-manager-metrics-service
+  namespace: capa-eks-control-plane-system
+spec:
+  ports:
+  - name: https
+    port: 8443
+    targetPort: https
+  selector:
+    cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: controller-manager
 ---
 apiVersion: v1
 kind: Service
@@ -271,6 +612,68 @@ spec:
   selector:
     cluster.x-k8s.io/provider: infrastructure-aws
     control-plane: capa-controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: controller-manager
+  name: capa-eks-control-plane-controller-manager
+  namespace: capa-eks-control-plane-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/provider: infrastructure-aws
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-aws
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=10
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: http
+      - args:
+        - --metrics-addr=127.0.0.1:8080
+        - --enable-leader-election
+        - --feature-gates=EKSEnableIAM=${EXP_EKS_IAM:=false},EKSAllowAddRoles=${EXP_EKS_ADD_ROLES:=false},MachinePool=${EXP_MACHINE_POOL:=false}
+        - --v=${EKS_CP_LOGLEVEL:=4}
+        command:
+        - /manager
+        env:
+        - name: AWS_SHARED_CREDENTIALS_FILE
+          value: /home/.aws/credentials
+        image: gcr.io/k8s-staging-cluster-api-aws/eks-controlplane-controller:latest
+        imagePullPolicy: Always
+        name: manager
+        volumeMounts:
+        - mountPath: /home/.aws
+          name: credentials
+      metadata:
+        annotations:
+          iam.amazonaws.com/role: ${AWS_CONTROLLER_IAM_ROLE:=""}
+      securityContext:
+        fsGroup: 1000
+      serviceAccountName: capa-eks-control-plane-controller-manager
+      terminationGracePeriodSeconds: 10
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      volumes:
+      - name: credentials
+        secret:
+          secretName: capa-eks-control-plane-controlplane-manager-bootstrap-credentials
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -306,7 +709,7 @@ spec:
       - args:
         - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
-        - --feature-gates=EKS=${EXP_EKS:=false},EKSEnableIAM=${EXP_EKS_IAM:=false},EKSAllowAddRoles=${EXP_EKS_ADD_ROLES:=false}
+        - --feature-gates=EKS=${EXP_EKS:=false},EKSEnableIAM=${EXP_EKS_IAM:=false},MachinePool=${EXP_MACHINE_POOL:=false},EventBridgeInstanceState=${EVENT_BRIDGE_INSTANCE_STATE:=false},AutoControllerIdentityCreator=${AUTO_CONTROLLER_IDENTITY_CREATOR:=true}
         env:
         - name: AWS_SHARED_CREDENTIALS_FILE
           value: /home/.aws/credentials
@@ -328,6 +731,12 @@ spec:
         volumeMounts:
         - mountPath: /home/.aws
           name: credentials
+      metadata:
+        annotations:
+          iam.amazonaws.com/role: ${AWS_CONTROLLER_IAM_ROLE:=""}
+      securityContext:
+        fsGroup: 1000
+      serviceAccountName: capa-controller-manager
       terminationGracePeriodSeconds: 10
       tolerations:
       - effect: NoSchedule
