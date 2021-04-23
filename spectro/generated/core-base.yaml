@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     control-plane: controller-manager
   name: capa-eks-control-plane-system
 ---
@@ -19,7 +19,7 @@ metadata:
   annotations:
     ${AWS_CONTROLLER_IAM_ROLE/#arn/eks.amazonaws.com/role-arn: arn}
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     control-plane: controller-manager
   name: capa-eks-control-plane-controller-manager
   namespace: capa-eks-control-plane-system
@@ -39,7 +39,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-leader-election-role
   namespace: capa-eks-control-plane-system
 rules:
@@ -104,7 +104,7 @@ kind: ClusterRole
 metadata:
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-manager-role
 rules:
 - apiGroups:
@@ -209,7 +209,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-proxy-role
 rules:
 - apiGroups:
@@ -465,7 +465,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-leader-election-rolebinding
   namespace: capa-eks-control-plane-system
 roleRef:
@@ -497,7 +497,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -512,7 +512,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -559,7 +559,7 @@ data:
 kind: Secret
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-controlplane-manager-bootstrap-credentials
   namespace: capa-eks-control-plane-system
 type: Opaque
@@ -579,7 +579,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     control-plane: controller-manager
   name: capa-eks-control-plane-controller-manager-metrics-service
   namespace: capa-eks-control-plane-system
@@ -589,7 +589,7 @@ spec:
     port: 8443
     targetPort: https
   selector:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     control-plane: controller-manager
 ---
 apiVersion: v1
@@ -617,7 +617,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     control-plane: controller-manager
   name: capa-eks-control-plane-controller-manager
   namespace: capa-eks-control-plane-system
@@ -625,12 +625,12 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      cluster.x-k8s.io/provider: infrastructure-aws
+      cluster.x-k8s.io/provider: control-plane-eks
       control-plane: controller-manager
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/provider: infrastructure-aws
+        cluster.x-k8s.io/provider: control-plane-eks
         control-plane: controller-manager
     spec:
       containers:

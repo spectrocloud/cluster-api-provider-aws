@@ -6,7 +6,7 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.2.9
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     cluster.x-k8s.io/v1alpha3: v1alpha3
   name: awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io
 spec:
@@ -1059,7 +1059,7 @@ metadata:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-eks-control-plane-serving-cert
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-mutating-webhook-configuration
 webhooks:
 - clientConfig:
@@ -1087,7 +1087,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-webhook-service
   namespace: capi-webhook-system
 spec:
@@ -1095,13 +1095,13 @@ spec:
   - port: 443
     targetPort: webhook-server
   selector:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
     control-plane: controller-manager
   name: capa-eks-control-plane-controller-manager
   namespace: capi-webhook-system
@@ -1109,12 +1109,12 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      cluster.x-k8s.io/provider: infrastructure-aws
+      cluster.x-k8s.io/provider: control-plane-eks
       control-plane: controller-manager
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/provider: infrastructure-aws
+        cluster.x-k8s.io/provider: control-plane-eks
         control-plane: controller-manager
     spec:
       containers:
@@ -1158,7 +1158,7 @@ apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-serving-cert
   namespace: capi-webhook-system
 spec:
@@ -1174,7 +1174,7 @@ apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-selfsigned-issuer
   namespace: capi-webhook-system
 spec:
@@ -1187,7 +1187,7 @@ metadata:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-eks-control-plane-serving-cert
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
+    cluster.x-k8s.io/provider: control-plane-eks
   name: capa-eks-control-plane-validating-webhook-configuration
 webhooks:
 - clientConfig:
