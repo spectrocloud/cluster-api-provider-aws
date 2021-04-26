@@ -23,8 +23,16 @@ import (
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+<<<<<<< HEAD
 	"k8s.io/klog/v2/klogr"
+=======
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/klogr"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
+>>>>>>> 6f0bdca4d1e2ac9769dddbd27dd0172ed8d19588
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
@@ -85,7 +93,7 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 
 	return &ManagedMachinePoolScope{
 		Logger:             params.Logger,
-		Client:             params.Client,
+		client:             params.Client,
 		Cluster:            params.Cluster,
 		ControlPlane:       params.ControlPlane,
 		ManagedMachinePool: params.ManagedMachinePool,
@@ -101,7 +109,7 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 // ManagedMachinePoolScope defines the basic context for an actuator to operate upon.
 type ManagedMachinePoolScope struct {
 	logr.Logger
-	Client      client.Client
+	client      client.Client
 	patchHelper *patch.Helper
 
 	Cluster            *clusterv1.Cluster
@@ -114,6 +122,16 @@ type ManagedMachinePoolScope struct {
 	controllerName  string
 
 	enableIAM bool
+}
+
+// Name returns the managed machine pool name.
+func (s *ManagedMachinePoolScope) Name() string {
+	return s.ManagedMachinePool.Name
+}
+
+// Name returns the managed machine pool namespace.
+func (s *ManagedMachinePoolScope) Namespace() string {
+	return s.ManagedMachinePool.Namespace
 }
 
 // ManagedPoolName returns the managed machine pool name.
@@ -144,13 +162,45 @@ func (s *ManagedMachinePoolScope) IdentityRef() *infrav1.AWSIdentityReference {
 	return s.ControlPlane.Spec.IdentityRef
 }
 
+func (m *ManagedMachinePoolScope) CoreSecurityGroups(scope EC2Scope) ([]string, error) {
+	// These are common across both controlplane and node machines
+	sgRoles := []infrav1.SecurityGroupRole{
+		controlplanev1exp.SecurityGroupCluster,
+		infrav1.SecurityGroupEKSNodeAdditional,
+	}
+
+	ids := make([]string, 0, len(sgRoles))
+	for _, sg := range sgRoles {
+		if _, ok := scope.SecurityGroups()[sg]; !ok {
+			return nil, awserrors.NewFailedDependency(
+				fmt.Sprintf("%s security group not available", sg),
+			)
+		}
+		ids = append(ids, scope.SecurityGroups()[sg].ID)
+	}
+	return ids, nil
+}
+
+func (m *ManagedMachinePoolScope) LaunchTemplateID() string {
+	if lt := m.ManagedMachinePool.Spec.LaunchTemplate; lt != nil {
+		return lt.ID
+	}
+	return ""
+}
+
+func (m *ManagedMachinePoolScope) OwnerObject() conditions.Setter {
+	return m.ManagedMachinePool
+}
+
 // AdditionalTags returns AdditionalTags from the scope's ManagedMachinePool
 // The returned value will never be nil.
 func (s *ManagedMachinePoolScope) AdditionalTags() infrav1.Tags {
 	if s.ManagedMachinePool.Spec.AdditionalTags == nil {
 		s.ManagedMachinePool.Spec.AdditionalTags = infrav1.Tags{}
 	}
-
+	name, _ := eks.GenerateEKSName(s.Cluster.Name, s.Cluster.GetNamespace())
+	s.ManagedMachinePool.Spec.AdditionalTags["eks:cluster-name"] = name
+	s.ManagedMachinePool.Spec.AdditionalTags["eks:nodegroup-name"] = s.Name()
 	return s.ManagedMachinePool.Spec.AdditionalTags.DeepCopy()
 }
 
@@ -264,4 +314,27 @@ func (s *ManagedMachinePoolScope) KubernetesClusterName() string {
 // NodegroupName is the name of the EKS nodegroup
 func (s *ManagedMachinePoolScope) NodegroupName() string {
 	return s.ManagedMachinePool.Spec.EKSNodegroupName
+}
+
+// GetRawBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName.
+// TODO: stolen from AWSMachinePool, it's not clear if this will remain identical to
+// that code
+func (m *ManagedMachinePoolScope) GetRawBootstrapData() ([]byte, error) {
+	if m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
+		return nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
+	}
+
+	secret := &corev1.Secret{}
+	key := types.NamespacedName{Namespace: m.Namespace(), Name: *m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName}
+
+	if err := m.client.Get(context.TODO(), key, secret); err != nil {
+		return nil, errors.Wrapf(err, "failed to retrieve bootstrap data secret for AWSMachine %s/%s", m.Namespace(), m.Name())
+	}
+
+	value, ok := secret.Data["value"]
+	if !ok {
+		return nil, errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return value, nil
 }
