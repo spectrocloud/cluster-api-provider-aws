@@ -23,16 +23,11 @@ import (
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-<<<<<<< HEAD
-	"k8s.io/klog/v2/klogr"
-=======
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
->>>>>>> 6f0bdca4d1e2ac9769dddbd27dd0172ed8d19588
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
@@ -198,8 +193,8 @@ func (s *ManagedMachinePoolScope) AdditionalTags() infrav1.Tags {
 	if s.ManagedMachinePool.Spec.AdditionalTags == nil {
 		s.ManagedMachinePool.Spec.AdditionalTags = infrav1.Tags{}
 	}
-	name, _ := eks.GenerateEKSName(s.Cluster.Name, s.Cluster.GetNamespace())
-	s.ManagedMachinePool.Spec.AdditionalTags["eks:cluster-name"] = name
+	//name, _ := eks.GenerateEKSName(s.Cluster.Name, s.Cluster.GetNamespace())
+	s.ManagedMachinePool.Spec.AdditionalTags["eks:cluster-name"] = s.ClusterName()
 	s.ManagedMachinePool.Spec.AdditionalTags["eks:nodegroup-name"] = s.Name()
 	return s.ManagedMachinePool.Spec.AdditionalTags.DeepCopy()
 }

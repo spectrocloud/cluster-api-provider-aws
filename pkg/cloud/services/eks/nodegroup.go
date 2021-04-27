@@ -210,11 +210,6 @@ func (s *NodegroupService) createNodegroup() (*awseks.Nodegroup, error) {
 	}
 	tags := ngTags(s.scope.ClusterName(), additionalTags)
 
-	remoteAccess, err := s.remoteAccess()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create remote access configuration")
-	}
-
 	subnets, err := s.scope.SubnetIDs()
 	if err != nil {
 		return nil, fmt.Errorf("failed getting nodegroup subnets: %w", err)

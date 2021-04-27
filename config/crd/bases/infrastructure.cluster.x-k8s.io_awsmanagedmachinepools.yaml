@@ -56,7 +56,8 @@ spec:
                   by default.
                 type: object
               amiID:
-                description: AMIID defines a specific, custom AMI. If not supplied, then the latest version for the Kubernetes version will be used
+                description: AMIID defines a specific, custom AMI. If not supplied,
+                  then the latest version for the Kubernetes version will be used
                 minLength: 2
                 type: string
               amiType:
@@ -98,7 +99,8 @@ spec:
                 description: Labels specifies labels for the Kubernetes node objects
                 type: object
               launchTemplate:
-                description: LaunchTemplate specifies the launch template to use for creating this MachinePool
+                description: LaunchTemplate specifies the launch template to use for
+                  creating this MachinePool
                 properties:
                   id:
                     description: The ID of the launch template for this nodegroup
