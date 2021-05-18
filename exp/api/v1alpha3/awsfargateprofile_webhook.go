@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
@@ -33,6 +34,8 @@ import (
 const (
 	maxProfileNameLength = 100
 )
+
+var fpLog = logf.Log.WithName("awsfargateprofile-resource")
 
 // SetupWebhookWithManager will setup the webhooks for the AWSFargateProfile
 func (r *AWSFargateProfile) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -49,6 +52,7 @@ var _ webhook.Validator = &AWSFargateProfile{}
 
 // Default will set default values for the AWSFargateProfile
 func (r *AWSFargateProfile) Default() {
+	fpLog.Info("AWSFargateProfile validate create", "name", r.Name)
 	if r.Labels == nil {
 		r.Labels = make(map[string]string)
 	}
@@ -66,6 +70,7 @@ func (r *AWSFargateProfile) Default() {
 }
 
 func (r *AWSFargateProfile) ValidateUpdate(oldObj runtime.Object) error {
+	fpLog.Info("AWSFargateProfile validate update", "name", r.Name)
 	gv := r.GroupVersionKind().GroupKind()
 	old, ok := oldObj.(*AWSFargateProfile)
 	if !ok {
