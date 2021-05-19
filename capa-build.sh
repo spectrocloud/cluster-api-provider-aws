@@ -1,7 +1,12 @@
 #!/bin/bash
 
-# please change the tag
-export TAG=v0.6.5-20210518.2
+if [ -z "$1" ]
+  then
+    echo "Please provide tag as the argument"
+    exit 1
+fi
+
+export TAG=$1
 export REGISTRY=gcr.io/spectro-images-public/cluster-api-aws/release
 
 make docker-build
