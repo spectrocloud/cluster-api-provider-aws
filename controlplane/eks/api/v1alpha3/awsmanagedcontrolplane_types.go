@@ -153,6 +153,9 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// +optional
 	Addons *[]Addon `json:"addons,omitempty"`
 
+	// IdentityProvider
+	OIDCIdentityProviderConfig *OIDCIdentityProviderConfig `json:"oidcIdentityProviderConfig"`
+
 	// DisableVPCCNI indcates the the Amazon VPC CNI should be disabled. With EKS clusters that
 	// the Amazon VPC CNI is automatically installed into the cluster. For clusters where you want
 	// to use an alternate CNI this option provides a way to specify that the Amazon VPC CNI
