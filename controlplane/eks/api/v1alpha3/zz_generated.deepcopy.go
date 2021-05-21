@@ -498,17 +498,9 @@ func (in *OIDCIdentityProviderConfig) DeepCopyInto(out *OIDCIdentityProviderConf
 	}
 	if in.RequiredClaims != nil {
 		in, out := &in.RequiredClaims, &out.RequiredClaims
-		*out = make(map[string]*string, len(*in))
+		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
-			var outVal *string
-			if val == nil {
-				(*out)[key] = nil
-			} else {
-				in, out := &val, &outVal
-				*out = new(string)
-				**out = **in
-			}
-			(*out)[key] = outVal
+			(*out)[key] = val
 		}
 	}
 	if in.UsernameClaim != nil {
