@@ -465,7 +465,8 @@ spec:
                     type: object
                 type: object
               oidcIdentityProviderConfig:
-                description: IdentityProvider
+                description: IdentityProviderconfig is used to specify the oidc provider
+                  config to be attached with this eks cluster
                 properties:
                   clientId:
                     description: This is also known as audience. The ID for the client
@@ -565,8 +566,6 @@ spec:
                 minLength: 2
                 pattern: ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.?$
                 type: string
-            required:
-            - oidcIdentityProviderConfig
             type: object
           status:
             description: AWSManagedControlPlaneStatus defines the observed state of

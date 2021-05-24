@@ -59,8 +59,8 @@ func (d *DisassociateIdentityProviderConfig) Do(ctx context.Context) error {
 		_, err := d.plan.eksClient.DisassociateIdentityProviderConfigWithContext(ctx, &eks.DisassociateIdentityProviderConfigInput{
 			ClusterName:            aws.String(d.plan.clusterName),
 			IdentityProviderConfig: &eks.IdentityProviderConfig{
-				Name: oidcType,
-				Type: nil,
+				Name: d.plan.currentIdentityProvider.IdentityProviderConfigName,
+				Type: oidcType,
 			},
 		})
 

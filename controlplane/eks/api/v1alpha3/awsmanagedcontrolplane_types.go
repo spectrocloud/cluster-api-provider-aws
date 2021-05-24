@@ -153,7 +153,9 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// +optional
 	Addons *[]Addon `json:"addons,omitempty"`
 
-	// IdentityProvider
+	// IdentityProviderconfig is used to specify the oidc provider config
+	// to be attached with this eks cluster
+	// +optional
 	OIDCIdentityProviderConfig *OIDCIdentityProviderConfig `json:"oidcIdentityProviderConfig"`
 
 	// DisableVPCCNI indcates the the Amazon VPC CNI should be disabled. With EKS clusters that

@@ -12,6 +12,7 @@ import (
 )
 
 func (s *Service) reconcileIdentityProvider(ctx context.Context) error {
+	s.scope.Info("begin identity provider reconcile")
 	if s.scope.ControlPlane.Spec.OIDCIdentityProviderConfig == nil {
 		return nil
 	}
