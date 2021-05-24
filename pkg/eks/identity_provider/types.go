@@ -13,12 +13,12 @@ type OidcIdentityProviderConfig struct {
 	GroupsPrefix *string
 	IdentityProviderConfigArn *string
 	IdentityProviderConfigName *string
-	IssuerUrl *string `locationName:"issuerUrl" type:"string"`
-	RequiredClaims map[string]*string `locationName:"requiredClaims" type:"map"`
-	Status *string `locationName:"status" type:"string" enum:"ConfigStatus"`
-	Tags infrav1.Tags `locationName:"tags" min:"1" type:"map"`
-	UsernameClaim *string `locationName:"usernameClaim" type:"string"`
-	UsernamePrefix *string `locationName:"usernamePrefix" type:"string"`
+	IssuerUrl *string
+	RequiredClaims map[string]*string
+	Status *string
+	Tags infrav1.Tags
+	UsernameClaim *string
+	UsernamePrefix *string
 }
 
 func (o *OidcIdentityProviderConfig) IsEqual(other *OidcIdentityProviderConfig) bool {

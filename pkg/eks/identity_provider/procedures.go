@@ -86,7 +86,7 @@ func (a *AssociateIdentityProviderProcedure) Name() string {
 
 func (a *AssociateIdentityProviderProcedure) Do(ctx context.Context) error {
 	oidc := a.plan.desiredIdentityProvider
-	_, err := a.plan.eksClient.AssociateIdentityProviderConfigWithContext(ctx, &eks.AssociateIdentityProviderConfigInput{
+	input := &eks.AssociateIdentityProviderConfigInput{
 		ClusterName:        aws.String(a.plan.clusterName),
 		Oidc:               &eks.OidcIdentityProviderConfigRequest{
 			ClientId:                   oidc.ClientId,
@@ -98,8 +98,13 @@ func (a *AssociateIdentityProviderProcedure) Do(ctx context.Context) error {
 			UsernameClaim:              oidc.UsernameClaim,
 			UsernamePrefix:             oidc.UsernamePrefix,
 		},
-		Tags:               converters.MapToMapPtr(oidc.Tags),
-	})
+	}
+
+	if len(oidc.Tags) > 0 {
+		input.Tags = converters.MapToMapPtr(oidc.Tags)
+	}
+
+	_, err := a.plan.eksClient.AssociateIdentityProviderConfigWithContext(ctx, input)
 
 	if err != nil {
 		return errors.Wrap(err, "failed associating identity provider")
