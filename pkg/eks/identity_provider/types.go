@@ -50,10 +50,6 @@ func (o *OidcIdentityProviderConfig) IsEqual(other *OidcIdentityProviderConfig) 
 		return false
 	}
 
-	if !reflect.DeepEqual(o.Tags, other.Tags) {
-		return false
-	}
-
 	if !reflect.DeepEqual(o.UsernameClaim, other.UsernameClaim) {
 		return false
 	}

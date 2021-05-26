@@ -28,7 +28,7 @@ type plan struct {
 
 
 func (p *plan) Create(ctx context.Context) ([]planner.Procedure, error) {
-	procedures := []planner.Procedure{}
+	var procedures []planner.Procedure
 
 	if p.desiredIdentityProvider == nil && p.currentIdentityProvider == nil {
 		return procedures, nil
@@ -52,6 +52,10 @@ func (p *plan) Create(ctx context.Context) ([]planner.Procedure, error) {
 	}
 
 	if p.currentIdentityProvider.IsEqual(p.desiredIdentityProvider) {
+		tagsDiff := p.currentIdentityProvider.Tags.Difference(p.desiredIdentityProvider.Tags)
+		if len(tagsDiff) > 0 {
+			procedures = append(procedures, &UpdatedIdentityProviderTagsProcedure{plan: p})
+		}
 		switch aws.StringValue(p.currentIdentityProvider.Status) {
 		case eks.ConfigStatusActive:
 			// config active no work to be done

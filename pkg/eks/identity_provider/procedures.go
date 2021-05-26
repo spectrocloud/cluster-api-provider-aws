@@ -5,7 +5,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/pkg/errors"
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 )
 
@@ -101,15 +100,37 @@ func (a *AssociateIdentityProviderProcedure) Do(ctx context.Context) error {
 	}
 
 	if len(oidc.Tags) > 0 {
-		input.Tags = converters.MapToMapPtr(oidc.Tags)
+		input.Tags = aws.StringMap(oidc.Tags)
 	}
 
 	_, err := a.plan.eksClient.AssociateIdentityProviderConfigWithContext(ctx, input)
-
 	if err != nil {
 		return errors.Wrap(err, "failed associating identity provider")
 	}
 
 	return nil
 }
+
+type UpdatedIdentityProviderTagsProcedure struct {
+	plan *plan
+}
+
+func (u *UpdatedIdentityProviderTagsProcedure) Name() string {
+	return "update_identity_provider_tags"
+}
+
+func (u *UpdatedIdentityProviderTagsProcedure) Do(ctx context.Context) error {
+	arn := u.plan.currentIdentityProvider.IdentityProviderConfigArn
+	_, err := u.plan.eksClient.TagResource(&eks.TagResourceInput{
+		ResourceArn: arn,
+		Tags:        aws.StringMap(u.plan.desiredIdentityProvider.Tags),
+	})
+
+	if err != nil {
+		return errors.Wrap(err, "updating identity provider tags")
+	}
+
+	return nil
+}
+
 

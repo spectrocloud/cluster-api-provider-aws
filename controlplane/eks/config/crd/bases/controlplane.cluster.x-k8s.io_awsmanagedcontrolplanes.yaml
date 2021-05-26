@@ -877,6 +877,16 @@ spec:
                 description: ErrorMessage indicates that there is a terminal problem
                   reconciling the state, and will be set to a descriptive error message.
                 type: string
+              identityProviderStatus:
+                properties:
+                  arn:
+                    description: ARN holds the ARN of associated identity provider
+                    type: string
+                  status:
+                    description: Status holds current status of associated identity
+                      provider
+                    type: string
+                type: object
               initialized:
                 description: Initialized denotes whether or not the control plane
                   has the uploaded kubernetes config-map.

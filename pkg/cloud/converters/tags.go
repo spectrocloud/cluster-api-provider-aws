@@ -48,15 +48,6 @@ func MapPtrToMap(src map[string]*string) infrav1.Tags {
 	return tags
 }
 
-func MapToMapPtr(src infrav1.Tags) map[string]*string {
-	tags := make(map[string]*string, len(src))
-	for k, v := range src {
-		tags[k] = aws.String(v)
-	}
-
-	return tags
-}
-
 // MapToTags converts a infrav1.Tags to a []*ec2.Tag
 func MapToTags(src infrav1.Tags) []*ec2.Tag {
 	tags := make([]*ec2.Tag, 0, len(src))

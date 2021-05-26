@@ -54,7 +54,7 @@ const (
 
 const (
 	// EKSIdentityProviderConfiguredCondition condition reports on the successful association of identity provider config
-	EKSIdentityProviderConfiguredCondition clusterv1.ConditionType = "EKSIdentityProviderConfiguredCondition"
+	EKSIdentityProviderConfiguredCondition clusterv1.ConditionType = "EKSIdentityProviderConfigured"
 	// EKSIdentityProviderConfiguredFailedReason used to report failures while reconciling the identity provider config association
-	EKSIdentityProviderConfiguredFailedReason = "EKSIdentityProviderConfiguredFailedReason"
+	EKSIdentityProviderConfiguredFailedReason = "EKSIdentityProviderConfiguredFailed"
 )

@@ -30,6 +30,8 @@ func (s *Service) reconcileIdentityProvider(ctx context.Context) error {
 		return nil
 	}
 
+	s.scope.Info("got states", "desired", desired, "current", current)
+
 	identityProviderPlan := identity_provider.NewPlan(clusterName, current, desired, s.EKSClient)
 
 	procedures, err := identityProviderPlan.Create(ctx)
@@ -41,10 +43,27 @@ func (s *Service) reconcileIdentityProvider(ctx context.Context) error {
 
 	// Perform required operations
 	for _, procedure := range procedures {
-		s.scope.V(2).Info("Executing identity provider procedure", "name", procedure.Name())
+		s.scope.Info("Executing identity provider procedure", "name", procedure.Name())
 		if err := procedure.Do(ctx); err != nil {
 			s.scope.Error(err, "failed executing identity provider procedure", "name", procedure.Name())
 			return fmt.Errorf("%s: %w", procedure.Name(), err)
+		}
+	}
+
+	latest, err := s.getAssociatedIdentityProvider(ctx, clusterName)
+	if err != nil {
+		return errors.Wrap(err, "getting associated identity provider")
+	}
+
+	if latest != nil {
+		s.scope.ControlPlane.Status.IdentityProviderStatus = v1alpha3.IdentityProviderStatus{
+			ARN:   aws.StringValue(latest.IdentityProviderConfigArn),
+			Status: aws.StringValue(latest.Status),
+		}
+
+		err := s.scope.PatchObject()
+		if err != nil {
+			return errors.Wrap(err, "updating identity provider status")
 		}
 	}
 
@@ -99,7 +118,7 @@ func (s *Service)convertSDKToIdentityProvider(in *v1alpha3.OIDCIdentityProviderC
 			GroupsPrefix:               in.GroupsPrefix,
 			IdentityProviderConfigName: in.IdentityProviderConfigName,
 			IssuerUrl:                  in.IssuerUrl,
-			RequiredClaims:             converters.MapToMapPtr(in.RequiredClaims),
+			RequiredClaims:             aws.StringMap(in.RequiredClaims),
 			Tags:                       in.Tags,
 			UsernameClaim:              in.UsernameClaim,
 			UsernamePrefix:             in.UsernamePrefix,
