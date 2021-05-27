@@ -5,27 +5,29 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/eks/eksiface"
+	"github.com/go-logr/logr"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/planner"
 )
 
 // NewPlan creates a new Plan to manage EKS addons
-func NewPlan(clusterName string, currentIdentityProvider, desiredIdentityProvider *OidcIdentityProviderConfig, client eksiface.EKSAPI) planner.Plan {
+func NewPlan(clusterName string, currentIdentityProvider, desiredIdentityProvider *OidcIdentityProviderConfig, client eksiface.EKSAPI, log logr.Logger) planner.Plan {
 	return &plan{
 		currentIdentityProvider: currentIdentityProvider,
-		desiredIdentityProvider:   desiredIdentityProvider,
-		eksClient:       client,
-		clusterName:     clusterName,
+		desiredIdentityProvider: desiredIdentityProvider,
+		eksClient:               client,
+		clusterName:             clusterName,
+		log:                     log,
 	}
 }
 
 // Plan is a plan that will manage EKS addons
 type plan struct {
 	currentIdentityProvider *OidcIdentityProviderConfig
-	desiredIdentityProvider   *OidcIdentityProviderConfig
-	eksClient       eksiface.EKSAPI
-	clusterName     string
+	desiredIdentityProvider *OidcIdentityProviderConfig
+	eksClient               eksiface.EKSAPI
+	log                     logr.Logger
+	clusterName             string
 }
-
 
 func (p *plan) Create(ctx context.Context) ([]planner.Procedure, error) {
 	var procedures []planner.Procedure
@@ -47,14 +49,18 @@ func (p *plan) Create(ctx context.Context) ([]planner.Procedure, error) {
 
 	// create case
 	if p.currentIdentityProvider == nil {
-		procedures  = append(procedures, &AssociateIdentityProviderProcedure{plan: p})
+		procedures = append(procedures, &AssociateIdentityProviderProcedure{plan: p})
 		return procedures, nil
 	}
 
 	if p.currentIdentityProvider.IsEqual(p.desiredIdentityProvider) {
-		tagsDiff := p.currentIdentityProvider.Tags.Difference(p.desiredIdentityProvider.Tags)
+		tagsDiff := p.desiredIdentityProvider.Tags.Difference(p.currentIdentityProvider.Tags)
 		if len(tagsDiff) > 0 {
 			procedures = append(procedures, &UpdatedIdentityProviderTagsProcedure{plan: p})
+		}
+
+		if len(p.desiredIdentityProvider.Tags) == 0 && len(p.currentIdentityProvider.Tags) != 0 {
+			procedures = append(procedures, &RemoveIdentityProviderTagsProcedure{plan: p})
 		}
 		switch aws.StringValue(p.currentIdentityProvider.Status) {
 		case eks.ConfigStatusActive:

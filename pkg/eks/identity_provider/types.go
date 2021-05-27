@@ -8,17 +8,17 @@ import (
 // An object that represents the configuration for an OpenID Connect (OIDC)
 // identity provider.
 type OidcIdentityProviderConfig struct {
-	ClientId *string
-	GroupsClaim *string
-	GroupsPrefix *string
-	IdentityProviderConfigArn *string
+	ClientId                   *string
+	GroupsClaim                *string
+	GroupsPrefix               *string
+	IdentityProviderConfigArn  *string
 	IdentityProviderConfigName *string
-	IssuerUrl *string
-	RequiredClaims map[string]*string
-	Status *string
-	Tags infrav1.Tags
-	UsernameClaim *string
-	UsernamePrefix *string
+	IssuerUrl                  *string
+	RequiredClaims             map[string]*string
+	Status                     *string
+	Tags                       infrav1.Tags
+	UsernameClaim              *string
+	UsernamePrefix             *string
 }
 
 func (o *OidcIdentityProviderConfig) IsEqual(other *OidcIdentityProviderConfig) bool {

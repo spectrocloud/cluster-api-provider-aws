@@ -17,22 +17,22 @@ func (s *Service) reconcileIdentityProvider(ctx context.Context) error {
 		return nil
 	}
 
-	clusterName := s.scope.KubernetesClusterName()	
+	clusterName := s.scope.KubernetesClusterName()
 	current, err := s.getAssociatedIdentityProvider(ctx, clusterName)
 	if err != nil {
 		return errors.Wrap(err, "unable to list associated identity providers")
 	}
-	
+
 	desired := s.convertSDKToIdentityProvider(s.scope.OIDCIdentityProviderConfig())
-	
+
 	if desired == nil && current == nil {
 		s.scope.Info("no identity provider required or installed, no action needed")
 		return nil
 	}
 
-	s.scope.Info("got states", "desired", desired, "current", current)
+	s.scope.V(2).Info("got states", "desired", desired, "current", current)
 
-	identityProviderPlan := identity_provider.NewPlan(clusterName, current, desired, s.EKSClient)
+	identityProviderPlan := identity_provider.NewPlan(clusterName, current, desired, s.EKSClient, s.scope.Logger)
 
 	procedures, err := identityProviderPlan.Create(ctx)
 	if err != nil {
@@ -57,7 +57,7 @@ func (s *Service) reconcileIdentityProvider(ctx context.Context) error {
 
 	if latest != nil {
 		s.scope.ControlPlane.Status.IdentityProviderStatus = v1alpha3.IdentityProviderStatus{
-			ARN:   aws.StringValue(latest.IdentityProviderConfigArn),
+			ARN:    aws.StringValue(latest.IdentityProviderConfigArn),
 			Status: aws.StringValue(latest.Status),
 		}
 
@@ -94,7 +94,7 @@ func (s *Service) getAssociatedIdentityProvider(ctx context.Context, clusterName
 	}
 
 	config := providerconfig.IdentityProviderConfig.Oidc
-	
+
 	return &identity_provider.OidcIdentityProviderConfig{
 		ClientId:                   config.ClientId,
 		GroupsClaim:                config.GroupsClaim,
@@ -110,7 +110,7 @@ func (s *Service) getAssociatedIdentityProvider(ctx context.Context, clusterName
 	}, nil
 }
 
-func (s *Service)convertSDKToIdentityProvider(in *v1alpha3.OIDCIdentityProviderConfig) *identity_provider.OidcIdentityProviderConfig {
+func (s *Service) convertSDKToIdentityProvider(in *v1alpha3.OIDCIdentityProviderConfig) *identity_provider.OidcIdentityProviderConfig {
 	if in != nil {
 		return &identity_provider.OidcIdentityProviderConfig{
 			ClientId:                   in.ClientId,

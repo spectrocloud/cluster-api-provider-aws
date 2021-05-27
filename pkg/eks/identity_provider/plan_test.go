@@ -29,14 +29,13 @@ import (
 func TestEKSAddonPlan(t *testing.T) {
 	clusterName := "default.cluster"
 
-
 	testCases := []struct {
-		name              string
-		currentIdentityProvider   *OidcIdentityProviderConfig
-		desiredIdentityProvider  *OidcIdentityProviderConfig
-		expect            func(m *mock_eksiface.MockEKSAPIMockRecorder)
-		expectCreateError bool
-		expectDoError     bool
+		name                    string
+		currentIdentityProvider *OidcIdentityProviderConfig
+		desiredIdentityProvider *OidcIdentityProviderConfig
+		expect                  func(m *mock_eksiface.MockEKSAPIMockRecorder)
+		expectCreateError       bool
+		expectDoError           bool
 	}{
 		{
 			name: "no desired and no installed",
@@ -299,7 +298,3 @@ func TestEKSAddonPlan(t *testing.T) {
 		})
 	}
 }
-
-
-
-

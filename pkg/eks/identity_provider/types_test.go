@@ -8,8 +8,8 @@ import (
 
 func TestIdentityProviderEqual(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	tests := []struct{
-		orig *OidcIdentityProviderConfig
+	tests := []struct {
+		orig  *OidcIdentityProviderConfig
 		other *OidcIdentityProviderConfig
 	}{
 		{
@@ -22,7 +22,7 @@ func TestIdentityProviderEqual(t *testing.T) {
 				ClientId:                   aws.String("a"),
 				IdentityProviderConfigName: aws.String("b"),
 				IssuerUrl:                  aws.String("c"),
-				Status: aws.String("e"),
+				Status:                     aws.String("e"),
 			},
 		},
 	}

@@ -11,7 +11,7 @@ import (
 var oidcType = aws.String("oidc")
 
 type WaitIdentityProviderAssociatedProcudure struct {
-	plan *plan
+	plan                 *plan
 	identityProviderName string
 }
 
@@ -22,7 +22,7 @@ func (w *WaitIdentityProviderAssociatedProcudure) Name() string {
 func (w *WaitIdentityProviderAssociatedProcudure) Do(ctx context.Context) error {
 	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 		out, err := w.plan.eksClient.DescribeIdentityProviderConfigWithContext(ctx, &eks.DescribeIdentityProviderConfigInput{
-			ClusterName:            aws.String(w.plan.clusterName),
+			ClusterName: aws.String(w.plan.clusterName),
 			IdentityProviderConfig: &eks.IdentityProviderConfig{
 				Name: w.plan.currentIdentityProvider.IdentityProviderConfigName,
 				Type: oidcType,
@@ -56,7 +56,7 @@ func (d *DisassociateIdentityProviderConfig) Name() string {
 func (d *DisassociateIdentityProviderConfig) Do(ctx context.Context) error {
 	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 		_, err := d.plan.eksClient.DisassociateIdentityProviderConfigWithContext(ctx, &eks.DisassociateIdentityProviderConfigInput{
-			ClusterName:            aws.String(d.plan.clusterName),
+			ClusterName: aws.String(d.plan.clusterName),
 			IdentityProviderConfig: &eks.IdentityProviderConfig{
 				Name: d.plan.currentIdentityProvider.IdentityProviderConfigName,
 				Type: oidcType,
@@ -66,7 +66,7 @@ func (d *DisassociateIdentityProviderConfig) Do(ctx context.Context) error {
 		if err != nil {
 			return false, err
 		}
-		
+
 		return true, nil
 	}); err != nil {
 		return errors.Wrap(err, "failing disassociating identity provider config")
@@ -86,8 +86,8 @@ func (a *AssociateIdentityProviderProcedure) Name() string {
 func (a *AssociateIdentityProviderProcedure) Do(ctx context.Context) error {
 	oidc := a.plan.desiredIdentityProvider
 	input := &eks.AssociateIdentityProviderConfigInput{
-		ClusterName:        aws.String(a.plan.clusterName),
-		Oidc:               &eks.OidcIdentityProviderConfigRequest{
+		ClusterName: aws.String(a.plan.clusterName),
+		Oidc: &eks.OidcIdentityProviderConfigRequest{
 			ClientId:                   oidc.ClientId,
 			GroupsClaim:                oidc.GroupsClaim,
 			GroupsPrefix:               oidc.GroupsPrefix,
@@ -133,4 +133,27 @@ func (u *UpdatedIdentityProviderTagsProcedure) Do(ctx context.Context) error {
 	return nil
 }
 
+type RemoveIdentityProviderTagsProcedure struct {
+	plan *plan
+}
 
+func (r *RemoveIdentityProviderTagsProcedure) Name() string {
+	return "remove_identity_provider_tags"
+}
+
+func (r *RemoveIdentityProviderTagsProcedure) Do(ctx context.Context) error {
+	keys := make([]*string, 0, len(r.plan.currentIdentityProvider.Tags))
+
+	for key := range r.plan.currentIdentityProvider.Tags {
+		keys = append(keys, aws.String(key))
+	}
+	_, err := r.plan.eksClient.UntagResource(&eks.UntagResourceInput{
+		ResourceArn: r.plan.currentIdentityProvider.IdentityProviderConfigArn,
+		TagKeys:     keys,
+	})
+
+	if err != nil {
+		return errors.Wrap(err, "untagging identity provider")
+	}
+	return nil
+}
