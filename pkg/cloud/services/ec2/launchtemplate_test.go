@@ -87,7 +87,7 @@ func TestGetLaunchTemplate(t *testing.T) {
 			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
 				m.DescribeLaunchTemplateVersions(gomock.Eq(&ec2.DescribeLaunchTemplateVersionsInput{
 					LaunchTemplateName: aws.String("foo"),
-					Versions:         []*string{aws.String("$Latest")},
+					Versions:           []*string{aws.String("$Latest")},
 				})).
 					Return(nil, awserrors.NewNotFound("not found"))
 			},
