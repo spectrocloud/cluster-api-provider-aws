@@ -133,12 +133,6 @@ func (r *AWSManagedMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Re
 
 	logger = logger.WithValues("AWSManagedControlPlane", controlPlane.Name)
 
-	if !controlPlane.Status.Ready {
-		logger.Info("Control plane is not ready yet")
-		conditions.MarkFalse(awsPool, infrav1exp.EKSNodegroupReadyCondition, infrav1exp.WaitingForEKSControlPlaneReason, clusterv1.ConditionSeverityInfo, "")
-		return ctrl.Result{}, nil
-	}
-
 	machinePoolScope, err := scope.NewManagedMachinePoolScope(scope.ManagedMachinePoolScopeParams{
 		Logger:             logger,
 		Client:             r.Client,
@@ -154,6 +148,16 @@ func (r *AWSManagedMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Re
 		return ctrl.Result{}, errors.Wrap(err, "failed to create scope")
 	}
 
+	if !awsPool.ObjectMeta.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, machinePoolScope)
+	}
+
+	if !controlPlane.Status.Ready {
+		logger.Info("Control plane is not ready yet")
+		conditions.MarkFalse(awsPool, infrav1exp.EKSNodegroupReadyCondition, infrav1exp.WaitingForEKSControlPlaneReason, clusterv1.ConditionSeverityInfo, "")
+		return ctrl.Result{}, nil
+	}
+
 	defer func() {
 		applicableConditions := []clusterv1.ConditionType{
 			infrav1exp.EKSNodegroupReadyCondition,
@@ -166,10 +170,6 @@ func (r *AWSManagedMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Re
 			reterr = err
 		}
 	}()
-
-	if !awsPool.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, machinePoolScope)
-	}
 
 	return r.reconcileNormal(ctx, machinePoolScope)
 }
