@@ -161,7 +161,6 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - awsclustercontrolleridentities
   - awsclusterroleidentities
   - awsclusterstaticidentities
   verbs:
