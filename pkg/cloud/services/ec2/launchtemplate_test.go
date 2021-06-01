@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/golang/mock/gomock"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
@@ -89,7 +90,11 @@ func TestGetLaunchTemplate(t *testing.T) {
 					LaunchTemplateName: aws.String("foo"),
 					Versions:           []*string{aws.String("$Latest")},
 				})).
-					Return(nil, awserrors.NewNotFound("not found"))
+					Return(nil, awserr.New(
+						awserrors.LaunchTemplateNameNotFound,
+						"The specified launch template, with template name foo, does not exist.",
+						nil,
+					))
 			},
 			check: func(launchtemplate *expinfrav1.AWSLaunchTemplate, userdatahash string, err error) {
 				if err != nil {
