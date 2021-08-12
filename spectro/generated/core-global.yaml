@@ -3,7 +3,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -138,7 +138,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -331,7 +331,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -1522,7 +1522,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -1660,7 +1660,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -1860,7 +1860,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -2361,7 +2361,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -3121,7 +3121,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -3743,7 +3743,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -3861,7 +3861,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-eks-control-plane-serving-cert
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: control-plane-eks
@@ -4983,7 +4983,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.9
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
@@ -5122,6 +5122,30 @@ spec:
                   scaling group of this nodegroup
                 items:
                   type: string
+                type: array
+              taints:
+                description: Taints specifies the taints to apply to the nodes of
+                  the machine pool
+                items:
+                  properties:
+                    effect:
+                      description: Effect specifies the effect for the taint
+                      enum:
+                      - no-schedule
+                      - no-execute
+                      - prefer-no-schedule
+                      type: string
+                    key:
+                      description: Key is the key of the taint
+                      type: string
+                    value:
+                      description: Value is the value of the taint
+                      type: string
+                  required:
+                  - effect
+                  - key
+                  - value
+                  type: object
                 type: array
             type: object
           status:
@@ -5773,7 +5797,7 @@ webhooks:
     - CREATE
     - UPDATE
     resources:
-    - fargateprofiles
+    - awsfargateprofiles
   sideEffects: None
 - clientConfig:
     caBundle: Cg==
