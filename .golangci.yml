@@ -1,21 +1,32 @@
 linters:
   enable-all: true
   disable:
+    - cyclop
     - dupl
+    - errorlint
+    - exhaustivestruct
     - funlen
+    - gci
     - gochecknoglobals
     - gochecknoinits
-    - lll
-    - godox
-    - wsl
-    - whitespace
     - gocognit
-    - gomnd
-    - godot
-    - gofumpt
-    - gci
-    - nlreturn
     - gocritic
+    - godot
+    - godox
+    - gofumpt
+    - gomnd
+    - gomoddirectives
+    - lll
+    - makezero
+    - nilerr
+    - nlreturn
+    - predeclared
+    - revive
+    - stylecheck
+    - tagliatelle
+    - whitespace
+    - wrapcheck
+    - wsl
   # Run with --fast=false for more extensive checks
   fast: true
 issues:
