@@ -75,12 +75,7 @@ func (r *AWSFargateProfile) ValidateUpdate(oldObj runtime.Object) error {
 	}
 
 	var allErrs field.ErrorList
-	if !reflect.DeepEqual(old.Spec, r.Spec) {
-		allErrs = append(
-			allErrs,
-			field.Invalid(field.NewPath("spec"), r.Spec, "is immutable"),
-		)
-	}
+	allErrs = append(allErrs, r.validateImmutable(old)...)
 
 	if len(allErrs) == 0 {
 		return nil
@@ -91,6 +86,35 @@ func (r *AWSFargateProfile) ValidateUpdate(oldObj runtime.Object) error {
 		r.Name,
 		allErrs,
 	)
+}
+
+func (r *AWSFargateProfile) validateImmutable(old *AWSFargateProfile) field.ErrorList {
+	var allErrs field.ErrorList
+
+	appendErrorIfMutated := func(old, update interface{}, name string) {
+		if !reflect.DeepEqual(old, update) {
+			allErrs = append(
+				allErrs,
+				field.Invalid(field.NewPath("spec", name), update, "field is immutable"),
+			)
+		}
+	}
+	appendErrorIfSetAndMutated := func(old, update interface{}, name string) {
+		if !reflect.ValueOf(old).IsZero() && !reflect.DeepEqual(old, update) {
+			allErrs = append(
+				allErrs,
+				field.Invalid(field.NewPath("spec", name), update, "field is immutable"),
+			)
+		}
+	}
+
+	appendErrorIfMutated(old.Spec.ClusterName, r.Spec.ClusterName, "clusterName")
+	appendErrorIfMutated(old.Spec.ProfileName, r.Spec.ProfileName, "profileName")
+	appendErrorIfMutated(old.Spec.SubnetIDs, r.Spec.SubnetIDs, "subnetIDs")
+	appendErrorIfSetAndMutated(old.Spec.RoleName, r.Spec.RoleName, "roleName")
+	appendErrorIfMutated(old.Spec.Selectors, r.Spec.Selectors, "selectors")
+
+	return allErrs
 }
 
 func (r *AWSFargateProfile) ValidateCreate() error {
