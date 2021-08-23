@@ -179,6 +179,7 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 		Labels:        aws.StringMap(managedPool.Labels),
 		Tags:          aws.StringMap(tags),
 		RemoteAccess:  remoteAccess,
+		CapacityType:  aws.String(eks.CapacityTypesSpot),
 	}
 	if managedPool.AMIType != nil {
 		input.AmiType = aws.String(string(*managedPool.AMIType))
