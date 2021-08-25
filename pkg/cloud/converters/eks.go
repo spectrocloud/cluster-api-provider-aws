@@ -22,9 +22,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
 )
@@ -32,6 +30,9 @@ import (
 var (
 	// ErrUnknowTaintEffect is an error when a unknown TaintEffect is used
 	ErrUnknowTaintEffect = errors.New("uknown taint effect")
+
+	// ErrUnknownCapacityType is an error when a unknown CapacityType is used.
+	ErrUnknownCapacityType = errors.New("unknown capacity type")
 )
 
 // AddonSDKToAddonState is used to convert an AWS SDK Addon to a control plane AddonState
@@ -131,5 +132,17 @@ func TaintEffectFromSDK(effect string) (infrav1exp.TaintEffect, error) {
 		return infrav1exp.TaintEffectNoSchedule, nil
 	default:
 		return "", ErrUnknowTaintEffect
+	}
+}
+
+// CapacityTypeToSDK is used to convert a CapacityType to the AWS SDK capacity type value.
+func CapacityTypeToSDK(capacityType infrav1exp.ManagedMachinePoolCapacityType) (string, error) {
+	switch capacityType {
+	case infrav1exp.ManagedMachinePoolCapacityTypeOnDemand:
+		return eks.CapacityTypesOnDemand, nil
+	case infrav1exp.ManagedMachinePoolCapacityTypeSpot:
+		return eks.CapacityTypesSpot, nil
+	default:
+		return "", ErrUnknownCapacityType
 	}
 }
