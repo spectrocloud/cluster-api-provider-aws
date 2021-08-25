@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/errors"
@@ -41,6 +40,16 @@ const (
 	Al2x86_64GPU ManagedMachineAMIType = "AL2_x86_64_GPU"
 	// Al2Arm64 is the Arm AMI type
 	Al2Arm64 ManagedMachineAMIType = "AL2_ARM_64"
+)
+
+// ManagedMachinePoolCapacityType specifies the capacity type to be used for the managed MachinePool.
+type ManagedMachinePoolCapacityType string
+
+const (
+	// ManagedMachinePoolCapacityTypeOnDemand is the default capacity type, to launch on-demand instances.
+	ManagedMachinePoolCapacityTypeOnDemand ManagedMachinePoolCapacityType = "onDemand"
+	// ManagedMachinePoolCapacityTypeSpot is the spot instance capacity type to launch spot instances.
+	ManagedMachinePoolCapacityTypeSpot ManagedMachinePoolCapacityType = "spot"
 )
 
 var (
@@ -117,6 +126,12 @@ type AWSManagedMachinePoolSpec struct {
 	// machine pool
 	// +optional
 	ProviderIDList []string `json:"providerIDList,omitempty"`
+
+	// CapacityType specifies the capacity type for the ASG behind this pool
+	// +kubebuilder:validation:Enum:=onDemand;spot
+	// +kubebuilder:default:=onDemand
+	// +optional
+	CapacityType *ManagedMachinePoolCapacityType `json:"capacityType,omitempty"`
 }
 
 // ManagedMachinePoolScaling specifies scaling options
