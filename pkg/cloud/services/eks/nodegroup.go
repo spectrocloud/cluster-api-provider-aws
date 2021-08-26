@@ -26,7 +26,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/version"
-
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 	controlplanev1exp "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
@@ -189,6 +188,7 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 	if managedPool.InstanceType != nil {
 		input.InstanceTypes = []*string{managedPool.InstanceType}
 	}
+
 	if len(managedPool.Taints) > 0 {
 		s.Info("adding taints to nodegroup", "nodegroup", nodegroupName)
 		taints, err := converters.TaintsToSDK(managedPool.Taints)
@@ -197,6 +197,15 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 		}
 		input.Taints = taints
 	}
+
+	if managedPool.CapacityType != nil {
+		capacityType, err := converters.CapacityTypeToSDK(*managedPool.CapacityType)
+		if err != nil {
+			return nil, fmt.Errorf("converting capacity type: %w", err)
+		}
+		input.CapacityType = aws.String(capacityType)
+	}
+
 	if err := input.Validate(); err != nil {
 		return nil, errors.Wrap(err, "created invalid CreateNodegroupInput")
 	}
