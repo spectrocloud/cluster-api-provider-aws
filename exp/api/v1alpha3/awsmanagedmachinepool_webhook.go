@@ -182,6 +182,7 @@ func (r *AWSManagedMachinePool) validateImmutable(old *AWSManagedMachinePool) fi
 	appendErrorIfMutated(old.Spec.EKSNodegroupName, r.Spec.EKSNodegroupName, "eksNodegroupName")
 	appendErrorIfMutated(old.Spec.SubnetIDs, r.Spec.SubnetIDs, "subnetIDs")
 	appendErrorIfSetAndMutated(old.Spec.RoleName, r.Spec.RoleName, "roleName")
+	appendErrorIfSetAndMutated(old.Spec.RoleAdditionalPolicies, r.Spec.RoleAdditionalPolicies, "roleAdditionalPolicies")
 	appendErrorIfMutated(old.Spec.DiskSize, r.Spec.DiskSize, "diskSize")
 	appendErrorIfMutated(old.Spec.AMIType, r.Spec.AMIType, "amiType")
 	appendErrorIfMutated(old.Spec.RemoteAccess, r.Spec.RemoteAccess, "remoteAccess")
