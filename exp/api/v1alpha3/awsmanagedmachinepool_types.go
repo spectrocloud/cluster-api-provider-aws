@@ -92,7 +92,7 @@ type AWSManagedMachinePoolSpec struct {
 	// the node group role. You must enable the EKSAllowAddRoles
 	// feature flag to incorporate these into the created role.
 	// +optional
-	RoleAdditionalPolicies *[]string `json:"roleAdditionalPolicies,omitempty"`
+	RoleAdditionalPolicies []string `json:"roleAdditionalPolicies,omitempty"`
 
 	// AMIVersion defines the desired AMI release version. If no version number
 	// is supplied then the latest version for the Kubernetes version
