@@ -480,12 +480,8 @@ func (in *AWSManagedMachinePoolSpec) DeepCopyInto(out *AWSManagedMachinePoolSpec
 	}
 	if in.RoleAdditionalPolicies != nil {
 		in, out := &in.RoleAdditionalPolicies, &out.RoleAdditionalPolicies
-		*out = new([]string)
-		if **in != nil {
-			in, out := *in, *out
-			*out = make([]string, len(*in))
-			copy(*out, *in)
-		}
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	if in.AMIVersion != nil {
 		in, out := &in.AMIVersion, &out.AMIVersion
