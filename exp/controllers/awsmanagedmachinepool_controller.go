@@ -53,7 +53,8 @@ type AWSManagedMachinePoolReconciler struct {
 	Recorder  record.EventRecorder
 	Endpoints []scope.ServiceEndpoint
 
-	EnableIAM bool
+	EnableIAM            bool
+	AllowAdditionalRoles bool
 }
 
 // SetupWithManager is used to setup the controller
@@ -134,15 +135,16 @@ func (r *AWSManagedMachinePoolReconciler) Reconcile(req ctrl.Request) (_ ctrl.Re
 	logger = logger.WithValues("AWSManagedControlPlane", controlPlane.Name)
 
 	machinePoolScope, err := scope.NewManagedMachinePoolScope(scope.ManagedMachinePoolScopeParams{
-		Logger:             logger,
-		Client:             r.Client,
-		ControllerName:     "awsmanagedmachinepool",
-		Cluster:            cluster,
-		ControlPlane:       controlPlane,
-		MachinePool:        machinePool,
-		ManagedMachinePool: awsPool,
-		EnableIAM:          r.EnableIAM,
-		Endpoints:          r.Endpoints,
+		Logger:               logger,
+		Client:               r.Client,
+		ControllerName:       "awsmanagedmachinepool",
+		Cluster:              cluster,
+		ControlPlane:         controlPlane,
+		MachinePool:          machinePool,
+		ManagedMachinePool:   awsPool,
+		EnableIAM:            r.EnableIAM,
+		AllowAdditionalRoles: r.AllowAdditionalRoles,
+		Endpoints:            r.Endpoints,
 	})
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create scope")
