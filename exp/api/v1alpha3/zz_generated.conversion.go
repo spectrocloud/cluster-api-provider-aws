@@ -743,6 +743,7 @@ func autoConvert_v1alpha3_AWSManagedMachinePoolSpec_To_v1alpha4_AWSManagedMachin
 	out.SubnetIDs = *(*[]string)(unsafe.Pointer(&in.SubnetIDs))
 	out.AdditionalTags = *(*clusterapiproviderawsapiv1alpha4.Tags)(unsafe.Pointer(&in.AdditionalTags))
 	out.RoleName = in.RoleName
+	out.RoleAdditionalPolicies = *(*[]string)(unsafe.Pointer(&in.RoleAdditionalPolicies))
 	out.AMIVersion = (*string)(unsafe.Pointer(in.AMIVersion))
 	out.AMIType = (*v1alpha4.ManagedMachineAMIType)(unsafe.Pointer(in.AMIType))
 	out.Labels = *(*map[string]string)(unsafe.Pointer(&in.Labels))
@@ -766,7 +767,7 @@ func autoConvert_v1alpha4_AWSManagedMachinePoolSpec_To_v1alpha3_AWSManagedMachin
 	out.SubnetIDs = *(*[]string)(unsafe.Pointer(&in.SubnetIDs))
 	out.AdditionalTags = *(*clusterapiproviderawsapiv1alpha3.Tags)(unsafe.Pointer(&in.AdditionalTags))
 	out.RoleName = in.RoleName
-	// WARNING: in.RoleAdditionalPolicies requires manual conversion: does not exist in peer-type
+	out.RoleAdditionalPolicies = *(*[]string)(unsafe.Pointer(&in.RoleAdditionalPolicies))
 	out.AMIVersion = (*string)(unsafe.Pointer(in.AMIVersion))
 	out.AMIType = (*ManagedMachineAMIType)(unsafe.Pointer(in.AMIType))
 	out.Labels = *(*map[string]string)(unsafe.Pointer(&in.Labels))
