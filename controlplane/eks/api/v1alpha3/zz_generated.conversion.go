@@ -23,6 +23,7 @@ package v1alpha3
 import (
 	unsafe "unsafe"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	clusterapiproviderawsapiv1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
@@ -64,8 +65,18 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*v1alpha4.AWSManagedControlPlaneSpec)(nil), (*AWSManagedControlPlaneSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha4_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedControlPlaneSpec(a.(*v1alpha4.AWSManagedControlPlaneSpec), b.(*AWSManagedControlPlaneSpec), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*AWSManagedControlPlaneStatus)(nil), (*v1alpha4.AWSManagedControlPlaneStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha3_AWSManagedControlPlaneStatus_To_v1alpha4_AWSManagedControlPlaneStatus(a.(*AWSManagedControlPlaneStatus), b.(*v1alpha4.AWSManagedControlPlaneStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*v1alpha4.AWSManagedControlPlaneStatus)(nil), (*AWSManagedControlPlaneStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha4_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedControlPlaneStatus(a.(*v1alpha4.AWSManagedControlPlaneStatus), b.(*AWSManagedControlPlaneStatus), scope)
 	}); err != nil {
 		return err
 	}
@@ -139,6 +150,16 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*IdentityProviderStatus)(nil), (*v1alpha4.IdentityProviderStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha3_IdentityProviderStatus_To_v1alpha4_IdentityProviderStatus(a.(*IdentityProviderStatus), b.(*v1alpha4.IdentityProviderStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*v1alpha4.IdentityProviderStatus)(nil), (*IdentityProviderStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus(a.(*v1alpha4.IdentityProviderStatus), b.(*IdentityProviderStatus), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*KubernetesMapping)(nil), (*v1alpha4.KubernetesMapping)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha3_KubernetesMapping_To_v1alpha4_KubernetesMapping(a.(*KubernetesMapping), b.(*v1alpha4.KubernetesMapping), scope)
 	}); err != nil {
@@ -146,6 +167,16 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*v1alpha4.KubernetesMapping)(nil), (*KubernetesMapping)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha4_KubernetesMapping_To_v1alpha3_KubernetesMapping(a.(*v1alpha4.KubernetesMapping), b.(*KubernetesMapping), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*OIDCIdentityProviderConfig)(nil), (*v1alpha4.OIDCIdentityProviderConfig)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha3_OIDCIdentityProviderConfig_To_v1alpha4_OIDCIdentityProviderConfig(a.(*OIDCIdentityProviderConfig), b.(*v1alpha4.OIDCIdentityProviderConfig), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*v1alpha4.OIDCIdentityProviderConfig)(nil), (*OIDCIdentityProviderConfig)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig(a.(*v1alpha4.OIDCIdentityProviderConfig), b.(*OIDCIdentityProviderConfig), scope)
 	}); err != nil {
 		return err
 	}
@@ -206,16 +237,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddConversionFunc((*apiv1alpha4.APIEndpoint)(nil), (*apiv1alpha3.APIEndpoint)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha4_APIEndpoint_To_v1alpha3_APIEndpoint(a.(*apiv1alpha4.APIEndpoint), b.(*apiv1alpha3.APIEndpoint), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddConversionFunc((*v1alpha4.AWSManagedControlPlaneSpec)(nil), (*AWSManagedControlPlaneSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha4_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedControlPlaneSpec(a.(*v1alpha4.AWSManagedControlPlaneSpec), b.(*AWSManagedControlPlaneSpec), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddConversionFunc((*v1alpha4.AWSManagedControlPlaneStatus)(nil), (*AWSManagedControlPlaneStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha4_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedControlPlaneStatus(a.(*v1alpha4.AWSManagedControlPlaneStatus), b.(*AWSManagedControlPlaneStatus), scope)
 	}); err != nil {
 		return err
 	}
@@ -347,6 +368,15 @@ func autoConvert_v1alpha3_AWSManagedControlPlaneSpec_To_v1alpha4_AWSManagedContr
 	out.TokenMethod = (*v1alpha4.EKSTokenMethod)(unsafe.Pointer(in.TokenMethod))
 	out.AssociateOIDCProvider = in.AssociateOIDCProvider
 	out.Addons = (*[]v1alpha4.Addon)(unsafe.Pointer(in.Addons))
+	if in.OIDCIdentityProviderConfig != nil {
+		in, out := &in.OIDCIdentityProviderConfig, &out.OIDCIdentityProviderConfig
+		*out = new(v1alpha4.OIDCIdentityProviderConfig)
+		if err := Convert_v1alpha3_OIDCIdentityProviderConfig_To_v1alpha4_OIDCIdentityProviderConfig(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.OIDCIdentityProviderConfig = nil
+	}
 	out.DisableVPCCNI = in.DisableVPCCNI
 	return nil
 }
@@ -387,9 +417,22 @@ func autoConvert_v1alpha4_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedContr
 	out.TokenMethod = (*EKSTokenMethod)(unsafe.Pointer(in.TokenMethod))
 	out.AssociateOIDCProvider = in.AssociateOIDCProvider
 	out.Addons = (*[]Addon)(unsafe.Pointer(in.Addons))
-	// WARNING: in.OIDCIdentityProviderConfig requires manual conversion: does not exist in peer-type
+	if in.OIDCIdentityProviderConfig != nil {
+		in, out := &in.OIDCIdentityProviderConfig, &out.OIDCIdentityProviderConfig
+		*out = new(OIDCIdentityProviderConfig)
+		if err := Convert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.OIDCIdentityProviderConfig = nil
+	}
 	out.DisableVPCCNI = in.DisableVPCCNI
 	return nil
+}
+
+// Convert_v1alpha4_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedControlPlaneSpec is an autogenerated conversion function.
+func Convert_v1alpha4_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedControlPlaneSpec(in *v1alpha4.AWSManagedControlPlaneSpec, out *AWSManagedControlPlaneSpec, s conversion.Scope) error {
+	return autoConvert_v1alpha4_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedControlPlaneSpec(in, out, s)
 }
 
 func autoConvert_v1alpha3_AWSManagedControlPlaneStatus_To_v1alpha4_AWSManagedControlPlaneStatus(in *AWSManagedControlPlaneStatus, out *v1alpha4.AWSManagedControlPlaneStatus, s conversion.Scope) error {
@@ -415,6 +458,9 @@ func autoConvert_v1alpha3_AWSManagedControlPlaneStatus_To_v1alpha4_AWSManagedCon
 	out.FailureMessage = (*string)(unsafe.Pointer(in.FailureMessage))
 	out.Conditions = *(*apiv1alpha4.Conditions)(unsafe.Pointer(&in.Conditions))
 	out.Addons = *(*[]v1alpha4.AddonState)(unsafe.Pointer(&in.Addons))
+	if err := Convert_v1alpha3_IdentityProviderStatus_To_v1alpha4_IdentityProviderStatus(&in.IdentityProviderStatus, &out.IdentityProviderStatus, s); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -446,8 +492,15 @@ func autoConvert_v1alpha4_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedCon
 	out.FailureMessage = (*string)(unsafe.Pointer(in.FailureMessage))
 	out.Conditions = *(*apiv1alpha3.Conditions)(unsafe.Pointer(&in.Conditions))
 	out.Addons = *(*[]AddonState)(unsafe.Pointer(&in.Addons))
-	// WARNING: in.IdentityProviderStatus requires manual conversion: does not exist in peer-type
+	if err := Convert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus(&in.IdentityProviderStatus, &out.IdentityProviderStatus, s); err != nil {
+		return err
+	}
 	return nil
+}
+
+// Convert_v1alpha4_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedControlPlaneStatus is an autogenerated conversion function.
+func Convert_v1alpha4_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedControlPlaneStatus(in *v1alpha4.AWSManagedControlPlaneStatus, out *AWSManagedControlPlaneStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha4_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedControlPlaneStatus(in, out, s)
 }
 
 func autoConvert_v1alpha3_Addon_To_v1alpha4_Addon(in *Addon, out *v1alpha4.Addon, s conversion.Scope) error {
@@ -630,6 +683,28 @@ func Convert_v1alpha4_IAMAuthenticatorConfig_To_v1alpha3_IAMAuthenticatorConfig(
 	return autoConvert_v1alpha4_IAMAuthenticatorConfig_To_v1alpha3_IAMAuthenticatorConfig(in, out, s)
 }
 
+func autoConvert_v1alpha3_IdentityProviderStatus_To_v1alpha4_IdentityProviderStatus(in *IdentityProviderStatus, out *v1alpha4.IdentityProviderStatus, s conversion.Scope) error {
+	out.ARN = in.ARN
+	out.Status = in.Status
+	return nil
+}
+
+// Convert_v1alpha3_IdentityProviderStatus_To_v1alpha4_IdentityProviderStatus is an autogenerated conversion function.
+func Convert_v1alpha3_IdentityProviderStatus_To_v1alpha4_IdentityProviderStatus(in *IdentityProviderStatus, out *v1alpha4.IdentityProviderStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha3_IdentityProviderStatus_To_v1alpha4_IdentityProviderStatus(in, out, s)
+}
+
+func autoConvert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus(in *v1alpha4.IdentityProviderStatus, out *IdentityProviderStatus, s conversion.Scope) error {
+	out.ARN = in.ARN
+	out.Status = in.Status
+	return nil
+}
+
+// Convert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus is an autogenerated conversion function.
+func Convert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus(in *v1alpha4.IdentityProviderStatus, out *IdentityProviderStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus(in, out, s)
+}
+
 func autoConvert_v1alpha3_KubernetesMapping_To_v1alpha4_KubernetesMapping(in *KubernetesMapping, out *v1alpha4.KubernetesMapping, s conversion.Scope) error {
 	out.UserName = in.UserName
 	out.Groups = *(*[]string)(unsafe.Pointer(&in.Groups))
@@ -650,6 +725,46 @@ func autoConvert_v1alpha4_KubernetesMapping_To_v1alpha3_KubernetesMapping(in *v1
 // Convert_v1alpha4_KubernetesMapping_To_v1alpha3_KubernetesMapping is an autogenerated conversion function.
 func Convert_v1alpha4_KubernetesMapping_To_v1alpha3_KubernetesMapping(in *v1alpha4.KubernetesMapping, out *KubernetesMapping, s conversion.Scope) error {
 	return autoConvert_v1alpha4_KubernetesMapping_To_v1alpha3_KubernetesMapping(in, out, s)
+}
+
+func autoConvert_v1alpha3_OIDCIdentityProviderConfig_To_v1alpha4_OIDCIdentityProviderConfig(in *OIDCIdentityProviderConfig, out *v1alpha4.OIDCIdentityProviderConfig, s conversion.Scope) error {
+	// INFO: in.ClientId opted out of conversion generation
+	out.GroupsClaim = (*string)(unsafe.Pointer(in.GroupsClaim))
+	out.GroupsPrefix = (*string)(unsafe.Pointer(in.GroupsPrefix))
+	if err := v1.Convert_Pointer_string_To_string(&in.IdentityProviderConfigName, &out.IdentityProviderConfigName, s); err != nil {
+		return err
+	}
+	// INFO: in.IssuerUrl opted out of conversion generation
+	out.RequiredClaims = *(*map[string]string)(unsafe.Pointer(&in.RequiredClaims))
+	out.UsernameClaim = (*string)(unsafe.Pointer(in.UsernameClaim))
+	out.UsernamePrefix = (*string)(unsafe.Pointer(in.UsernamePrefix))
+	out.Tags = *(*clusterapiproviderawsapiv1alpha4.Tags)(unsafe.Pointer(&in.Tags))
+	return nil
+}
+
+// Convert_v1alpha3_OIDCIdentityProviderConfig_To_v1alpha4_OIDCIdentityProviderConfig is an autogenerated conversion function.
+func Convert_v1alpha3_OIDCIdentityProviderConfig_To_v1alpha4_OIDCIdentityProviderConfig(in *OIDCIdentityProviderConfig, out *v1alpha4.OIDCIdentityProviderConfig, s conversion.Scope) error {
+	return autoConvert_v1alpha3_OIDCIdentityProviderConfig_To_v1alpha4_OIDCIdentityProviderConfig(in, out, s)
+}
+
+func autoConvert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig(in *v1alpha4.OIDCIdentityProviderConfig, out *OIDCIdentityProviderConfig, s conversion.Scope) error {
+	// INFO: in.ClientID opted out of conversion generation
+	out.GroupsClaim = (*string)(unsafe.Pointer(in.GroupsClaim))
+	out.GroupsPrefix = (*string)(unsafe.Pointer(in.GroupsPrefix))
+	if err := v1.Convert_string_To_Pointer_string(&in.IdentityProviderConfigName, &out.IdentityProviderConfigName, s); err != nil {
+		return err
+	}
+	// INFO: in.IssuerURL opted out of conversion generation
+	out.RequiredClaims = *(*map[string]string)(unsafe.Pointer(&in.RequiredClaims))
+	out.UsernameClaim = (*string)(unsafe.Pointer(in.UsernameClaim))
+	out.UsernamePrefix = (*string)(unsafe.Pointer(in.UsernamePrefix))
+	out.Tags = *(*clusterapiproviderawsapiv1alpha3.Tags)(unsafe.Pointer(&in.Tags))
+	return nil
+}
+
+// Convert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig is an autogenerated conversion function.
+func Convert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig(in *v1alpha4.OIDCIdentityProviderConfig, out *OIDCIdentityProviderConfig, s conversion.Scope) error {
+	return autoConvert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig(in, out, s)
 }
 
 func autoConvert_v1alpha3_OIDCProviderStatus_To_v1alpha4_OIDCProviderStatus(in *OIDCProviderStatus, out *v1alpha4.OIDCProviderStatus, s conversion.Scope) error {

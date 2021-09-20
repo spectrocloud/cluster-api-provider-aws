@@ -153,6 +153,9 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// +optional
 	Addons *[]Addon `json:"addons,omitempty"`
 
+	// IdentityProvider
+	OIDCIdentityProviderConfig *OIDCIdentityProviderConfig `json:"oidcIdentityProviderConfig"`
+
 	// DisableVPCCNI indcates the the Amazon VPC CNI should be disabled. With EKS clusters that
 	// the Amazon VPC CNI is automatically installed into the cluster. For clusters where you want
 	// to use an alternate CNI this option provides a way to specify that the Amazon VPC CNI
@@ -191,6 +194,14 @@ type OIDCProviderStatus struct {
 	TrustPolicy string `json:"trustPolicy,omitempty"`
 }
 
+type IdentityProviderStatus struct {
+	// ARN holds the ARN of associated identity provider
+	ARN string `json:"arn,omitempty"`
+
+	// Status holds current status of associated identity provider
+	Status string `json:"status,omitempty"`
+}
+
 // AWSManagedControlPlaneStatus defines the observed state of AWSManagedControlPlane
 type AWSManagedControlPlaneStatus struct {
 	// Networks holds details about the AWS networking resources used by the control plane
@@ -226,6 +237,9 @@ type AWSManagedControlPlaneStatus struct {
 	// Addons holds the current status of the EKS addons
 	// +optional
 	Addons []AddonState `json:"addons,omitempty"`
+
+	// +optional
+	IdentityProviderStatus IdentityProviderStatus `json:"identityProviderStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true
