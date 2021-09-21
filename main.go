@@ -260,14 +260,18 @@ func main() {
 
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create ready check")
-		os.Exit(1)
-	}
+	// skip checks when role=reconciler(no webhook port provided)
+	// these checks are required only when role=webhook (webhook port > 0)
+	if webhookPort > 0 {
+		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "unable to create ready check")
+			os.Exit(1)
+		}
 
-	if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create health check")
-		os.Exit(1)
+		if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "unable to create health check")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager", "version", version.Get().String())
@@ -437,7 +441,7 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&webhookPort,
 		"webhook-port",
-		9443,
+		0,
 		"Webhook Server port.",
 	)
 
