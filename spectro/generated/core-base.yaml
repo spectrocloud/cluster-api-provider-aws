@@ -444,9 +444,6 @@ spec:
         volumeMounts:
         - mountPath: /home/.aws
           name: credentials
-      metadata:
-        annotations:
-          iam.amazonaws.com/role: ${AWS_CONTROLLER_IAM_ROLE:=""}
       securityContext:
         fsGroup: 1000
       terminationGracePeriodSeconds: 10

@@ -14,7 +14,6 @@ bases:
 patchesStrategicMerge:
   - ../../config/default/manager_credentials_patch.yaml
   - ../../config/default/manager_service_account_patch.yaml
-  - ../../config/default/manager_iam_patch.yaml
   - ../../config/default/manager_pull_policy.yaml
   - ../../config/default/manager_image_patch.yaml
 

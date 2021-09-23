@@ -9234,9 +9234,6 @@ spec:
         - --leader-elect
         - --feature-gates=EKS=${CAPA_EKS:=true},EKSEnableIAM=${CAPA_EKS_IAM:=false},EKSAllowAddRoles=${CAPA_EKS_ADD_ROLES:=false},EKSFargate=${EXP_EKS_FARGATE:=false},MachinePool=${EXP_MACHINE_POOL:=false},EventBridgeInstanceState=${EVENT_BRIDGE_INSTANCE_STATE:=false},AutoControllerIdentityCreator=${AUTO_CONTROLLER_IDENTITY_CREATOR:=true}
         - --v=${CAPA_LOGLEVEL:=0}
-        env:
-        - name: AWS_SHARED_CREDENTIALS_FILE
-          value: /home/.aws/credentials
         image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -9259,11 +9256,6 @@ spec:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
-        - mountPath: /home/.aws
-          name: credentials
-      metadata:
-        annotations:
-          iam.amazonaws.com/role: ${AWS_CONTROLLER_IAM_ROLE:=""}
       securityContext:
         fsGroup: 1000
       terminationGracePeriodSeconds: 10
@@ -9277,9 +9269,6 @@ spec:
         secret:
           defaultMode: 420
           secretName: capa-webhook-service-cert
-      - name: credentials
-        secret:
-          secretName: capa-manager-bootstrap-credentials
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
