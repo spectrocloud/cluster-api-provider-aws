@@ -63,6 +63,9 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 	if params.MachinePool == nil {
 		return nil, errors.New("failed to generate new scope from nil MachinePool")
 	}
+	if params.ManagedMachinePool == nil {
+		return nil, errors.New("failed to generate new scope from nil ManagedMachinePool")
+	}
 	if params.Logger == nil {
 		params.Logger = klogr.New()
 	}
