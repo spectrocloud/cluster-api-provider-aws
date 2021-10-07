@@ -19,7 +19,7 @@ package addons
 import (
 	"reflect"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 )
 
 // EKSAddon represents an EKS addon.
@@ -33,7 +33,7 @@ type EKSAddon struct {
 	Status                *string
 }
 
-// IsEqual determines if 2 EKSAddon are equal
+// IsEqual determines if 2 EKSAddon are equal.
 func (e *EKSAddon) IsEqual(other *EKSAddon, includeTags bool) bool {
 	//NOTE: we don't compare the ARN as thats only for existing addons
 	if e == other {

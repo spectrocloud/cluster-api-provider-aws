@@ -27,15 +27,15 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/userdata"
 )
 
 // GetLaunchTemplate returns the existing LaunchTemplate or nothing if it doesn't exist.
-// For now by name until we need the input to be something different
+// For now by name until we need the input to be something different.
 func (s *Service) GetLaunchTemplate(launchTemplateName string) (*expinfrav1.AWSLaunchTemplate, string, error) {
 	if launchTemplateName == "" {
 		return nil, "", nil
@@ -53,7 +53,6 @@ func (s *Service) GetLaunchTemplate(launchTemplateName string) (*expinfrav1.AWSL
 	case awserrors.IsNotFound(err):
 		return nil, "", nil
 	case err != nil:
-		s.scope.Info("", "aerr", err.Error())
 		return nil, "", err
 	}
 
@@ -64,7 +63,7 @@ func (s *Service) GetLaunchTemplate(launchTemplateName string) (*expinfrav1.AWSL
 	return s.SDKToLaunchTemplate(out.LaunchTemplateVersions[0])
 }
 
-// GetLaunchTemplateId returns the existing LaunchTemplateId or empty string if it doesn't exist.
+// GetLaunchTemplateID returns the existing LaunchTemplateId or empty string if it doesn't exist.
 func (s *Service) GetLaunchTemplateID(launchTemplateName string) (string, error) {
 	if launchTemplateName == "" {
 		return "", nil
@@ -81,6 +80,7 @@ func (s *Service) GetLaunchTemplateID(launchTemplateName string) (string, error)
 		return "", nil
 	case err != nil:
 		s.scope.Info("", "aerr", err.Error())
+		return "", err
 	}
 
 	if len(out.LaunchTemplateVersions) == 0 {
@@ -90,7 +90,7 @@ func (s *Service) GetLaunchTemplateID(launchTemplateName string) (string, error)
 	return aws.StringValue(out.LaunchTemplateVersions[0].LaunchTemplateId), nil
 }
 
-// CreateLaunchTemplate generates a launch template to be used with the autoscaling group
+// CreateLaunchTemplate generates a launch template to be used with the autoscaling group.
 func (s *Service) CreateLaunchTemplate(scope *scope.MachinePoolScope, imageID *string, userData []byte) (string, error) {
 	s.scope.Info("Create a new launch template")
 
@@ -134,6 +134,7 @@ func (s *Service) CreateLaunchTemplate(scope *scope.MachinePoolScope, imageID *s
 	return aws.StringValue(result.LaunchTemplate.LaunchTemplateId), nil
 }
 
+// CreateLaunchTemplateVersion will create a launch template.
 func (s *Service) CreateLaunchTemplateVersion(scope *scope.MachinePoolScope, imageID *string, userData []byte) error {
 	s.scope.V(2).Info("creating new launch template version", "machine-pool", scope.Name())
 
@@ -197,30 +198,11 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, imageI
 			return nil, err
 		}
 
-		ebsRootDevice := &ec2.LaunchTemplateEbsBlockDeviceRequest{
-			DeleteOnTermination: aws.Bool(true),
-			VolumeSize:          aws.Int64(lt.RootVolume.Size),
-			Encrypted:           aws.Bool(lt.RootVolume.Encrypted),
-		}
+		lt.RootVolume.DeviceName = aws.StringValue(rootDeviceName)
 
-		if lt.RootVolume.IOPS != 0 {
-			ebsRootDevice.Iops = aws.Int64(lt.RootVolume.IOPS)
-		}
-
-		if lt.RootVolume.EncryptionKey != "" {
-			ebsRootDevice.Encrypted = aws.Bool(true)
-			ebsRootDevice.KmsKeyId = aws.String(lt.RootVolume.EncryptionKey)
-		}
-
-		if lt.RootVolume.Type != "" {
-			ebsRootDevice.VolumeType = aws.String(lt.RootVolume.Type)
-		}
-
+		req := volumeToLaunchTemplateBlockDeviceMappingRequest(lt.RootVolume)
 		data.BlockDeviceMappings = []*ec2.LaunchTemplateBlockDeviceMappingRequest{
-			{
-				DeviceName: rootDeviceName,
-				Ebs:        ebsRootDevice,
-			},
+			req,
 		}
 	}
 
@@ -229,7 +211,37 @@ func (s *Service) createLaunchTemplateData(scope *scope.MachinePoolScope, imageI
 	return data, nil
 }
 
-// DeleteLaunchTemplate delete a launch template
+func volumeToLaunchTemplateBlockDeviceMappingRequest(v *infrav1.Volume) *ec2.LaunchTemplateBlockDeviceMappingRequest {
+	ltEbsDevice := &ec2.LaunchTemplateEbsBlockDeviceRequest{
+		DeleteOnTermination: aws.Bool(true),
+		VolumeSize:          aws.Int64(v.Size),
+		Encrypted:           v.Encrypted,
+	}
+
+	if v.Throughput != nil {
+		ltEbsDevice.Throughput = v.Throughput
+	}
+
+	if v.IOPS != 0 {
+		ltEbsDevice.Iops = aws.Int64(v.IOPS)
+	}
+
+	if v.EncryptionKey != "" {
+		ltEbsDevice.Encrypted = aws.Bool(true)
+		ltEbsDevice.KmsKeyId = aws.String(v.EncryptionKey)
+	}
+
+	if v.Type != "" {
+		ltEbsDevice.VolumeType = aws.String(string(v.Type))
+	}
+
+	return &ec2.LaunchTemplateBlockDeviceMappingRequest{
+		DeviceName: &v.DeviceName,
+		Ebs:        ltEbsDevice,
+	}
+}
+
+// DeleteLaunchTemplate delete a launch template.
 func (s *Service) DeleteLaunchTemplate(id string) error {
 	s.scope.V(2).Info("Deleting launch template", "id", id)
 
@@ -307,7 +319,7 @@ func (s *Service) SDKToLaunchTemplate(d *ec2.LaunchTemplateVersion) (*expinfrav1
 	v := d.LaunchTemplateData
 	i := &expinfrav1.AWSLaunchTemplate{
 		Name: aws.StringValue(d.LaunchTemplateName),
-		AMI: infrav1.AWSResourceReference{
+		AMI: infrav1.AMIReference{
 			ID: v.ImageId,
 		},
 		IamInstanceProfile: aws.StringValue(v.IamInstanceProfile.Name),
@@ -382,6 +394,7 @@ func (s *Service) LaunchTemplateNeedsUpdate(scope *scope.MachinePoolScope, incom
 	return false, nil
 }
 
+// DiscoverLaunchTemplateAMI will discover the AMI launch template.
 func (s *Service) DiscoverLaunchTemplateAMI(scope *scope.MachinePoolScope) (*string, error) {
 	lt := scope.AWSMachinePool.Spec.AWSLaunchTemplate
 
@@ -414,7 +427,7 @@ func (s *Service) DiscoverLaunchTemplateAMI(scope *scope.MachinePoolScope) (*str
 	}
 
 	if scope.IsEKSManaged() && imageLookupFormat == "" && imageLookupOrg == "" && imageLookupBaseOS == "" {
-		lookupAMI, err = s.eksAMILookup(*scope.MachinePool.Spec.Template.Spec.Version)
+		lookupAMI, err = s.eksAMILookup(*scope.MachinePool.Spec.Template.Spec.Version, scope.AWSMachinePool.Spec.AWSLaunchTemplate.AMI.EKSOptimizedLookupType)
 		if err != nil {
 			return nil, err
 		}
@@ -462,7 +475,6 @@ func (s *Service) buildLaunchTemplateTagSpecificationRequest(scope *scope.Machin
 			})
 		}
 		tagSpecifications = append(tagSpecifications, spec)
-
 	}
 	return tagSpecifications
 }

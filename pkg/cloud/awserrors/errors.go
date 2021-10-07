@@ -23,31 +23,36 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
+// Error singletons for AWS errors.
 const (
-	AuthFailure                = "AuthFailure"
-	InUseIPAddress             = "InvalidIPAddress.InUse"
-	GroupNotFound              = "InvalidGroup.NotFound"
-	PermissionNotFound         = "InvalidPermission.NotFound"
-	VPCNotFound                = "InvalidVpcID.NotFound"
-	SubnetNotFound             = "InvalidSubnetID.NotFound"
-	InternetGatewayNotFound    = "InvalidInternetGatewayID.NotFound"
-	NATGatewayNotFound         = "InvalidNatGatewayID.NotFound"
-	GatewayNotFound            = "InvalidGatewayID.NotFound"
-	EIPNotFound                = "InvalidElasticIpID.NotFound"
-	RouteTableNotFound         = "InvalidRouteTableID.NotFound"
-	LoadBalancerNotFound       = "LoadBalancerNotFound"
-	ResourceNotFound           = "InvalidResourceID.NotFound"
-	InvalidSubnet              = "InvalidSubnet"
 	AssociationIDNotFound      = "InvalidAssociationID.NotFound"
+	AuthFailure                = "AuthFailure"
+	BucketAlreadyOwnedByYou    = "BucketAlreadyOwnedByYou"
+	EIPNotFound                = "InvalidElasticIpID.NotFound"
+	GatewayNotFound            = "InvalidGatewayID.NotFound"
+	GroupNotFound              = "InvalidGroup.NotFound"
+	InternetGatewayNotFound    = "InvalidInternetGatewayID.NotFound"
+	InUseIPAddress             = "InvalidIPAddress.InUse"
+	InvalidAccessKeyID         = "InvalidAccessKeyId"
+	InvalidClientTokenID       = "InvalidClientTokenId"
 	InvalidInstanceID          = "InvalidInstanceID.NotFound"
+	InvalidSubnet              = "InvalidSubnet"
 	LaunchTemplateNameNotFound = "InvalidLaunchTemplateName.NotFoundException"
-	ResourceExists             = "ResourceExistsException"
+	LoadBalancerNotFound       = "LoadBalancerNotFound"
+	NATGatewayNotFound         = "InvalidNatGatewayID.NotFound"
 	NoCredentialProviders      = "NoCredentialProviders"
+	NoSuchKey                  = "NoSuchKey"
+	PermissionNotFound         = "InvalidPermission.NotFound"
+	ResourceExists             = "ResourceExistsException"
+	ResourceNotFound           = "InvalidResourceID.NotFound"
+	RouteTableNotFound         = "InvalidRouteTableID.NotFound"
+	SubnetNotFound             = "InvalidSubnetID.NotFound"
+	VPCNotFound                = "InvalidVpcID.NotFound"
 )
 
 var _ error = &EC2Error{}
 
-// Code returns the AWS error code as a string
+// Code returns the AWS error code as a string.
 func Code(err error) (string, bool) {
 	if awserr, ok := err.(awserr.Error); ok {
 		return awserr.Code(), true
@@ -55,7 +60,7 @@ func Code(err error) (string, bool) {
 	return "", false
 }
 
-// Message returns the AWS error message as a string
+// Message returns the AWS error message as a string.
 func Message(err error) string {
 	if awserr, ok := err.(awserr.Error); ok {
 		return awserr.Message()
@@ -91,6 +96,14 @@ func NewConflict(msg string) error {
 	}
 }
 
+func IsBucketAlreadyOwnedByYou(err error) bool {
+	if code, ok := Code(err); ok {
+		return code == BucketAlreadyOwnedByYou
+	}
+	return false
+}
+
+// IsResourceExists checks the state of the resource.
 func IsResourceExists(err error) bool {
 	if code, ok := Code(err); ok {
 		return code == ResourceExists
@@ -98,7 +111,7 @@ func IsResourceExists(err error) bool {
 	return false
 }
 
-// NewFailedDependency returns an error which indicates that a dependency failure status
+// NewFailedDependency returns an error which indicates that a dependency failure status.
 func NewFailedDependency(msg string) error {
 	return &EC2Error{
 		msg:  msg,
@@ -106,7 +119,7 @@ func NewFailedDependency(msg string) error {
 	}
 }
 
-// IsFailedDependency checks if the error is pf http.StatusFailedDependency
+// IsFailedDependency checks if the error is pf http.StatusFailedDependency.
 func IsFailedDependency(err error) bool {
 	return ReasonForError(err) == http.StatusFailedDependency
 }
@@ -130,7 +143,7 @@ func IsSDKError(err error) (ok bool) {
 	return
 }
 
-// IsInvalidNotFoundError tests for common aws not found errors
+// IsInvalidNotFoundError tests for common aws not found errors.
 func IsInvalidNotFoundError(err error) bool {
 	if code, ok := Code(err); ok {
 		switch code {

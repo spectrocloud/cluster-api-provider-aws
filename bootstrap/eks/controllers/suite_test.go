@@ -17,44 +17,56 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
+	"os"
+	"path"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"sigs.k8s.io/cluster-api/test/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/test/helpers"
+	ctrl "sigs.k8s.io/controller-runtime"
 	// +kubebuilder:scaffold:imports
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+var (
+	testEnv *helpers.TestEnvironment
+	ctx     = ctrl.SetupSignalHandler()
+)
 
-var testEnv *helpers.TestEnvironment
-
-func TestAPIs(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+func TestMain(m *testing.M) {
+	setup()
+	defer func() {
+		teardown()
+	}()
+	code := m.Run()
+	os.Exit(code) // nolint:gocritic
 }
 
-var _ = BeforeSuite(func(done Done) {
-	By("bootstrapping test environment")
-	testEnv = helpers.NewTestEnvironment()
-
-	By("starting the manager")
-	go func() {
-		defer GinkgoRecover()
-		Expect(testEnv.StartManager()).To(Succeed())
-	}()
-
-	close(done)
-}, 60)
-
-var _ = AfterSuite(func() {
-	if testEnv != nil {
-		By("tearing down the test environment")
-		Expect(testEnv.Stop()).To(Succeed())
+func setup() {
+	// utilruntime.Must(bootstrapv1.AddToScheme(scheme.Scheme))
+	// utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(ekscontrolplanev1.AddToScheme(scheme.Scheme))
+	testEnvConfig := helpers.NewTestEnvironmentConfiguration([]string{
+		path.Join("config", "crd", "bases"),
+	},
+	)
+	var err error
+	testEnv, err = testEnvConfig.Build()
+	if err != nil {
+		panic(err)
 	}
-})
+	go func() {
+		fmt.Println("Starting the manager")
+		if err := testEnv.StartManager(ctx); err != nil {
+			panic(fmt.Sprintf("Failed to start the envtest manager: %v", err))
+		}
+	}()
+}
+
+func teardown() {
+	if err := testEnv.Stop(); err != nil {
+		panic(fmt.Sprintf("Failed to stop envtest: %v", err))
+	}
+}

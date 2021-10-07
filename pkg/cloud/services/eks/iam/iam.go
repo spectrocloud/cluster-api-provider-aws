@@ -31,22 +31,23 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	apiiam "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
-	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/converters"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 )
 
 const (
-	// EKSFargateService is the service to trust for fargate pod execution roles
+	// EKSFargateService is the service to trust for fargate pod execution roles.
 	EKSFargateService = "eks-fargate-pods.amazonaws.com"
 )
 
+// IAMService defines the specs for an IAM service.
 type IAMService struct {
 	logr.Logger
 	IAMClient iamiface.IAMAPI
 }
 
+// GetIAMRole will return the IAM role for the IAMService.
 func (s *IAMService) GetIAMRole(name string) (*iam.Role, error) {
 	input := &iam.GetRoleInput{
 		RoleName: aws.String(name),
@@ -97,8 +98,7 @@ func (s *IAMService) detachIAMRolePolicy(roleName string, policyARN string) erro
 		PolicyArn: aws.String(policyARN),
 	}
 
-	_, err := s.IAMClient.DetachRolePolicy(input)
-	if err != nil {
+	if _, err := s.IAMClient.DetachRolePolicy(input); err != nil {
 		return errors.Wrapf(err, "error detaching policy %s from role %s", policyARN, roleName)
 	}
 
@@ -111,14 +111,14 @@ func (s *IAMService) attachIAMRolePolicy(roleName string, policyARN string) erro
 		PolicyArn: aws.String(policyARN),
 	}
 
-	_, err := s.IAMClient.AttachRolePolicy(input)
-	if err != nil {
+	if _, err := s.IAMClient.AttachRolePolicy(input); err != nil {
 		return errors.Wrapf(err, "error attaching policy %s to role %s", policyARN, roleName)
 	}
 
 	return nil
 }
 
+// EnsurePoliciesAttached will ensure the IAMService has policies attached.
 func (s *IAMService) EnsurePoliciesAttached(role *iam.Role, policies []*string) (bool, error) {
 	s.V(2).Info("Ensuring Polices are attached to role")
 	existingPolices, err := s.getIAMRolePolicies(*role.RoleName)
@@ -162,6 +162,7 @@ func (s *IAMService) EnsurePoliciesAttached(role *iam.Role, policies []*string) 
 	return updatedPolicies, nil
 }
 
+// RoleTags returns the tags for the given role.
 func RoleTags(key string, additionalTags infrav1.Tags) []*iam.Tag {
 	additionalTags[infrav1.ClusterAWSCloudProviderTagKey(key)] = string(infrav1.ResourceLifecycleOwned)
 	tags := []*iam.Tag{}
@@ -174,10 +175,11 @@ func RoleTags(key string, additionalTags infrav1.Tags) []*iam.Tag {
 	return tags
 }
 
+// CreateRole will create a role from the IAMService.
 func (s *IAMService) CreateRole(
 	roleName string,
 	key string,
-	trustRelationship *apiiam.PolicyDocument,
+	trustRelationship *iamv1.PolicyDocument,
 	additionalTags infrav1.Tags,
 ) (*iam.Role, error) {
 	tags := RoleTags(key, additionalTags)
@@ -201,10 +203,11 @@ func (s *IAMService) CreateRole(
 	return out.Role, nil
 }
 
+// EnsureTagsAndPolicy will ensure any tags and policies against the IAMService.
 func (s *IAMService) EnsureTagsAndPolicy(
 	role *iam.Role,
 	key string,
-	trustRelationship *apiiam.PolicyDocument,
+	trustRelationship *iamv1.PolicyDocument,
 	additionalTags infrav1.Tags,
 ) (bool, error) {
 	s.V(2).Info("Ensuring tags and AssumeRolePolicyDocument are set on role")
@@ -234,7 +237,6 @@ func (s *IAMService) EnsureTagsAndPolicy(
 		if _, err := s.IAMClient.UpdateAssumeRolePolicy(policyInput); err != nil {
 			return updated, err
 		}
-
 	}
 
 	tagInput := &iam.TagRoleInput{
@@ -299,6 +301,7 @@ func (s *IAMService) detachAllPoliciesForRole(name string) error {
 	return nil
 }
 
+// DeleteRole will delete a role from the IAMService.
 func (s *IAMService) DeleteRole(name string) error {
 	if err := s.detachAllPoliciesForRole(name); err != nil {
 		return errors.Wrapf(err, "error detaching policies for role %s", name)
@@ -308,14 +311,14 @@ func (s *IAMService) DeleteRole(name string) error {
 		RoleName: aws.String(name),
 	}
 
-	_, err := s.IAMClient.DeleteRole(input)
-	if err != nil {
+	if _, err := s.IAMClient.DeleteRole(input); err != nil {
 		return errors.Wrapf(err, "error deleting role %s", name)
 	}
 
 	return nil
 }
 
+// IsUnmanaged will check if a given role and tag are unmanaged against the IAMService.
 func (s *IAMService) IsUnmanaged(role *iam.Role, key string) bool {
 	keyToFind := infrav1.ClusterAWSCloudProviderTagKey(key)
 	for _, tag := range role.Tags {
@@ -327,16 +330,17 @@ func (s *IAMService) IsUnmanaged(role *iam.Role, key string) bool {
 	return true
 }
 
-func ControlPlaneTrustRelationship(enableFargate bool) *apiiam.PolicyDocument {
-	identity := make(apiiam.Principals)
+// ControlPlaneTrustRelationship will generate a ControlPlane PolicyDocument.
+func ControlPlaneTrustRelationship(enableFargate bool) *iamv1.PolicyDocument {
+	identity := make(iamv1.Principals)
 	identity["Service"] = []string{"eks.amazonaws.com"}
 	if enableFargate {
 		identity["Service"] = append(identity["Service"], EKSFargateService)
 	}
 
-	policy := &apiiam.PolicyDocument{
+	policy := &iamv1.PolicyDocument{
 		Version: "2012-10-17",
-		Statement: []apiiam.StatementEntry{
+		Statement: []iamv1.StatementEntry{
 			{
 				Effect: "Allow",
 				Action: []string{
@@ -350,13 +354,14 @@ func ControlPlaneTrustRelationship(enableFargate bool) *apiiam.PolicyDocument {
 	return policy
 }
 
-func FargateTrustRelationship() *apiiam.PolicyDocument {
-	identity := make(apiiam.Principals)
+// FargateTrustRelationship will generate a Fargate PolicyDocument.
+func FargateTrustRelationship() *iamv1.PolicyDocument {
+	identity := make(iamv1.Principals)
 	identity["Service"] = []string{EKSFargateService}
 
-	policy := &apiiam.PolicyDocument{
+	policy := &iamv1.PolicyDocument{
 		Version: "2012-10-17",
-		Statement: []apiiam.StatementEntry{
+		Statement: []iamv1.StatementEntry{
 			{
 				Effect: "Allow",
 				Action: []string{
@@ -370,13 +375,14 @@ func FargateTrustRelationship() *apiiam.PolicyDocument {
 	return policy
 }
 
-func NodegroupTrustRelationship() *apiiam.PolicyDocument {
-	identity := make(apiiam.Principals)
+// NodegroupTrustRelationship will generate a Nodegroup PolicyDocument.
+func NodegroupTrustRelationship() *iamv1.PolicyDocument {
+	identity := make(iamv1.Principals)
 	identity["Service"] = []string{"ec2.amazonaws.com"}
 
-	policy := &apiiam.PolicyDocument{
+	policy := &iamv1.PolicyDocument{
 		Version: "2012-10-17",
-		Statement: []apiiam.StatementEntry{
+		Statement: []iamv1.StatementEntry{
 			{
 				Effect: "Allow",
 				Action: []string{
@@ -402,6 +408,7 @@ func findStringInSlice(slice []*string, toFind string) bool {
 
 const stsAWSAudience = "sts.amazonaws.com"
 
+// CreateOIDCProvider will create an OIDC provider.
 func (s *IAMService) CreateOIDCProvider(cluster *eks.Cluster) (string, error) {
 	issuerURL, err := url.Parse(*cluster.Identity.Oidc.Issuer)
 	if err != nil {
@@ -439,6 +446,7 @@ func fetchRootCAThumbprint(issuerURL string) (string, error) {
 	return hex.EncodeToString(sha1Sum[:]), nil
 }
 
+// DeleteOIDCProvider will delete an OIDC provider.
 func (s *IAMService) DeleteOIDCProvider(arn *string) error {
 	input := iam.DeleteOpenIDConnectProviderInput{
 		OpenIDConnectProviderArn: arn,

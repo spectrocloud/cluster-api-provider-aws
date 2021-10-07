@@ -17,11 +17,11 @@ limitations under the License.
 package scope
 
 import (
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 )
 
-// Scope is the interface for the scoep to be used with the ec2 service
+// EC2Scope is the interface for the scoep to be used with the ec2 service.
 type EC2Scope interface {
 	cloud.ClusterScoper
 
@@ -32,7 +32,7 @@ type EC2Scope interface {
 	Subnets() infrav1.Subnets
 
 	// Network returns the cluster network object.
-	Network() *infrav1.Network
+	Network() *infrav1.NetworkStatus
 
 	// SecurityGroups returns the cluster security groups as a map, it creates the map if empty.
 	SecurityGroups() map[infrav1.SecurityGroupRole]infrav1.SecurityGroup

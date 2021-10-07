@@ -24,13 +24,13 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	iamauthv1 "sigs.k8s.io/aws-iam-authenticator/pkg/mapper/crd/apis/iamauthenticator/v1alpha1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 )
 
 func TestAddRoleMappingCRD(t *testing.T) {
@@ -125,9 +125,9 @@ func TestAddRoleMappingCRD(t *testing.T) {
 
 			var client crclient.Client
 			if tc.existingRoleMapping == nil {
-				client = fake.NewFakeClientWithScheme(scheme)
+				client = fake.NewClientBuilder().WithScheme(scheme).Build()
 			} else {
-				client = fake.NewFakeClientWithScheme(scheme, tc.existingRoleMapping)
+				client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(tc.existingRoleMapping).Build()
 			}
 			backend, err := NewBackend(BackendTypeCRD, client)
 			g.Expect(err).To(BeNil())
@@ -136,9 +136,9 @@ func TestAddRoleMappingCRD(t *testing.T) {
 			if tc.expectError {
 				g.Expect(err).ToNot(BeNil())
 				return
-			} else {
-				g.Expect(err).To(BeNil())
 			}
+
+			g.Expect(err).To(BeNil())
 
 			mappings := &iamauthv1.IAMIdentityMappingList{}
 			err = client.List(context.TODO(), mappings)
@@ -157,7 +157,6 @@ func TestAddRoleMappingCRD(t *testing.T) {
 				g.Expect(actualMapping.Namespace).To(Equal("kube-system"))
 				g.Expect(strings.HasPrefix(actualMapping.Name, "capa-iamauth-")).To(BeTrue())
 			}
-
 		})
 	}
 }
@@ -253,9 +252,9 @@ func TestAddUserMappingCRD(t *testing.T) {
 
 			var client crclient.Client
 			if tc.existingUserMapping == nil {
-				client = fake.NewFakeClientWithScheme(scheme)
+				client = fake.NewClientBuilder().WithScheme(scheme).Build()
 			} else {
-				client = fake.NewFakeClientWithScheme(scheme, tc.existingUserMapping)
+				client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(tc.existingUserMapping).Build()
 			}
 			backend, err := NewBackend(BackendTypeCRD, client)
 			g.Expect(err).To(BeNil())
@@ -264,9 +263,9 @@ func TestAddUserMappingCRD(t *testing.T) {
 			if tc.expectError {
 				g.Expect(err).ToNot(BeNil())
 				return
-			} else {
-				g.Expect(err).To(BeNil())
 			}
+
+			g.Expect(err).To(BeNil())
 
 			mappings := &iamauthv1.IAMIdentityMappingList{}
 			err = client.List(context.TODO(), mappings)
@@ -285,14 +284,13 @@ func TestAddUserMappingCRD(t *testing.T) {
 				g.Expect(actualMapping.Namespace).To(Equal("kube-system"))
 				g.Expect(strings.HasPrefix(actualMapping.Name, "capa-iamauth-")).To(BeTrue())
 			}
-
 		})
 	}
 }
 
 func createIAMAuthMapping(arn string, username string, groups []string) *iamauthv1.IAMIdentityMapping {
 	return &iamauthv1.IAMIdentityMapping{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "capa-iamauth-abcd1234",
 			Namespace: "kube-system",
 			UID:       "1234567890",

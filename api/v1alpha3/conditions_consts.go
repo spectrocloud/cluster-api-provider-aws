@@ -16,54 +16,54 @@ limitations under the License.
 
 package v1alpha3
 
-import clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+import clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 
 const (
 	// PrincipalCredentialRetrievedCondition reports on whether Principal credentials could be retrieved successfully.
 	// A possible scenario, where retrieval is unsuccessful, is when SourcePrincipal is not authorized for assume role.
-	PrincipalCredentialRetrievedCondition clusterv1.ConditionType = "PrincipalCredentialRetrieved"
+	PrincipalCredentialRetrievedCondition clusterv1alpha3.ConditionType = "PrincipalCredentialRetrieved"
 	// PrincipalCredentialRetrievalFailedReason used when errors occur during identity credential retrieval.
 	PrincipalCredentialRetrievalFailedReason = "PrincipalCredentialRetrievalFailed"
 	// CredentialProviderBuildFailedReason used when errors occur during building providers before trying credential retrieval.
 	CredentialProviderBuildFailedReason = "CredentialProviderBuildFailed"
 	// PrincipalUsageAllowedCondition reports on whether Principal and all the nested source identities are allowed to be used in the AWSCluster namespace.
-	PrincipalUsageAllowedCondition clusterv1.ConditionType = "PrincipalUsageAllowed"
+	PrincipalUsageAllowedCondition clusterv1alpha3.ConditionType = "PrincipalUsageAllowed"
 	// PrincipalUsageUnauthorizedReason used when AWSCluster namespace is not in the identity's allowed namespaces list.
 	PrincipalUsageUnauthorizedReason = "PrincipalUsageUnauthorized"
 	// SourcePrincipalUsageUnauthorizedReason used when AWSCluster is not in the intersection of source identity allowed namespaces
-	// and allowed namespaces of the identities that source identity depends to
+	// and allowed namespaces of the identities that source identity depends to.
 	SourcePrincipalUsageUnauthorizedReason = "SourcePrincipalUsageUnauthorized"
 )
 
 const (
-	// VpcReady condition reports on the successful reconciliation of a VPC
-	VpcReadyCondition clusterv1.ConditionType = "VpcReady"
+	// VpcReadyCondition reports on the successful reconciliation of a VPC.
+	VpcReadyCondition clusterv1alpha3.ConditionType = "VpcReady"
 	// VpcCreationStartedReason used when attempting to create a VPC for a managed cluster.
 	// Will not be applied to unmanaged clusters.
 	VpcCreationStartedReason = "VpcCreationStarted"
-	// VpcReconciliationFailedReason used when errors occur during VPC reconciliation
+	// VpcReconciliationFailedReason used when errors occur during VPC reconciliation.
 	VpcReconciliationFailedReason = "VpcReconciliationFailed"
 )
 
 const (
-	// SubnetsReady condition reports on the successful reconciliation of subnets.
-	SubnetsReadyCondition clusterv1.ConditionType = "SubnetsReady"
-	// SubnetsReconciliationFailedReason used to report failures while reconciling subnets
+	// SubnetsReadyCondition reports on the successful reconciliation of subnets.
+	SubnetsReadyCondition clusterv1alpha3.ConditionType = "SubnetsReady"
+	// SubnetsReconciliationFailedReason used to report failures while reconciling subnets.
 	SubnetsReconciliationFailedReason = "SubnetsReconciliationFailed"
 )
 
 const (
-	// InternetGatewayReady condition reports on the successful reconciliation of internet gateways.
+	// InternetGatewayReadyCondition reports on the successful reconciliation of internet gateways.
 	// Only applicable to managed clusters.
-	InternetGatewayReadyCondition clusterv1.ConditionType = "InternetGatewayReady"
-	// InternetGatewayFailedReason used when errors occur during internet gateway reconciliation
+	InternetGatewayReadyCondition clusterv1alpha3.ConditionType = "InternetGatewayReady"
+	// InternetGatewayFailedReason used when errors occur during internet gateway reconciliation.
 	InternetGatewayFailedReason = "InternetGatewayFailed"
 )
 
 const (
-	// NatGatewayReady condition reports successful reconciliation of NAT gateways.
+	// NatGatewaysReadyCondition reports successful reconciliation of NAT gateways.
 	// Only applicable to managed clusters.
-	NatGatewaysReadyCondition clusterv1.ConditionType = "NatGatewaysReady"
+	NatGatewaysReadyCondition clusterv1alpha3.ConditionType = "NatGatewaysReady"
 	// NatGatewaysCreationStartedReason set once when creating new NAT gateways.
 	NatGatewaysCreationStartedReason = "NatGatewaysCreationStarted"
 	// NatGatewaysReconciliationFailedReason used when any errors occur during reconciliation of NAT gateways.
@@ -71,52 +71,52 @@ const (
 )
 
 const (
-	// RouteTablesReady condition reports successful reconciliation of route tables.
+	// RouteTablesReadyCondition reports successful reconciliation of route tables.
 	// Only applicable to managed clusters.
-	RouteTablesReadyCondition clusterv1.ConditionType = "RouteTablesReady"
+	RouteTablesReadyCondition clusterv1alpha3.ConditionType = "RouteTablesReady"
 	// RouteTableReconciliationFailedReason used when any errors occur during reconciliation of route tables.
 	RouteTableReconciliationFailedReason = "RouteTableReconciliationFailed"
 )
 
 const (
-	// SecondaryCidrsReady condition reports successful reconciliation of secondary CIDR blocks.
+	// SecondaryCidrsReadyCondition reports successful reconciliation of secondary CIDR blocks.
 	// Only applicable to managed clusters.
-	SecondaryCidrsReadyCondition clusterv1.ConditionType = "SecondaryCidrsReady"
+	SecondaryCidrsReadyCondition clusterv1alpha3.ConditionType = "SecondaryCidrsReady"
 	// SecondaryCidrReconciliationFailedReason used when any errors occur during reconciliation of secondary CIDR blocks.
 	SecondaryCidrReconciliationFailedReason = "SecondaryCidrReconciliationFailed"
 )
 
 const (
-	// ClusterSecurityGroupsReady condition reports successful reconciliation of security groups.
-	ClusterSecurityGroupsReadyCondition clusterv1.ConditionType = "ClusterSecurityGroupsReady"
+	// ClusterSecurityGroupsReadyCondition reports successful reconciliation of security groups.
+	ClusterSecurityGroupsReadyCondition clusterv1alpha3.ConditionType = "ClusterSecurityGroupsReady"
 	// ClusterSecurityGroupReconciliationFailedReason used when any errors occur during reconciliation of security groups.
 	ClusterSecurityGroupReconciliationFailedReason = "SecurityGroupReconciliationFailed"
 )
 
 const (
 	// BastionHostReadyCondition reports whether a bastion host is ready. Depending on the configuration, a cluster
-	// may not require a bastion host and this condition will be skipped
-	BastionHostReadyCondition clusterv1.ConditionType = "BastionHostReady"
-	// BastionCreationStartedReason used when creating a new bastion host
+	// may not require a bastion host and this condition will be skipped.
+	BastionHostReadyCondition clusterv1alpha3.ConditionType = "BastionHostReady"
+	// BastionCreationStartedReason used when creating a new bastion host.
 	BastionCreationStartedReason = "BastionCreationStarted"
-	// BastionHostFailedReason used when an error occurs during the creation of a bastion host
+	// BastionHostFailedReason used when an error occurs during the creation of a bastion host.
 	BastionHostFailedReason = "BastionHostFailed"
 )
 
 const (
 	// LoadBalancerReadyCondition reports on whether a control plane load balancer was successfully reconciled.
-	LoadBalancerReadyCondition clusterv1.ConditionType = "LoadBalancerReady"
-	// WaitForDNSNameReason used while waiting for a DNS name for the API server to be populated
+	LoadBalancerReadyCondition clusterv1alpha3.ConditionType = "LoadBalancerReady"
+	// WaitForDNSNameReason used while waiting for a DNS name for the API server to be populated.
 	WaitForDNSNameReason = "WaitForDNSName"
-	// WaitForDNSNameResolveReason used while waiting for DNS name to resolve
+	// WaitForDNSNameResolveReason used while waiting for DNS name to resolve.
 	WaitForDNSNameResolveReason = "WaitForDNSNameResolve"
-	// LoadBalancerFailedReason used when an error occurs during load balancer reconciliation
+	// LoadBalancerFailedReason used when an error occurs during load balancer reconciliation.
 	LoadBalancerFailedReason = "LoadBalancerFailed"
 )
 
 const (
 	// InstanceReadyCondition reports on current status of the EC2 instance. Ready indicates the instance is in a Running state.
-	InstanceReadyCondition clusterv1.ConditionType = "InstanceReady"
+	InstanceReadyCondition clusterv1alpha3.ConditionType = "InstanceReady"
 
 	// InstanceNotFoundReason used when the instance couldn't be retrieved.
 	InstanceNotFoundReason = "InstanceNotFound"
@@ -138,19 +138,20 @@ const (
 
 const (
 	// SecurityGroupsReadyCondition indicates the security groups are up to date on the AWSMachine.
-	SecurityGroupsReadyCondition clusterv1.ConditionType = "SecurityGroupsReady"
+	SecurityGroupsReadyCondition clusterv1alpha3.ConditionType = "SecurityGroupsReady"
 
-	// SecurityGroupsFailedReason used when the security groups could not be synced
+	// SecurityGroupsFailedReason used when the security groups could not be synced.
 	SecurityGroupsFailedReason = "SecurityGroupsSyncFailed"
 )
 
 const (
-	// Only applicable to control plane machines. ELBAttachedCondition will report true when a control plane is successfully registered with an ELB
-	// When set to false, severity can be an Error if the subnet is not found or unavailable in the instance's AZ
-	ELBAttachedCondition clusterv1.ConditionType = "ELBAttached"
+	// ELBAttachedCondition will report true when a control plane is successfully registered with an ELB.
+	// When set to false, severity can be an Error if the subnet is not found or unavailable in the instance's AZ.
+	// Note this is only applicable to control plane machines.
+	ELBAttachedCondition clusterv1alpha3.ConditionType = "ELBAttached"
 
-	// ELBAttachFailedReason used when a control plane node fails to attach to the ELB
+	// ELBAttachFailedReason used when a control plane node fails to attach to the ELB.
 	ELBAttachFailedReason = "ELBAttachFailed"
-	// ELBDetachFailedReason used when a control plane node fails to detach from an ELB
+	// ELBDetachFailedReason used when a control plane node fails to detach from an ELB.
 	ELBDetachFailedReason = "ELBDetachFailed"
 )

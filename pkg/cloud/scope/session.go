@@ -34,11 +34,12 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/identity"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-aws/util/system"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -49,7 +50,7 @@ const (
 	notPermittedError = "Namespace is not permitted to use %s: %s"
 )
 
-// ServiceEndpoint defines a tuple containing AWS Service resolution information
+// ServiceEndpoint defines a tuple containing AWS Service resolution information.
 type ServiceEndpoint struct {
 	ServiceID     string
 	URL           string
@@ -122,7 +123,6 @@ func sessionForClusterWithRegion(k8sClient client.Client, clusterScoper cloud.Cl
 		// could not get providers and retrieve the credentials
 		conditions.MarkFalse(clusterScoper.InfraCluster(), infrav1.PrincipalCredentialRetrievedCondition, infrav1.PrincipalCredentialRetrievalFailedReason, clusterv1.ConditionSeverityError, err.Error())
 		return nil, nil, errors.Wrap(err, "Failed to get providers for cluster")
-
 	}
 
 	isChanged := false
@@ -340,7 +340,7 @@ func buildAWSClusterStaticIdentity(ctx context.Context, identityObjectKey client
 		return nil, err
 	}
 	secret := &corev1.Secret{}
-	err = k8sClient.Get(ctx, client.ObjectKey{Name: staticPrincipal.Spec.SecretRef.Name, Namespace: staticPrincipal.Spec.SecretRef.Namespace}, secret)
+	err = k8sClient.Get(ctx, client.ObjectKey{Name: staticPrincipal.Spec.SecretRef, Namespace: system.GetManagerNamespace()}, secret)
 	if err != nil {
 		return nil, err
 	}
@@ -422,7 +422,7 @@ func isClusterPermittedToUsePrincipal(k8sClient client.Client, allowedNs *infrav
 		return true, nil
 	}
 
-	for _, v := range (*allowedNs).NamespaceList {
+	for _, v := range allowedNs.NamespaceList {
 		if v == clusterNamespace {
 			return true, nil
 		}

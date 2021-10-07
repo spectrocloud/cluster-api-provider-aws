@@ -17,16 +17,16 @@ limitations under the License.
 package scope
 
 import (
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 )
 
-// Scope is a scope for use with the ELB reconciling service
+// ELBScope is a scope for use with the ELB reconciling service.
 type ELBScope interface {
 	cloud.ClusterScoper
 
 	// Network returns the cluster network object.
-	Network() *infrav1.Network
+	Network() *infrav1.NetworkStatus
 
 	// Subnets returns the cluster subnets.
 	Subnets() infrav1.Subnets

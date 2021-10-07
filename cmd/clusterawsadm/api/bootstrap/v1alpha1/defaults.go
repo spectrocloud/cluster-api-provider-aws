@@ -19,8 +19,9 @@ package v1alpha1
 import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	utilpointer "k8s.io/utils/pointer"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 )
 
 const (
@@ -28,9 +29,9 @@ const (
 	DefaultBootstrapUserName = "bootstrapper.cluster-api-provider-aws.sigs.k8s.io"
 	// DefaultStackName is the default CloudFormation stack name.
 	DefaultStackName = "cluster-api-provider-aws-sigs-k8s-io"
-	// DefaultParittionName is the default security partition for AWS ARNs.
+	// DefaultPartitionName is the default security partition for AWS ARNs.
 	DefaultPartitionName = "aws"
-	// DefaultKMSAliasPattern is the default KMS alias
+	// DefaultKMSAliasPattern is the default KMS alias.
 	DefaultKMSAliasPattern = "cluster-api-provider-aws-*"
 )
 
@@ -38,17 +39,17 @@ func addDefaultingFuncs(scheme *runtime.Scheme) error {
 	return RegisterDefaults(scheme)
 }
 
-// SetDefaults_BootstrapUser is used by defaulter-gen
+// SetDefaults_BootstrapUser is used by defaulter-gen.
 func SetDefaults_BootstrapUser(obj *BootstrapUser) { //nolint:golint,stylecheck
 	if obj != nil && obj.UserName == "" {
 		obj.UserName = DefaultBootstrapUserName
 	}
 }
 
-// SetDefaults_AWSIAMConfigurationSpec is used by defaulter-gen
+// SetDefaults_AWSIAMConfigurationSpec is used by defaulter-gen.
 func SetDefaults_AWSIAMConfigurationSpec(obj *AWSIAMConfigurationSpec) { //nolint:golint,stylecheck
 	if obj.NameSuffix == nil {
-		obj.NameSuffix = utilpointer.StringPtr(infrav1.DefaultNameSuffix)
+		obj.NameSuffix = utilpointer.StringPtr(iamv1.DefaultNameSuffix)
 	}
 	if obj.Partition == "" {
 		obj.Partition = DefaultPartitionName
@@ -58,13 +59,13 @@ func SetDefaults_AWSIAMConfigurationSpec(obj *AWSIAMConfigurationSpec) { //nolin
 	}
 	if obj.EKS == nil {
 		obj.EKS = &EKSConfig{
-			Enable:               false,
+			Disable:              false,
 			AllowIAMRoleCreation: false,
 			DefaultControlPlaneRole: AWSIAMRoleSpec{
-				Disable: true,
+				Disable: false,
 			},
 		}
-	} else if obj.EKS.Enable {
+	} else if !obj.EKS.Disable {
 		obj.Nodes.EC2ContainerRegistryReadOnly = true
 	}
 	if obj.EventBridge == nil {
@@ -92,12 +93,12 @@ func SetDefaults_AWSIAMConfigurationSpec(obj *AWSIAMConfigurationSpec) { //nolin
 	}
 }
 
-// SetDefaults_AWSIAMConfiguration is used by defaulter-gen
+// SetDefaults_AWSIAMConfiguration is used by defaulter-gen.
 func SetDefaults_AWSIAMConfiguration(obj *AWSIAMConfiguration) { //nolint:golint,stylecheck
 	obj.APIVersion = SchemeGroupVersion.String()
 	obj.Kind = "AWSIAMConfiguration"
 	if obj.Spec.NameSuffix == nil {
-		obj.Spec.NameSuffix = utilpointer.StringPtr(infrav1.DefaultNameSuffix)
+		obj.Spec.NameSuffix = utilpointer.StringPtr(iamv1.DefaultNameSuffix)
 	}
 	if obj.Spec.StackName == "" {
 		obj.Spec.StackName = DefaultStackName

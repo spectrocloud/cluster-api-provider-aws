@@ -16,9 +16,7 @@ limitations under the License.
 
 package v1alpha3
 
-// TODO (richardcase): get this working with defaulter-gen
-
-// SetDefaults_Bastion is used by defaulter-gen
+// SetDefaults_Bastion is used by defaulter-gen.
 func SetDefaults_Bastion(obj *Bastion) { //nolint:golint,stylecheck
 	// Default to allow open access to the bastion host if no CIDR Blocks have been set
 	if len(obj.AllowedCIDRBlocks) == 0 && !obj.DisableIngressRules {
@@ -26,7 +24,7 @@ func SetDefaults_Bastion(obj *Bastion) { //nolint:golint,stylecheck
 	}
 }
 
-// SetDefaults_NetworkSpec is used by defaulter-gen
+// SetDefaults_NetworkSpec is used by defaulter-gen.
 func SetDefaults_NetworkSpec(obj *NetworkSpec) { //nolint:golint,stylecheck
 	// Default to Calico ingress rules if no rules have been set
 	if obj.CNI == nil {

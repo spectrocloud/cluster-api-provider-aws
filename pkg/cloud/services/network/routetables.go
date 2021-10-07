@@ -22,7 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/filter"
@@ -50,17 +50,18 @@ func (s *Service) reconcileRouteTables() error {
 		return err
 	}
 
-	for i := range s.scope.Subnets() {
+	subnets := s.scope.Subnets()
+	for i := range subnets {
+		sn := subnets[i]
 		// We need to compile the minimum routes for this subnet first, so we can compare it or create them.
 		var routes []*ec2.Route
-		sn := s.scope.Subnets()[i]
 		if sn.IsPublic {
 			if s.scope.VPC().InternetGatewayID == nil {
 				return errors.Errorf("failed to create routing tables: internet gateway for %q is nil", s.scope.VPC().ID)
 			}
 			routes = append(routes, s.getGatewayPublicRoute())
 		} else {
-			natGatewayID, err := s.getNatGatewayForSubnet(sn)
+			natGatewayID, err := s.getNatGatewayForSubnet(&sn)
 			if err != nil {
 				return err
 			}
@@ -79,7 +80,8 @@ func (s *Service) reconcileRouteTables() error {
 					// Routes destination cidr blocks must be unique within a routing table.
 					// If there is a mistmatch, we replace the routing association.
 					specRoute := routes[i]
-					if *currentRoute.DestinationCidrBlock == *specRoute.DestinationCidrBlock &&
+					if (currentRoute.DestinationCidrBlock != nil && // Manually-created routes can have .DestinationIpv6CidrBlock or .DestinationPrefixListId set instead.
+						*currentRoute.DestinationCidrBlock == *specRoute.DestinationCidrBlock) &&
 						((currentRoute.GatewayId != nil && *currentRoute.GatewayId != *specRoute.GatewayId) ||
 							(currentRoute.NatGatewayId != nil && *currentRoute.NatGatewayId != *specRoute.NatGatewayId)) {
 						if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
@@ -126,6 +128,7 @@ func (s *Service) reconcileRouteTables() error {
 
 		if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 			if err := s.associateRouteTable(rt, sn.ID); err != nil {
+				s.scope.Error(err, "trying to associate route table", "subnet_id", sn.ID)
 				return false, err
 			}
 			return true, nil

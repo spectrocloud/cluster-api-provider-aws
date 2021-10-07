@@ -24,8 +24,9 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1alpha1"
-	bootstrapschemev1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1alpha1/scheme"
+	yamlserializer "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
+	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
+	bootstrapschemev1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1/scheme"
 )
 
 type errEmptyBootstrapConfig string
@@ -54,7 +55,7 @@ type loader interface {
 	Load() (*bootstrapv1.AWSIAMConfiguration, error)
 }
 
-// fsLoader loads configuration from `configDir`
+// fsLoader loads configuration from `configDir`..
 type fsLoader struct {
 
 	// bootstrapCodecs is the scheme used to decode config files
@@ -63,14 +64,15 @@ type fsLoader struct {
 	bootstrapFile string
 }
 
-// ReadFile reads a file
+// ReadFile reads a file.
 func (fsLoader) ReadFile(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filename)
+	return ioutil.ReadFile(filepath.Clean(filename))
 }
 
-// NewFsLoader returns a Loader that loads a AWSIAMConfiguration from the `config file`
+// NewFsLoader returns a Loader that loads a AWSIAMConfiguration from the `config file`.
 func newFsLoader(bootstrapFile string) (loader, error) {
 	_, bootstrapCodecs, err := bootstrapschemev1.NewSchemeAndCodecs()
+
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +94,16 @@ func (loader *fsLoader) Load() (*bootstrapv1.AWSIAMConfiguration, error) {
 		return nil, errEmptyBootstrapConfig(loader.bootstrapFile)
 	}
 
+	// Deserialize the TypeMeta information of this byte slice
+	gvk, err := yamlserializer.DefaultMetaFactory.Interpret(data)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(gvk.Group) == 0 || len(gvk.Version) == 0 || len(gvk.Kind) == 0 {
+		return nil, errors.Errorf("invalid configuration for GroupVersionKind %+v: kind and apiVersion is mandatory information that must be specified", gvk)
+	}
+
 	kc, err := DecodeBootstrapConfiguration(loader.bootstrapCodecs, data)
 	if err != nil {
 		return nil, err
@@ -104,7 +116,7 @@ func (loader *fsLoader) Load() (*bootstrapv1.AWSIAMConfiguration, error) {
 	return kc, nil
 }
 
-// resolveRelativePaths makes relative paths absolute by resolving them against `root`
+// resolveRelativePaths makes relative paths absolute by resolving them against `root`.
 func resolveRelativePaths(paths []*string, root string) {
 	for _, path := range paths {
 		// leave empty paths alone, "no path" is a valid input
@@ -115,7 +127,7 @@ func resolveRelativePaths(paths []*string, root string) {
 	}
 }
 
-// DecodeBootstrapConfiguration decodes a serialized AWSIAMConfiguration to the internal type
+// DecodeBootstrapConfiguration decodes a serialized AWSIAMConfiguration to the internal type.
 func DecodeBootstrapConfiguration(bootstrapCodecs *serializer.CodecFactory, data []byte) (*bootstrapv1.AWSIAMConfiguration, error) {
 	obj := &bootstrapv1.AWSIAMConfiguration{}
 

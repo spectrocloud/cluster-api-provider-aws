@@ -28,9 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2/klogr"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/identity"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/cluster-api-provider-aws/util/system"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -185,7 +186,7 @@ func TestIsClusterPermittedToUsePrincipal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			k8sClient := fake.NewFakeClientWithScheme(scheme)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 			if tc.setup != nil {
 				tc.setup(k8sClient, t)
 			}
@@ -199,14 +200,17 @@ func TestIsClusterPermittedToUsePrincipal(t *testing.T) {
 			if tc.expectedResult != result {
 				t.Fatal("Did not get expected result")
 			}
-
 		})
 	}
 }
 
 func TestPrincipalParsing(t *testing.T) {
 	// Create the scope.
+	scheme := runtime.NewScheme()
+	_ = infrav1.AddToScheme(scheme)
+	cl := fake.NewClientBuilder().WithScheme(scheme).Build()
 	clusterScope, _ := NewClusterScope(ClusterScopeParams{
+		Client: cl,
 		Cluster: &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test",
@@ -271,10 +275,7 @@ func TestPrincipalParsing(t *testing.T) {
 						Name: "static-identity",
 					},
 					Spec: infrav1.AWSClusterStaticIdentitySpec{
-						SecretRef: corev1.SecretReference{
-							Name:      "static-credentials-secret",
-							Namespace: "default",
-						},
+						SecretRef: "static-credentials-secret",
 						AWSClusterIdentitySpec: infrav1.AWSClusterIdentitySpec{
 							AllowedNamespaces: &infrav1.AllowedNamespaces{},
 						},
@@ -289,7 +290,7 @@ func TestPrincipalParsing(t *testing.T) {
 				credentialsSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "static-credentials-secret",
-						Namespace: "default",
+						Namespace: system.GetManagerNamespace(),
 					},
 					Data: map[string][]byte{
 						"AccessKeyID":     []byte("1234567890"),
@@ -347,10 +348,7 @@ func TestPrincipalParsing(t *testing.T) {
 						Name: "static-identity",
 					},
 					Spec: infrav1.AWSClusterStaticIdentitySpec{
-						SecretRef: corev1.SecretReference{
-							Name:      "static-credentials-secret",
-							Namespace: "default",
-						},
+						SecretRef: "static-credentials-secret",
 						AWSClusterIdentitySpec: infrav1.AWSClusterIdentitySpec{
 							AllowedNamespaces: &infrav1.AllowedNamespaces{},
 						},
@@ -365,7 +363,7 @@ func TestPrincipalParsing(t *testing.T) {
 				credentialsSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "static-credentials-secret",
-						Namespace: "default",
+						Namespace: system.GetManagerNamespace(),
 					},
 					Data: map[string][]byte{
 						"AccessKeyID":     []byte("1234567890"),
@@ -464,12 +462,13 @@ func TestPrincipalParsing(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			scheme, err := setupScheme()
 			if err != nil {
 				t.Fatal(err)
 			}
-			k8sClient := fake.NewFakeClientWithScheme(scheme)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 			tc.setup(k8sClient, t)
 			clusterScope.AWSCluster = &tc.awsCluster
 			providers, err := getProvidersForCluster(context.Background(), k8sClient, clusterScope, klogr.New())

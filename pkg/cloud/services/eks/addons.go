@@ -23,8 +23,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	eksaddons "sigs.k8s.io/cluster-api-provider-aws/pkg/eks/addons"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
@@ -139,10 +139,10 @@ func (s *Service) getClusterAddonsInstalled(eksClusterName string, addonNames []
 	return addonsInstalled, nil
 }
 
-func (s *Service) getInstalledState(eksClusterName string, addonNames []*string) ([]*ekscontrolplanev1.AddonState, error) {
+func (s *Service) getInstalledState(eksClusterName string, addonNames []*string) ([]ekscontrolplanev1.AddonState, error) {
 	s.V(2).Info("getting eks addons installed to create state")
 
-	addonState := []*ekscontrolplanev1.AddonState{}
+	addonState := []ekscontrolplanev1.AddonState{}
 	if len(addonNames) == 0 {
 		s.scope.Info("no eks addons installed in cluster", "cluster", eksClusterName)
 		return addonState, nil
@@ -164,7 +164,7 @@ func (s *Service) getInstalledState(eksClusterName string, addonNames []*string)
 		s.scope.V(2).Info("describe output", "output", describeOutput.Addon)
 
 		installedAddonState := converters.AddonSDKToAddonState(describeOutput.Addon)
-		addonState = append(addonState, installedAddonState)
+		addonState = append(addonState, *installedAddonState)
 	}
 
 	return addonState, nil

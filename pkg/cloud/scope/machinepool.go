@@ -28,12 +28,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	capierrors "sigs.k8s.io/cluster-api/errors"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
+	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -189,12 +189,12 @@ func (m *MachinePoolScope) SetFailureReason(v capierrors.MachineStatusError) {
 	m.AWSMachinePool.Status.FailureReason = &v
 }
 
-// HasFailed returns true when the AWSMachinePool's Failure reason or Failure message is populated
+// HasFailed returns true when the AWSMachinePool's Failure reason or Failure message is populated.
 func (m *MachinePoolScope) HasFailed() bool {
 	return m.AWSMachinePool.Status.FailureReason != nil || m.AWSMachinePool.Status.FailureMessage != nil
 }
 
-// SetNotReady sets the AWSMachinePool Ready Status to false
+// SetNotReady sets the AWSMachinePool Ready Status to false.
 func (m *MachinePoolScope) SetNotReady() {
 	m.AWSMachinePool.Status.Ready = false
 }
@@ -214,6 +214,7 @@ func (m *MachinePoolScope) SetLaunchTemplateIDStatus(id string) {
 	m.AWSMachinePool.Status.LaunchTemplateID = id
 }
 
+// IsEKSManaged checks if the AWSMachinePool is EKS managed.
 func (m *MachinePoolScope) IsEKSManaged() bool {
 	return m.InfraCluster.InfraCluster().GetObjectKind().GroupVersionKind().Kind == "AWSManagedControlPlane"
 }
@@ -238,7 +239,7 @@ func (m *MachinePoolScope) SubnetIDs() ([]string, error) {
 	})
 }
 
-// NodeStatus represents the status of a Kubernetes node
+// NodeStatus represents the status of a Kubernetes node.
 type NodeStatus struct {
 	Ready   bool
 	Version string
@@ -258,9 +259,9 @@ func (m *MachinePoolScope) UpdateInstanceStatuses(ctx context.Context, instances
 	}
 
 	var readyReplicas int32
-	instanceStatuses := make([]*expinfrav1.AWSMachinePoolInstanceStatus, len(instances))
+	instanceStatuses := make([]expinfrav1.AWSMachinePoolInstanceStatus, len(instances))
 	for i, instance := range instances {
-		instanceStatuses[i] = &expinfrav1.AWSMachinePoolInstanceStatus{
+		instanceStatuses[i] = expinfrav1.AWSMachinePoolInstanceStatus{
 			InstanceID: instance.ID,
 		}
 
@@ -284,7 +285,7 @@ func (m *MachinePoolScope) getNodeStatusByProviderID(ctx context.Context, provid
 		nodeStatusMap[id] = &NodeStatus{}
 	}
 
-	workloadClient, err := remote.NewClusterClient(ctx, m.client, util.ObjectKey(m.Cluster), nil)
+	workloadClient, err := remote.NewClusterClient(ctx, "", m.client, util.ObjectKey(m.Cluster))
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +297,6 @@ func (m *MachinePoolScope) getNodeStatusByProviderID(ctx context.Context, provid
 		}
 
 		for _, node := range nodeList.Items {
-
 			strList := strings.Split(node.Spec.ProviderID, "/")
 
 			if status, ok := nodeStatusMap[fmt.Sprintf("aws:////%s", strList[len(strList)-1])]; ok {

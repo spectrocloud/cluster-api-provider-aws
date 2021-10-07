@@ -22,16 +22,16 @@ import (
 	"flag"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 
-	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
-	infrav1alpha3exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/test/e2e/shared"
 )
 
@@ -50,21 +50,24 @@ func init() {
 }
 
 func TestE2E(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "capa-eks-e2e", []Reporter{framework.CreateJUnitReporterForProw(e2eCtx.Settings.ArtifactFolder)})
+	RegisterFailHandler(ginkgo.Fail)
+	ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "capa-eks-e2e", []ginkgo.Reporter{framework.CreateJUnitReporterForProw(e2eCtx.Settings.ArtifactFolder)})
 }
 
-var _ = SynchronizedBeforeSuite(func() []byte {
+var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	return shared.Node1BeforeSuite(e2eCtx)
 }, func(data []byte) {
 	shared.AllNodesBeforeSuite(e2eCtx, data)
 })
 
-var _ = SynchronizedAfterSuite(func() {
-	shared.Node1AfterSuite(e2eCtx)
-}, func() {
-	shared.AllNodesAfterSuite(e2eCtx)
-})
+var _ = ginkgo.SynchronizedAfterSuite(
+	func() {
+		shared.AllNodesAfterSuite(e2eCtx)
+	},
+	func() {
+		shared.Node1AfterSuite(e2eCtx)
+	},
+)
 
 func runGeneralTests() bool {
 	return !skipGeneralTests
@@ -76,10 +79,10 @@ func runUpgradeTests() bool {
 
 func initScheme() *runtime.Scheme {
 	sc := shared.DefaultScheme()
-	_ = infrav1alpha3exp.AddToScheme(sc)
+	_ = expinfrav1.AddToScheme(sc)
 	_ = clusterv1.AddToScheme(sc)
 	_ = controlplanev1.AddToScheme(sc)
-	_ = clusterv1exp.AddToScheme(sc)
+	_ = expclusterv1.AddToScheme(sc)
 
 	return sc
 }

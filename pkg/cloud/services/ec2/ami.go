@@ -24,6 +24,8 @@ import (
 	"text/template"
 	"time"
 
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
@@ -39,7 +41,7 @@ const (
 	DefaultMachineAMIOwnerID = "258751437250"
 
 	// defaultMachineAMILookupBaseOS is the default base operating system to use
-	// when looking up machine AMIs
+	// when looking up machine AMIs.
 	defaultMachineAMILookupBaseOS = "ubuntu-18.04"
 
 	// DefaultAmiNameFormat is defined in the build/ directory of this project.
@@ -47,14 +49,17 @@ const (
 	// 1. the string value `capa-ami-`
 	// 2. the baseOS of the AMI, for example: ubuntu-18.04, centos-7, amazon-2
 	// 3. the kubernetes version as defined by the packages produced by kubernetes/release with or without v as a prefix, for example: 1.13.0, 1.12.5-mybuild.1, v1.17.3
-	// 4. a `-` followed by any additional characters
+	// 4. a `-` followed by any additional characters.
 	DefaultAmiNameFormat = "capa-ami-{{.BaseOS}}-?{{.K8sVersion}}-*"
 
-	// Amazon's AMI timestamp format
+	// Amazon's AMI timestamp format.
 	createDateTimestampFormat = "2006-01-02T15:04:05.000Z"
 
-	// EKS AMI ID SSM Parameter name
+	// EKS AMI ID SSM Parameter name.
 	eksAmiSSMParameterFormat = "/aws/service/eks/optimized-ami/%s/amazon-linux-2/recommended/image_id"
+
+	// EKS GPU AMI ID SSM Parameter name.
+	eksGPUAmiSSMParameterFormat = "/aws/service/eks/optimized-ami/%s/amazon-linux-2-gpu/recommended/image_id"
 )
 
 // AMILookup contains the parameters used to template AMI names used for lookup.
@@ -63,6 +68,7 @@ type AMILookup struct {
 	K8sVersion string
 }
 
+// GenerateAmiName will generate an AMI name.
 func GenerateAmiName(amiNameFormat, baseOS, kubernetesVersion string) (string, error) {
 	amiNameParameters := AMILookup{baseOS, strings.TrimPrefix(kubernetesVersion, "v")}
 	// revert to default if not specified
@@ -81,6 +87,7 @@ func GenerateAmiName(amiNameFormat, baseOS, kubernetesVersion string) (string, e
 	return templateBytes.String(), nil
 }
 
+// DefaultAMILookup will do a default AMI lookup.
 func DefaultAMILookup(ec2Client ec2iface.EC2API, ownerID, baseOS, kubernetesVersion, amiNameFormat string) (*ec2.Image, error) {
 	if amiNameFormat == "" {
 		amiNameFormat = DefaultAmiNameFormat
@@ -136,7 +143,7 @@ func DefaultAMILookup(ec2Client ec2iface.EC2API, ownerID, baseOS, kubernetesVers
 	return latestImage, nil
 }
 
-// defaultAMIIDLookup returns the default AMI based on region
+// defaultAMIIDLookup returns the default AMI based on region.
 func (s *Service) defaultAMIIDLookup(amiNameFormat, ownerID, baseOS, kubernetesVersion string) (string, error) {
 	latestImage, err := DefaultAMILookup(s.EC2Client, ownerID, baseOS, kubernetesVersion, amiNameFormat)
 	if err != nil {
@@ -224,14 +231,25 @@ func (s *Service) defaultBastionAMILookup(region string) string {
 	}
 }
 
-func (s *Service) eksAMILookup(kubernetesVersion string) (string, error) {
+func (s *Service) eksAMILookup(kubernetesVersion string, amiType *infrav1.EKSAMILookupType) (string, error) {
 	// format ssm parameter path properly
 	formattedVersion, err := formatVersionForEKS(kubernetesVersion)
 	if err != nil {
 		return "", err
 	}
 
-	paramName := fmt.Sprintf(eksAmiSSMParameterFormat, formattedVersion)
+	var paramName string
+
+	if amiType == nil {
+		amiType = new(infrav1.EKSAMILookupType)
+	}
+
+	switch *amiType {
+	case infrav1.AmazonLinuxGPU:
+		paramName = fmt.Sprintf(eksGPUAmiSSMParameterFormat, formattedVersion)
+	default:
+		paramName = fmt.Sprintf(eksAmiSSMParameterFormat, formattedVersion)
+	}
 
 	input := &ssm.GetParameterInput{
 		Name: aws.String(paramName),

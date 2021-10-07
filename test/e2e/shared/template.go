@@ -30,11 +30,11 @@ import (
 	"gopkg.in/yaml.v2"
 
 	cfn_iam "github.com/awslabs/goformation/v4/cloudformation/iam"
-	"sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1alpha1"
-	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
 	cfn_bootstrap "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/cloudformation/bootstrap"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/credentials"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 )
@@ -55,26 +55,59 @@ func newBootstrapTemplate(e2eCtx *E2EContext) *cfn_bootstrap.Template {
 	t.Spec.BootstrapUser.Enable = true
 	t.Spec.BootstrapUser.ExtraStatements = []iamv1.StatementEntry{
 		{
-			Effect: "Allow",
-			Action: []string{"sts:AssumeRole"},
-			Resource: []string{
-				cloudformation.GetAtt(MultiTenancySimpleRole.RoleName(), "Arn"),
-				cloudformation.GetAtt(MultiTenancyJumpRole.RoleName(), "Arn"),
+			Effect: iamv1.EffectAllow,
+			Resource: iamv1.Resources{
+				iamv1.Any,
+			},
+			Action: iamv1.Actions{
+				"s3:*",
+				"sts:*",
+				"servicequotas:GetServiceQuota",
+				"servicequotas:RequestServiceQuotaIncrease",
+				"servicequotas:ListRequestedServiceQuotaChangeHistory",
+				"elasticloadbalancing:DescribeAccountLimits",
+				"ec2:DescribeAccountLimits",
+				"cloudtrail:LookupEvents",
+				"ssm:StartSession",
+				"ssm:DescribeSessions",
+				"ssm:GetConnectionStatus",
+				"ssm:DescribeInstanceProperties",
+				"ssm:GetDocument",
+				"ssm:TerminateSession",
+				"ssm:ResumeSession",
+			},
+		},
+		{
+			Effect: iamv1.EffectAllow,
+			Resource: iamv1.Resources{
+				"arn:*:iam::*:role/aws-service-role/servicequotas.amazonaws.com/AWSServiceRoleForServiceQuotas",
+				"arn:*:iam::*:role/aws-service-role/support.amazonaws.com/AWSServiceRoleForSupport",
+				"arn:*:iam::*:role/aws-service-role/trustedadvisor.amazonaws.com/AWSServiceRoleForTrustedAdvisor",
+			},
+			Action: iamv1.Actions{
+				"iam:CreateServiceLinkedRole",
 			},
 		},
 	}
-	t.Spec.SecureSecretsBackends = []v1alpha3.SecretBackend{
-		v1alpha3.SecretBackendSecretsManager,
-		v1alpha3.SecretBackendSSMParameterStore,
+	t.Spec.Nodes.ExtraStatements = []iamv1.StatementEntry{
+		{
+			Effect:   iamv1.EffectAllow,
+			Action:   []string{"s3:Get*", "s3:List*"},
+			Resource: []string{iamv1.Any},
+		},
 	}
-	t.Spec.EventBridge = &v1alpha1.EventBridgeConfig{
+	t.Spec.SecureSecretsBackends = []infrav1.SecretBackend{
+		infrav1.SecretBackendSecretsManager,
+		infrav1.SecretBackendSSMParameterStore,
+	}
+	t.Spec.EventBridge = &bootstrapv1.EventBridgeConfig{
 		Enable: true,
 	}
 
 	region, err := credentials.ResolveRegion("")
 	Expect(err).NotTo(HaveOccurred())
 	t.Spec.Region = region
-	t.Spec.EKS.Enable = true
+	t.Spec.EKS.Disable = false
 	t.Spec.EKS.AllowIAMRoleCreation = false
 	t.Spec.EKS.DefaultControlPlaneRole.Disable = false
 	t.Spec.EKS.ManagedMachinePool.Disable = false

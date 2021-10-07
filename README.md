@@ -1,8 +1,13 @@
 # Kubernetes Cluster API Provider AWS
 
-[![Go Report Card](https://goreportcard.com/badge/kubernetes-sigs/cluster-api-provider-aws)](https://goreportcard.com/report/kubernetes-sigs/cluster-api-provider-aws)
-
-<img src="https://github.com/kubernetes/kubernetes/raw/master/logo/logo.png"  width="100"><a href="https://aws.amazon.com/opensource/"><img hspace="90px" src="https://d0.awsstatic.com/logos/powered-by-aws.png" alt="Powered by AWS Cloud Computing"></a>
+<p align="center">
+<img src="https://github.com/kubernetes/kubernetes/raw/master/logo/logo.png"  width="100x"><a href="https://aws.amazon.com/opensource/"><img width="192x" src="https://d0.awsstatic.com/logos/powered-by-aws.png" alt="Powered by AWS Cloud Computing"></a>
+</p>
+<p align="center">
+<!-- go doc / reference card -->
+<a href="https://godoc.org/sigs.k8s.io/cluster-api-provider-aws">
+ <img src="https://godoc.org/sigs.k8s.io/cluster-api-provider-aws?status.svg"></a>
+</p>
 
 ------
 
@@ -47,26 +52,23 @@ cluster on AWS.
 
 This provider's versions are compatible with the following versions of Cluster API:
 
-|                              | Cluster API v1alpha1 (v0.1) | Cluster API v1alpha2 (v0.2) | Cluster API v1alpha3 (v0.3) |
-| ---------------------------- | --------------------------- | --------------------------- | --------------------------- |
-| AWS Provider v1alpha1 (v0.2) | ✓                           |                             |                             |
-| AWS Provider v1alpha1 (v0.3) | ✓                           |                             |                             |
-| AWS Provider v1alpha2 (v0.4) |                             | ✓                           |                             |
-| AWS Provider v1alpha3 (v0.5) |                             |                             | ✓                           |
-| AWS Provider v1alpha3 (v0.6) |                             |                             | ✓                           |
+|                              | Cluster API v1alpha3 (v0.3) | Cluster API v1alpha4 (v0.4) |
+| ---------------------------- | --------------------------- | --------------------------- |
+| AWS Provider v1alpha3 (v0.5) | ✓                           |                             |
+| AWS Provider v1alpha3 (v0.6) | ✓                           |                             |
+| AWS Provider v1alpha4 (v0.7) |                             | ✓                           |
+
 
 This provider's versions are able to install and manage the following versions of Kubernetes:
 
-|                              | Kubernetes 1.13 | Kubernetes 1.14 | Kubernetes 1.15 | Kubernetes 1.16 | Kubernetes 1.17 | Kubernetes 1.18 | Kubernetes 1.19 | Kubernetes 1.20 |
-|------------------------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|-----------------|
-| AWS Provider v1alpha1 (v0.2) | ✓               | ✓               | ✓               |                 |                 |                 |                 |                 |
-| AWS Provider v1alpha1 (v0.3) | ✓               | ✓               | ✓               |                 |                 |                 |                 |                 |
-| AWS Provider v1alpha2 (v0.4) |                 | ✓               | ✓               | ✓               | ✓               |                 |                 |                 |
-| AWS Provider v1alpha3 (v0.5) |                 |                 | ✓               | ✓               | ✓               | ✓               | ✓               | ✓               |
-| AWS Provider v1alpha3 (v0.6) |                 |                 | ✓               | ✓               | ✓               | ✓               | ✓               | ✓               |
+|                              | Kubernetes 1.16 | Kubernetes 1.17 | Kubernetes 1.18 | Kubernetes 1.19 | Kubernetes 1.20 | Kubernetes 1.21 |
+| ---------------------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- |
+| AWS Provider v1alpha3 (v0.5) | ✓               | ✓               | ✓               | ✓               | ✓               |                 |
+| AWS Provider v1alpha3 (v0.6) | ✓               | ✓               | ✓               | ✓               | ✓               | ✓               |
+| AWS Provider v1alpha4 (v0.7) |                 |                 |                 | ✓               | ✓               | ✓               |
 
-Each version of Cluster API for AWS will attempt to support two Kubernetes versions; e.g., Cluster API for AWS `v0.2`
-may support Kubernetes 1.13 and Kubernetes 1.14.
+
+Each version of Cluster API for AWS will attempt to support two Kubernetes versions; e.g., Cluster API for AWS `v0.3` supports Kubernetes 1.16, 1.17, 1.18 etc.
 
 **NOTE:** As the versioning for this project is tied to the versioning of Cluster API, future modifications to this
 policy may be made to more closely align with other providers in the Cluster API ecosystem.
@@ -75,60 +77,17 @@ policy may be made to more closely align with other providers in the Cluster API
 
 ## Kubernetes versions with published AMIs
 
-Note: These AMIs are not updated for security fixes and it is recommended to always use the latest patch version for the Kubernetes version you wish to run. For production-like environments, it is highly recommended to build and use your own custom images.
+See [amis] for the list of most recently published AMIs.
 
-| Kubernetes minor version | Kubernetes full version |
-| ------------------------ | ----------------------- |
-| v1.16                    | v1.16.0                 |
-|                          | v1.16.1                 |
-|                          | v1.16.2                 |
-|                          | v1.16.3                 |
-|                          | v1.16.4                 |
-|                          | v1.16.5                 |
-|                          | v1.16.6                 |
-|                          | v1.16.7                 |
-|                          | v1.16.8                 |
-|                          | v1.16.9                 |
-|                          | v1.16.14                |
-|                          | v1.16.15                |
-| v1.17                    | v1.17.0                 |
-|                          | v1.17.1                 |
-|                          | v1.17.2                 |
-|                          | v1.17.3                 |
-|                          | v1.17.4                 |
-|                          | v1.17.5                 |
-|                          | v1.17.11                |
-|                          | v1.17.12                |
-|                          | v1.17.13                |
-|                          | v1.17.14                |
-|                          | v1.17.15                |
-|                          | v1.17.16                |
-|                          | v1.17.17                |
-| v1.18                    | v1.18.0                 |
-|                          | v1.18.1                 |
-|                          | v1.18.2                 |
-|                          | v1.18.8                 |
-|                          | v1.18.9                 |
-|                          | v1.18.10                 |
-|                          | v1.18.12                 |
-|                          | v1.18.13                 |
-|                          | v1.18.14                 |
-|                          | v1.18.15                 |
-|                          | v1.18.16                 |
-| v1.19                    | v1.19.0                 |
-|                          | v1.19.1                 |
-|                          | v1.19.2                 |
-|                          | v1.19.3                 |
-|                          | v1.19.4                 |
-|                          | v1.19.5                 |
-|                          | v1.19.6                 |
-|                          | v1.19.7                 |
-|                          | v1.19.8                 |
-| v1.20                    | v1.20.1                 |
-|                          | v1.20.2                 |
-|                          | v1.20.4                 |
 ------
 
+## clusterawsadm
+
+`clusterawsadm` CLI tool provides bootstrapping, AMI, EKS, and controller related helpers.
+
+`clusterawsadm` binaries are released with each release, can be found under [assets](https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases/latest) section.
+
+------
 ## Getting involved and contributing
 
 Are you interested in contributing to cluster-api-provider-aws? We, the
@@ -162,27 +121,10 @@ If you want to just build the CAPA containers locally, run
 
 ### Tilt-based development environment
 
-We have support for using [Tilt][tilt] for rapid iterative development. Please visit the
-[Cluster API documentation on Tilt][cluster_api_tilt] for information on how to set up your development environment.
-Additionally, you must also include your base64 encoded AWS credentials in your `tilt-settings.json` file or you
-will not be able to deploy this provider.
+See [development][development] section for details
 
-1. `make clusterawsadm`
-1. `export AWS_REGION=<your desired region`
-1. `./bin/clusterawsadm alpha bootstrap encode-aws-credentials`
-1. Copy the output containing the base64 encoded credentials and add it to your `tilt-settings.json` file like this:
+[development]: https://cluster-api-aws.sigs.k8s.io/development/development.html
 
-```json
-{
-  "allowed_contexts": ["kind-kind"],
-  "default_registry": "your registry here",
-  "provider_repos": ["../cluster-api-provider-aws"],
-  "enable_providers": ["aws"],
-  "kustomize_substitutions": {
-    "AWS_B64ENCODED_CREDENTIALS": "put your encoded credentials here"
-  }
-}
-```
 
 ### Implementer office hours
 
@@ -229,7 +171,6 @@ trademarks of Amazon.com, Inc. or its affiliates in the United States
 and/or other countries."
 
 <!-- References -->
-
 [slack]: https://kubernetes.slack.com/messages/CD6U2V71N
 [good_first_issue]: https://github.com/kubernetes-sigs/cluster-api-provider-aws/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22good+first+issue%22
 [gcal]: https://calendar.google.com/calendar/embed?src=cgnt364vd8s86hr2phapfjc6uk%40group.calendar.google.com
@@ -240,3 +181,4 @@ and/or other countries."
 [kubicorn]: http://kubicorn.io/
 [tilt]: https://tilt.dev
 [cluster_api_tilt]: https://master.cluster-api.sigs.k8s.io/developer/tilt.html
+[amis]: https://cluster-api-aws.sigs.k8s.io/amis.html

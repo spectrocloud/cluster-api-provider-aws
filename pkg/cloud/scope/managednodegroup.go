@@ -26,15 +26,15 @@ import (
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	controlplanev1exp "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 )
 
@@ -43,9 +43,9 @@ type ManagedMachinePoolScopeParams struct {
 	Client             client.Client
 	Logger             logr.Logger
 	Cluster            *clusterv1.Cluster
-	ControlPlane       *controlplanev1exp.AWSManagedControlPlane
-	ManagedMachinePool *infrav1exp.AWSManagedMachinePool
-	MachinePool        *clusterv1exp.MachinePool
+	ControlPlane       *ekscontrolplanev1.AWSManagedControlPlane
+	ManagedMachinePool *expinfrav1.AWSManagedMachinePool
+	MachinePool        *expclusterv1.MachinePool
 	ControllerName     string
 	Endpoints          []ServiceEndpoint
 	Session            awsclient.ConfigProvider
@@ -62,6 +62,9 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 	}
 	if params.MachinePool == nil {
 		return nil, errors.New("failed to generate new scope from nil MachinePool")
+	}
+	if params.ManagedMachinePool == nil {
+		return nil, errors.New("failed to generate new scope from nil ManagedMachinePool")
 	}
 	if params.Logger == nil {
 		params.Logger = klogr.New()
@@ -107,9 +110,9 @@ type ManagedMachinePoolScope struct {
 	patchHelper *patch.Helper
 
 	Cluster            *clusterv1.Cluster
-	ControlPlane       *controlplanev1exp.AWSManagedControlPlane
-	ManagedMachinePool *infrav1exp.AWSManagedMachinePool
-	MachinePool        *clusterv1exp.MachinePool
+	ControlPlane       *ekscontrolplanev1.AWSManagedControlPlane
+	ManagedMachinePool *expinfrav1.AWSManagedMachinePool
+	MachinePool        *expclusterv1.MachinePool
 
 	session         awsclient.ConfigProvider
 	serviceLimiters throttle.ServiceLimiters
@@ -124,7 +127,7 @@ func (s *ManagedMachinePoolScope) ManagedPoolName() string {
 	return s.ManagedMachinePool.Name
 }
 
-// ServiceLimiter returns the AWS SDK session. Used for creating clients
+// ServiceLimiter returns the AWS SDK session. Used for creating clients.
 func (s *ManagedMachinePoolScope) ServiceLimiter(service string) *throttle.ServiceLimiter {
 	if sl, ok := s.serviceLimiters[service]; ok {
 		return sl
@@ -137,7 +140,7 @@ func (s *ManagedMachinePoolScope) ClusterName() string {
 	return s.Cluster.Name
 }
 
-// EnableIAM indicates that reconciliation should create IAM roles
+// EnableIAM indicates that reconciliation should create IAM roles.
 func (s *ManagedMachinePoolScope) EnableIAM() bool {
 	return s.enableIAM
 }
@@ -162,12 +165,12 @@ func (s *ManagedMachinePoolScope) AdditionalTags() infrav1.Tags {
 	return s.ManagedMachinePool.Spec.AdditionalTags.DeepCopy()
 }
 
-// RoleName returns the node group role name
+// RoleName returns the node group role name.
 func (s *ManagedMachinePoolScope) RoleName() string {
 	return s.ManagedMachinePool.Spec.RoleName
 }
 
-// Version returns the nodegroup Kubernetes version
+// Version returns the nodegroup Kubernetes version.
 func (s *ManagedMachinePoolScope) Version() *string {
 	return s.MachinePool.Spec.Template.Spec.Version
 }
@@ -193,7 +196,7 @@ func (s *ManagedMachinePoolScope) SubnetIDs() ([]string, error) {
 }
 
 // NodegroupReadyFalse marks the ready condition false using warning if error isn't
-// empty
+// empty.
 func (s *ManagedMachinePoolScope) NodegroupReadyFalse(reason string, err string) error {
 	severity := clusterv1.ConditionSeverityWarning
 	if err == "" {
@@ -201,7 +204,7 @@ func (s *ManagedMachinePoolScope) NodegroupReadyFalse(reason string, err string)
 	}
 	conditions.MarkFalse(
 		s.ManagedMachinePool,
-		infrav1exp.EKSNodegroupReadyCondition,
+		expinfrav1.EKSNodegroupReadyCondition,
 		reason,
 		severity,
 		err,
@@ -213,7 +216,7 @@ func (s *ManagedMachinePoolScope) NodegroupReadyFalse(reason string, err string)
 }
 
 // IAMReadyFalse marks the ready condition false using warning if error isn't
-// empty
+// empty.
 func (s *ManagedMachinePoolScope) IAMReadyFalse(reason string, err string) error {
 	severity := clusterv1.ConditionSeverityWarning
 	if err == "" {
@@ -221,7 +224,7 @@ func (s *ManagedMachinePoolScope) IAMReadyFalse(reason string, err string) error
 	}
 	conditions.MarkFalse(
 		s.ManagedMachinePool,
-		infrav1exp.IAMNodegroupRolesReadyCondition,
+		expinfrav1.IAMNodegroupRolesReadyCondition,
 		reason,
 		severity,
 		err,
@@ -238,8 +241,8 @@ func (s *ManagedMachinePoolScope) PatchObject() error {
 		context.TODO(),
 		s.ManagedMachinePool,
 		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
-			infrav1exp.EKSNodegroupReadyCondition,
-			infrav1exp.IAMNodegroupRolesReadyCondition,
+			expinfrav1.EKSNodegroupReadyCondition,
+			expinfrav1.IAMNodegroupRolesReadyCondition,
 		}})
 }
 
@@ -253,7 +256,7 @@ func (s *ManagedMachinePoolScope) InfraCluster() cloud.ClusterObject {
 	return s.ControlPlane
 }
 
-// Session returns the AWS SDK session. Used for creating clients
+// Session returns the AWS SDK session. Used for creating clients.
 func (s *ManagedMachinePoolScope) Session() awsclient.ConfigProvider {
 	return s.session
 }
@@ -269,7 +272,7 @@ func (s *ManagedMachinePoolScope) KubernetesClusterName() string {
 	return s.ControlPlane.Spec.EKSClusterName
 }
 
-// NodegroupName is the name of the EKS nodegroup
+// NodegroupName is the name of the EKS nodegroup.
 func (s *ManagedMachinePoolScope) NodegroupName() string {
 	return s.ManagedMachinePool.Spec.EKSNodegroupName
 }

@@ -26,11 +26,14 @@ import (
 
 const (
 	clusterAPIGroup       = "cluster.x-k8s.io"
-	clusterAPITestVersion = "v1alpha3"
+	clusterAPITestVersion = "v1beta1"
 )
 
 var (
+	// TestClusterCRD will generate a test cluster CustomResourceDefinition.
 	TestClusterCRD = generateTestClusterAPICRD("cluster", "clusters")
+
+	// TestMachineCRD will generate a test machine CustomResourceDefinition.
 	TestMachineCRD = generateTestClusterAPICRD("machine", "machines")
 )
 

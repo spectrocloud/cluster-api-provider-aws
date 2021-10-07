@@ -27,6 +27,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
+	"os/exec"
+	"bytes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,15 +39,22 @@ import (
 	awscreds "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	cfn "github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/aws/aws-sdk-go/service/configservice"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go/service/servicequotas"
 	cfn_iam "github.com/awslabs/goformation/v4/cloudformation/iam"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	cfn_bootstrap "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/cloudformation/bootstrap"
 	cloudformation "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/cloudformation/service"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/credentials"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/filter"
 	"sigs.k8s.io/yaml"
 )
 
@@ -231,6 +241,106 @@ func deleteCloudFormationStack(prov client.ConfigProvider, t *cfn_bootstrap.Temp
 	})
 }
 
+func ensureTestImageUploaded(e2eCtx *E2EContext) (string, string, error) {
+	By("Determining the account ID")
+	stsSvc := sts.New(e2eCtx.BootstrapUserAWSSession)
+	accountInfo := &sts.GetCallerIdentityOutput{}
+	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+		var intErr error
+		accountInfo, intErr = stsSvc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+		if intErr != nil {
+			return false, intErr
+		}
+		return true, nil
+	}, awserrors.InvalidClientTokenID); err != nil {
+		return "", "", nil
+	}
+	region, err := credentials.ResolveRegion("")
+	if err != nil {
+		return "", "", err
+	}
+	accountID := aws.StringValue(accountInfo.Account)
+	bucketName := fmt.Sprintf("capi-images.%s.%s.oci-images", region, accountID)
+	By("Creating an S3 bucket for container images")
+	s3Svc := s3.New(e2eCtx.BootstrapUserAWSSession)
+	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+		_, err = s3Svc.CreateBucket(&s3.CreateBucketInput{
+			ACL: aws.String("public-read"),
+			Bucket: aws.String(bucketName),
+		})
+		if err != nil && !awserrors.IsBucketAlreadyOwnedByYou(err) {
+			return false, err
+		}
+		return true, nil
+	}, awserrors.InvalidAccessKeyID); err != nil {
+		return "", "", nil
+	}
+
+	dir, err := ioutil.TempDir(e2eCtx.Settings.ArtifactFolder, "containers")
+	if err != nil {
+		return "", "", err
+	}
+	defer os.RemoveAll(dir)
+
+	dockerImage :=  fmt.Sprintf("%s/image.tar", dir)
+
+
+	Byf("Saving the e2e image to %s", dockerImage)
+	err = exec.Command("docker", "save", "gcr.io/k8s-staging-cluster-api/capa-manager:e2e", "-o", dockerImage).Run()
+
+	if err != nil {
+		return "", "", err
+	}
+
+	cmd := exec.Command("docker", "inspect", "--format='{{index .Id}}'", "gcr.io/k8s-staging-cluster-api/capa-manager:e2e")
+	var stdOut bytes.Buffer
+	cmd.Stdout = &stdOut
+	err = cmd.Run()
+
+	if err != nil {
+		return "","",  err
+	}
+
+	imageSha := strings.ReplaceAll(strings.TrimSuffix(string(stdOut.Bytes()), "\n"), "'", "")
+
+	uploader := s3manager.NewUploader(e2eCtx.AWSSession)
+
+	f, err := os.Open(dockerImage)
+	if err != nil {
+		return "", "", err
+	}
+
+	Byf("Uploading the e2e image to s3:///%s/%s", bucketName, imageSha)
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(bucketName),
+		Key: aws.String(imageSha),
+		Body: f,
+	})
+
+	Byf("Making the image public")
+	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+		_, err = s3Svc.PutObjectAcl(&s3.PutObjectAclInput{
+			ACL: aws.String("public-read"),
+			Bucket: aws.String(bucketName),
+			Key: aws.String(imageSha),
+		})
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}, awserrors.NoSuchKey); err != nil {
+		return "", "", nil
+	}
+
+
+	if err != nil {
+		return "", "", err
+	}
+
+	Byf("Image uploaded to s3:///%s/%s", bucketName, imageSha)
+	return bucketName, imageSha, nil
+}
+
 // ensureNoServiceLinkedRoles removes an auto-created IAM role, and tests
 // the controller's IAM permissions to use ELB and Spot instances successfully
 func ensureNoServiceLinkedRoles(prov client.ConfigProvider) {
@@ -300,6 +410,30 @@ func newUserAccessKey(prov client.ConfigProvider, userName string) *iam.AccessKe
 	}
 }
 
+func DumpCloudTrailEvents(e2eCtx *E2EContext) {
+	client := cloudtrail.New(e2eCtx.BootstrapUserAWSSession)
+	events := []*cloudtrail.Event{}
+	err := client.LookupEventsPages(
+		&cloudtrail.LookupEventsInput{
+			StartTime: aws.Time(e2eCtx.StartOfSuite),
+			EndTime:   aws.Time(time.Now()),
+		},
+		func(page *cloudtrail.LookupEventsOutput, lastPage bool) bool {
+			events = append(events, page.Events...)
+			return !lastPage
+		},
+	)
+	if err != nil {
+		fmt.Fprintf(GinkgoWriter, "couldn't get AWS CloudTrail events: err=%s", err)
+	}
+	logPath := filepath.Join(e2eCtx.Settings.ArtifactFolder, "cloudtrail-events.yaml")
+	dat, err := yaml.Marshal(events)
+	if err := ioutil.WriteFile(logPath, dat, 0600); err != nil {
+		fmt.Fprintf(GinkgoWriter, "couldn't write cloudtrail events to file: file=%s err=%s", logPath, err)
+		return
+	}
+}
+
 // conformanceImageID looks up a specific image for a given
 // Kubernetes version in the e2econfig
 func conformanceImageID(e2eCtx *E2EContext) string {
@@ -336,6 +470,78 @@ func GetAvailabilityZones(sess client.ConfigProvider) []*ec2.AvailabilityZone {
 	return azs.AvailabilityZones
 }
 
+type ServiceQuota struct {
+	ServiceCode         string
+	QuotaName           string
+	QuotaCode           string
+	Value               int
+	DesiredMinimumValue int
+	RequestStatus       string
+}
+
+func EnsureServiceQuotas(sess client.ConfigProvider) map[string]*ServiceQuota {
+	limitedResources := getLimitedResources()
+	serviceQuotasClient := servicequotas.New(sess)
+
+	for k, v := range limitedResources {
+		out, err := serviceQuotasClient.GetServiceQuota(&servicequotas.GetServiceQuotaInput{
+			QuotaCode:   aws.String(v.QuotaCode),
+			ServiceCode: aws.String(v.ServiceCode),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		v.Value = int(aws.Float64Value(out.Quota.Value))
+		limitedResources[k] = v
+		if v.Value < v.DesiredMinimumValue {
+			v.attemptRaiseServiceQuotaRequest(serviceQuotasClient)
+		}
+	}
+
+	return limitedResources
+}
+
+func (s *ServiceQuota) attemptRaiseServiceQuotaRequest(serviceQuotasClient *servicequotas.ServiceQuotas) {
+	s.updateServiceQuotaRequestStatus(serviceQuotasClient)
+	if s.RequestStatus == "" {
+		s.raiseServiceRequest(serviceQuotasClient)
+	}
+}
+
+func (s *ServiceQuota) raiseServiceRequest(serviceQuotasClient *servicequotas.ServiceQuotas) {
+	fmt.Printf("Requesting service quota increase for %s/%s to %d\n", s.ServiceCode, s.QuotaName, s.DesiredMinimumValue)
+	out, err := serviceQuotasClient.RequestServiceQuotaIncrease(
+		&servicequotas.RequestServiceQuotaIncreaseInput{
+			DesiredValue: aws.Float64(float64(s.DesiredMinimumValue)),
+			ServiceCode:  aws.String(s.ServiceCode),
+			QuotaCode:    aws.String(s.QuotaCode),
+		},
+	)
+	if err != nil {
+		fmt.Printf("Unable to raise quota for %s/%s: %s\n", s.ServiceCode, s.QuotaName, err)
+	} else {
+		s.RequestStatus = aws.StringValue(out.RequestedQuota.Status)
+	}
+}
+
+func (s *ServiceQuota) updateServiceQuotaRequestStatus(serviceQuotasClient *servicequotas.ServiceQuotas) {
+	params := &servicequotas.ListRequestedServiceQuotaChangeHistoryInput{
+		ServiceCode: aws.String(s.ServiceCode),
+	}
+	latestRequest := &servicequotas.RequestedServiceQuotaChange{}
+	serviceQuotasClient.ListRequestedServiceQuotaChangeHistoryPages(params,
+		func(page *servicequotas.ListRequestedServiceQuotaChangeHistoryOutput, lastPage bool) bool {
+			for _, v := range page.RequestedQuotas {
+				if int(aws.Float64Value(v.DesiredValue)) >= s.DesiredMinimumValue && aws.StringValue(v.QuotaCode) == s.QuotaCode && aws.TimeValue(v.Created).After(aws.TimeValue(latestRequest.Created)) {
+					latestRequest = v
+				}
+			}
+			return !lastPage
+		},
+	)
+	if latestRequest.Status != nil {
+		s.RequestStatus = aws.StringValue(latestRequest.Status)
+	}
+}
+
 func DumpEKSClusters(ctx context.Context, e2eCtx *E2EContext) {
 	logPath := filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", e2eCtx.Environment.BootstrapClusterProxy.GetName(), "aws-resources")
 	if err := os.MkdirAll(logPath, os.ModePerm); err != nil {
@@ -344,7 +550,7 @@ func DumpEKSClusters(ctx context.Context, e2eCtx *E2EContext) {
 	fmt.Fprintf(GinkgoWriter, "folder created for eks clusters: %s\n", logPath)
 
 	input := &eks.ListClustersInput{}
-	eksClient := eks.New(e2eCtx.BootstratpUserAWSSession)
+	eksClient := eks.New(e2eCtx.BootstrapUserAWSSession)
 	output, err := eksClient.ListClusters(input)
 	if err != nil {
 		fmt.Fprintf(GinkgoWriter, "couldn't list EKS clusters: err=%s", err)
@@ -385,4 +591,95 @@ func dumpEKSCluster(cluster *eks.Cluster, logPath string) {
 		fmt.Fprintf(GinkgoWriter, "couldn't write cluster yaml to file: name=%s file=%s err=%s", *cluster.Name, f.Name(), err)
 		return
 	}
+}
+
+// 	To calculate how much resources a test consumes, these helper functions below can be used.
+//	ListNATGateways(e2eCtx), ListRunningEC2(e2eCtx), ListVPC(e2eCtx), ListVpcInternetGateways(e2eCtx)
+func ListVpcInternetGateways(e2eCtx *E2EContext) ([]*ec2.InternetGateway, error) {
+	ec2Svc := ec2.New(e2eCtx.AWSSession)
+
+	out, err := ec2Svc.DescribeInternetGateways(&ec2.DescribeInternetGatewaysInput{})
+	if err != nil {
+		return nil, err
+	}
+
+	return out.InternetGateways, nil
+}
+
+func ListNATGateways(e2eCtx *E2EContext) (map[string]*ec2.NatGateway, error) {
+	ec2Svc := ec2.New(e2eCtx.AWSSession)
+
+	describeNatGatewayInput := &ec2.DescribeNatGatewaysInput{
+		Filter: []*ec2.Filter{
+			filter.EC2.NATGatewayStates(ec2.NatGatewayStateAvailable),
+		},
+	}
+
+	gateways := make(map[string]*ec2.NatGateway)
+
+	err := ec2Svc.DescribeNatGatewaysPages(describeNatGatewayInput,
+		func(page *ec2.DescribeNatGatewaysOutput, lastPage bool) bool {
+			for _, r := range page.NatGateways {
+				gateways[*r.SubnetId] = r
+			}
+			return !lastPage
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return gateways, nil
+}
+
+func ListRunningEC2(e2eCtx *E2EContext) ([]instance, error) {
+	ec2Svc := ec2.New(e2eCtx.AWSSession)
+
+	resp, err := ec2Svc.DescribeInstancesWithContext(context.TODO(), &ec2.DescribeInstancesInput{
+		Filters: []*ec2.Filter{filter.EC2.InstanceStates(ec2.InstanceStateNameRunning)},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Reservations) == 0 || len(resp.Reservations[0].Instances) == 0 {
+		return nil, fmt.Errorf("no machines found")
+	}
+	instances := []instance{}
+	for _, r := range resp.Reservations {
+		for _, i := range r.Instances {
+			tags := i.Tags
+			name := ""
+			for _, t := range tags {
+				if aws.StringValue(t.Key) == "Name" {
+					name = aws.StringValue(t.Value)
+				}
+			}
+			if name == "" {
+				continue
+			}
+			instances = append(instances,
+				instance{
+					name:       name,
+					instanceID: aws.StringValue(i.InstanceId),
+				},
+			)
+		}
+	}
+	return instances, nil
+}
+
+func ListVPC(e2eCtx *E2EContext) int {
+	ec2Svc := ec2.New(e2eCtx.AWSSession)
+
+	input := &ec2.DescribeVpcsInput{
+		Filters: []*ec2.Filter{
+			filter.EC2.VPCStates(ec2.VpcStateAvailable),
+		},
+	}
+
+	out, err := ec2Svc.DescribeVpcs(input)
+	if err != nil {
+		return 0
+	}
+
+	return len(out.Vpcs)
 }

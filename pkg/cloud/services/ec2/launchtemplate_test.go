@@ -21,17 +21,59 @@ import (
 	"reflect"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/golang/mock/gomock"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2/mock_ec2iface"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/userdata"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+)
+
+const (
+	testUserData = `## template: jinja
+#cloud-config
+
+write_files:
+-   path: /tmp/kubeadm-join-config.yaml
+	owner: root:root
+	permissions: '0640'
+	content: |
+	  ---
+	  apiVersion: kubeadm.k8s.io/v1beta2
+	  discovery:
+		bootstrapToken:
+		  apiServerEndpoint: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+		  caCertHashes:
+		  - sha256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+		  token: xxxxxx.xxxxxxxxxxxxxxxx
+		  unsafeSkipCAVerification: false
+	  kind: JoinConfiguration
+	  nodeRegistration:
+		kubeletExtraArgs:
+		  cloud-provider: aws
+		name: '{{ ds.meta_data.local_hostname }}'
+
+runcmd:
+  - kubeadm join --config /tmp/kubeadm-join-config.yaml
+users:
+  - name: xxxxxxxx
+	sudo: ALL=(ALL) NOPASSWD:ALL
+	ssh_authorized_keys:
+	  - ssh-rsa xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx user@example.com
+`
+)
+
+var (
+	testUserDataHash = userdata.ComputeHash([]byte(testUserData))
 )
 
 const (
@@ -116,7 +158,11 @@ func TestGetLaunchTemplate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
 
+			scheme := runtime.NewScheme()
+			_ = infrav1.AddToScheme(scheme)
+			client := fake.NewClientBuilder().WithScheme(scheme).Build()
 			scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+				Client:     client,
 				Cluster:    &clusterv1.Cluster{},
 				AWSCluster: &infrav1.AWSCluster{},
 			})
@@ -176,7 +222,7 @@ func TestService_SDKToLaunchTemplate(t *testing.T) {
 			},
 			wantLT: &expinfrav1.AWSLaunchTemplate{
 				Name: "foo",
-				AMI: infrav1.AWSResourceReference{
+				AMI: infrav1.AMIReference{
 					ID: aws.String("foo-image"),
 				},
 				IamInstanceProfile: "foo-profile",
@@ -266,8 +312,9 @@ func TestService_LaunchTemplateNeedsUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ac := &infrav1.AWSCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test"},
 				Status: infrav1.AWSClusterStatus{
-					Network: infrav1.Network{
+					Network: infrav1.NetworkStatus{
 						SecurityGroups: map[infrav1.SecurityGroupRole]infrav1.SecurityGroup{
 							infrav1.SecurityGroupNode: {
 								ID: "sg-111",

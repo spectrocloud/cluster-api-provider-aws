@@ -22,15 +22,17 @@ import (
 	"path"
 
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/converters"
-
-	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 )
 
+// PolicyName defines the name of a managed IAM policy.
 type PolicyName string
 
-// ManagedIAMPolicyNames slice of managed IAM policies
-var ManagedIAMPolicyNames = [4]PolicyName{ControllersPolicy, ControlPlanePolicy, NodePolicy, CSIPolicy}
+// ManagedIAMPolicyNames slice of managed IAM policies.
+var ManagedIAMPolicyNames = [5]PolicyName{ControllersPolicy, ControllersPolicyEKS, ControlPlanePolicy, NodePolicy, CSIPolicy}
 
+// IsValid will check if a given policy name is valid. That is, it will check if the given policy name is
+// one of the ManagedIAMPolicyNames.
 func (p PolicyName) IsValid() bool {
 	for i := range ManagedIAMPolicyNames {
 		if ManagedIAMPolicyNames[i] == p {
@@ -40,7 +42,7 @@ func (p PolicyName) IsValid() bool {
 	return false
 }
 
-// GenerateManagedIAMPolicyDocuments generates JSON representation of policy documents for all ManagedIAMPolicy
+// GenerateManagedIAMPolicyDocuments generates JSON representation of policy documents for all ManagedIAMPolicy.
 func (t Template) GenerateManagedIAMPolicyDocuments(policyDocDir string) error {
 	for _, pn := range ManagedIAMPolicyNames {
 		pd := t.GetPolicyDocFromPolicyName(pn)
@@ -61,13 +63,15 @@ func (t Template) GenerateManagedIAMPolicyDocuments(policyDocDir string) error {
 
 func (t Template) policyFunctionMap() map[PolicyName]func() *iamv1.PolicyDocument {
 	return map[PolicyName]func() *iamv1.PolicyDocument{
-		ControlPlanePolicy: t.cloudProviderControlPlaneAwsPolicy,
-		ControllersPolicy:  t.ControllersPolicy,
-		NodePolicy:         t.cloudProviderNodeAwsPolicy,
-		CSIPolicy:          t.csiControllerPolicy,
+		ControlPlanePolicy:   t.cloudProviderControlPlaneAwsPolicy,
+		ControllersPolicy:    t.ControllersPolicy,
+		ControllersPolicyEKS: t.ControllersPolicyEKS,
+		NodePolicy:           t.cloudProviderNodeAwsPolicy,
+		CSIPolicy:            t.csiControllerPolicy,
 	}
 }
 
+// GetPolicyDocFromPolicyName returns a Template's policy document.
 func (t Template) GetPolicyDocFromPolicyName(policyName PolicyName) *iamv1.PolicyDocument {
 	return t.policyFunctionMap()[policyName]()
 }

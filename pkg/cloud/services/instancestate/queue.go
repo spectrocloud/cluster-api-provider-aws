@@ -19,12 +19,14 @@ package instancestate
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
-	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
-	"strings"
+
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 )
 
 func (s *Service) reconcileSQSQueue() error {
@@ -64,17 +66,17 @@ func (s *Service) deleteSQSQueue() error {
 
 func (s *Service) createPolicyForRule(input *createPolicyForRuleInput) error {
 	attrs := make(map[string]string)
-	policy := v1alpha1.PolicyDocument{
-		Version: v1alpha1.CurrentVersion,
+	policy := iamv1.PolicyDocument{
+		Version: iamv1.CurrentVersion,
 		ID:      input.QueueArn,
-		Statement: v1alpha1.Statements{
-			v1alpha1.StatementEntry{
+		Statement: iamv1.Statements{
+			iamv1.StatementEntry{
 				Sid:       fmt.Sprintf("CAPAEvents_%s_%s", s.getEC2RuleName(), GenerateQueueName(s.scope.Name())),
-				Effect:    v1alpha1.EffectAllow,
-				Principal: v1alpha1.Principals{v1alpha1.PrincipalService: v1alpha1.PrincipalID{"events.amazonaws.com"}},
-				Action:    v1alpha1.Actions{"sqs:SendMessage"},
-				Resource:  v1alpha1.Resources{input.QueueArn},
-				Condition: v1alpha1.Conditions{
+				Effect:    iamv1.EffectAllow,
+				Principal: iamv1.Principals{iamv1.PrincipalService: iamv1.PrincipalID{"events.amazonaws.com"}},
+				Action:    iamv1.Actions{"sqs:SendMessage"},
+				Resource:  iamv1.Resources{input.QueueArn},
+				Condition: iamv1.Conditions{
 					"ArnEquals": map[string]string{"aws:SourceArn": input.RuleArn},
 				},
 			},
@@ -94,8 +96,9 @@ func (s *Service) createPolicyForRule(input *createPolicyForRuleInput) error {
 	return errors.Wrap(err, "unable to update queue attributes")
 }
 
+// GenerateQueueName will generate a queue name.
 func GenerateQueueName(clusterName string) string {
-	adjusted := strings.Replace(clusterName, ".", "-", -1)
+	adjusted := strings.ReplaceAll(clusterName, ".", "-")
 	return fmt.Sprintf("%s-queue", adjusted)
 }
 

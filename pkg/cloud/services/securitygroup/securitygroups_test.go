@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/golang/mock/gomock"
@@ -28,11 +30,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2/mock_ec2iface"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -57,12 +59,12 @@ func TestReconcileSecurityGroups(t *testing.T) {
 					},
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -106,8 +108,6 @@ func TestReconcileSecurityGroups(t *testing.T) {
 					Return(&ec2.AuthorizeSecurityGroupIngressOutput{}, nil).
 					After(securityGroupBastion)
 
-				////////////////////////
-
 				securityGroupAPIServerLb := m.CreateSecurityGroup(gomock.Eq(&ec2.CreateSecurityGroupInput{
 					VpcId:       aws.String("vpc-securitygroups"),
 					GroupName:   aws.String("test-cluster-apiserver-lb"),
@@ -140,8 +140,6 @@ func TestReconcileSecurityGroups(t *testing.T) {
 					Return(&ec2.AuthorizeSecurityGroupIngressOutput{}, nil).
 					After(securityGroupAPIServerLb)
 
-				////////////////////////
-
 				m.CreateSecurityGroup(gomock.Eq(&ec2.CreateSecurityGroupInput{
 					VpcId:       aws.String("vpc-securitygroups"),
 					GroupName:   aws.String("test-cluster-lb"),
@@ -171,8 +169,6 @@ func TestReconcileSecurityGroups(t *testing.T) {
 					},
 				})).
 					Return(&ec2.CreateSecurityGroupOutput{GroupId: aws.String("sg-lb")}, nil)
-
-				////////////////////////
 
 				securityGroupControl := m.CreateSecurityGroup(gomock.Eq(&ec2.CreateSecurityGroupInput{
 					VpcId:       aws.String("vpc-securitygroups"),
@@ -205,8 +201,6 @@ func TestReconcileSecurityGroups(t *testing.T) {
 				})).
 					Return(&ec2.AuthorizeSecurityGroupIngressOutput{}, nil).
 					After(securityGroupControl)
-
-				//////////////////////////////////////////////
 
 				securityGroupNode := m.CreateSecurityGroup(gomock.Eq(&ec2.CreateSecurityGroupInput{
 					VpcId:       aws.String("vpc-securitygroups"),
@@ -249,12 +243,12 @@ func TestReconcileSecurityGroups(t *testing.T) {
 					InternetGatewayID: aws.String("igw-01"),
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -280,7 +274,6 @@ func TestReconcileSecurityGroups(t *testing.T) {
 							{GroupId: aws.String("sg-node"), GroupName: aws.String("Node Security Group")},
 						},
 					}, nil).AnyTimes()
-
 			},
 		},
 		{
@@ -294,12 +287,12 @@ func TestReconcileSecurityGroups(t *testing.T) {
 					},
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -325,7 +318,6 @@ func TestReconcileSecurityGroups(t *testing.T) {
 							{GroupId: aws.String("sg-node"), GroupName: aws.String("Node Security Group")},
 						},
 					}, nil).AnyTimes()
-
 			},
 			err: errors.New(`security group overrides provided for managed vpc "test-cluster"`),
 		},
@@ -335,11 +327,16 @@ func TestReconcileSecurityGroups(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
 
+			scheme := runtime.NewScheme()
+			_ = infrav1.AddToScheme(scheme)
+			client := fake.NewClientBuilder().WithScheme(scheme).Build()
 			scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+				Client: client,
 				Cluster: &clusterv1.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				},
 				AWSCluster: &infrav1.AWSCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "test"},
 					Spec: infrav1.AWSClusterSpec{
 						NetworkSpec: *tc.input,
 					},
@@ -366,7 +363,11 @@ func TestReconcileSecurityGroups(t *testing.T) {
 }
 
 func TestControlPlaneSecurityGroupNotOpenToAnyCIDR(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = infrav1.AddToScheme(scheme)
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
 	scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+		Client: client,
 		Cluster: &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 		},
@@ -400,19 +401,19 @@ func TestDeleteSecurityGroups(t *testing.T) {
 		err    error
 	}{
 		{
-			name: "do not delete overridden security groups, only delete 'owned' SGs",
+			name: "do not delete overridden security groups",
 			input: &infrav1.NetworkSpec{
 				VPC: infrav1.VPCSpec{
 					ID:                "vpc-securitygroups",
 					InternetGatewayID: aws.String("igw-01"),
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-securitygroups-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -428,35 +429,7 @@ func TestDeleteSecurityGroups(t *testing.T) {
 				},
 			},
 			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
-				m.DescribeSecurityGroupsPages(gomock.Any(), gomock.Any()).Do(func(_, y interface{}) {
-					funct := y.(func(output *ec2.DescribeSecurityGroupsOutput, lastPage bool) bool)
-					funct(&ec2.DescribeSecurityGroupsOutput{
-						SecurityGroups: []*ec2.SecurityGroup{
-							{
-								GroupName: aws.String("sg-bastion"),
-								GroupId:   aws.String("sg-bastion"),
-
-								Tags: []*ec2.Tag{
-									{
-										Key:   aws.String("Name"),
-										Value: aws.String("test-cluster-nat"),
-									},
-									{
-										Key:   aws.String("sigs.k8s.io/cluster-api-provider-aws/cluster/test-cluster"),
-										Value: aws.String("owned"),
-									},
-									{
-										Key:   aws.String("sigs.k8s.io/cluster-api-provider-aws/role"),
-										Value: aws.String("common"),
-									},
-								},
-							},
-						},
-					}, true)
-				}).Return(nil)
-
-				m.DescribeSecurityGroups(gomock.Any()).Return(&ec2.DescribeSecurityGroupsOutput{}, nil)
-				m.DeleteSecurityGroup(gomock.Any()).Return(nil, nil)
+				m.DescribeSecurityGroupsPages(gomock.Any(), gomock.Any()).Return(nil)
 			},
 		},
 	}
@@ -477,7 +450,7 @@ func TestDeleteSecurityGroups(t *testing.T) {
 					NetworkSpec: *tc.input,
 				},
 			}
-			client := fake.NewFakeClientWithScheme(scheme, awsCluster)
+			client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(awsCluster).Build()
 
 			ctx := context.TODO()
 			client.Create(ctx, awsCluster)
@@ -505,6 +478,90 @@ func TestDeleteSecurityGroups(t *testing.T) {
 			} else if err != nil {
 				t.Fatalf("got an unexpected error: %v", err)
 			}
+		})
+	}
+}
+
+func TestIngressRulesFromSDKType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *ec2.IpPermission
+		expected infrav1.IngressRules
+	}{
+		{
+			name: "Two group pairs",
+			input: &ec2.IpPermission{
+				IpProtocol: aws.String("tcp"),
+				FromPort:   aws.Int64(10250),
+				ToPort:     aws.Int64(10250),
+				UserIdGroupPairs: []*ec2.UserIdGroupPair{
+					{
+						Description: aws.String("Kubelet API"),
+						UserId:      aws.String("aws-user-id-1"),
+						GroupId:     aws.String("sg-source-1"),
+					},
+					{
+						Description: aws.String("Kubelet API"),
+						UserId:      aws.String("aws-user-id-1"),
+						GroupId:     aws.String("sg-source-2"),
+					},
+				},
+			},
+			expected: infrav1.IngressRules{
+				{
+					Description:            "Kubelet API",
+					Protocol:               "tcp",
+					FromPort:               10250,
+					ToPort:                 10250,
+					SourceSecurityGroupIDs: []string{"sg-source-1", "sg-source-2"},
+				},
+			},
+		},
+		{
+			name: "Mix of group pairs and cidr blocks",
+			input: &ec2.IpPermission{
+				IpProtocol: aws.String("tcp"),
+				FromPort:   aws.Int64(22),
+				ToPort:     aws.Int64(22),
+				IpRanges: []*ec2.IpRange{
+					{
+						CidrIp:      aws.String("0.0.0.0/0"),
+						Description: aws.String("MY-SSH"),
+					},
+				},
+				UserIdGroupPairs: []*ec2.UserIdGroupPair{
+					{
+						UserId:      aws.String("aws-user-id-1"),
+						GroupId:     aws.String("sg-source-1"),
+						Description: aws.String("SSH"),
+					},
+				},
+			},
+			expected: infrav1.IngressRules{
+				{
+					Description: "MY-SSH",
+					Protocol:    "tcp",
+					FromPort:    22,
+					ToPort:      22,
+					CidrBlocks:  []string{"0.0.0.0/0"},
+				},
+				{
+					Description:            "SSH",
+					Protocol:               "tcp",
+					FromPort:               22,
+					ToPort:                 22,
+					SourceSecurityGroupIDs: []string{"sg-source-1"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			output := ingressRulesFromSDKType(tc.input)
+
+			g.Expect(output).To(Equal(tc.expected))
 		})
 	}
 }

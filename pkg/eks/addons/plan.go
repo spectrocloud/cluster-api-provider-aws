@@ -22,11 +22,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/eks/eksiface"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/planner"
 )
 
-// NewPlan creates a new Plan to manage EKS addons
+// NewPlan creates a new Plan to manage EKS addons.
 func NewPlan(clusterName string, desiredAddons, installedAddons []*EKSAddon, client eksiface.EKSAPI) planner.Plan {
 	return &plan{
 		installedAddons: installedAddons,
@@ -36,7 +36,7 @@ func NewPlan(clusterName string, desiredAddons, installedAddons []*EKSAddon, cli
 	}
 }
 
-// Plan is a plan that will manage EKS addons
+// Plan is a plan that will manage EKS addons.
 type plan struct {
 	installedAddons []*EKSAddon
 	desiredAddons   []*EKSAddon
@@ -44,7 +44,7 @@ type plan struct {
 	clusterName     string
 }
 
-// Create will create the plan (i.e. list of procedures) for managing EKS addons
+// Create will create the plan (i.e. list of procedures) for managing EKS addons.
 func (a *plan) Create(ctx context.Context) ([]planner.Procedure, error) {
 	procedures := []planner.Procedure{}
 
@@ -112,17 +112,6 @@ func convertTags(tags infrav1.Tags) map[string]*string {
 	for k, v := range tags {
 		copiedVal := v
 		converted[k] = &copiedVal
-	}
-
-	return converted
-}
-
-func convertSDKTags(tags map[string]*string) infrav1.Tags {
-	converted := infrav1.Tags{}
-
-	for k, v := range tags {
-		copiedVal := v
-		converted[k] = *copiedVal
 	}
 
 	return converted

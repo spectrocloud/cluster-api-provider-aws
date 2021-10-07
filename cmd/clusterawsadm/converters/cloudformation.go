@@ -18,10 +18,10 @@ package converters
 
 import (
 	"github.com/awslabs/goformation/v4/cloudformation/tags"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 )
 
-// MapToCloudFormationTags converts a infrav1.Tags to []tags.Tag
+// MapToCloudFormationTags converts a infrav1.Tags to []tags.Tag.
 func MapToCloudFormationTags(src infrav1.Tags) []tags.Tag {
 	cfnTags := make([]tags.Tag, 0, len(src))
 

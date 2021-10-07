@@ -20,12 +20,14 @@ import (
 	"encoding/base64"
 	"testing"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -118,11 +120,11 @@ func setupMachineScope() (*MachineScope, error) {
 	awsMachine := newAWSMachine(clusterName, "my-machine-0")
 	awsCluster := newAWSCluster(clusterName)
 
-	initObjects := []runtime.Object{
+	initObjects := []client.Object{
 		cluster, machine, secret, awsMachine, awsCluster,
 	}
 
-	client := fake.NewFakeClientWithScheme(scheme, initObjects...)
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 	return NewMachineScope(
 		MachineScopeParams{
 			Client:  client,
@@ -198,8 +200,7 @@ func TestSetSecretARN(t *testing.T) {
 	}
 
 	scope.SetSecretPrefix(prefix)
-	val := scope.GetSecretPrefix()
-	if val != prefix {
+	if val := scope.GetSecretPrefix(); val != prefix {
 		t.Fatalf("prefix does not equal %s: %s", prefix, val)
 	}
 }

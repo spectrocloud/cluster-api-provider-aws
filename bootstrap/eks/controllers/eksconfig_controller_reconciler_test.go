@@ -17,56 +17,136 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
 	"fmt"
+	"testing"
 
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"k8s.io/apimachinery/pkg/types"
+	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/bootstrap/eks/internal/userdata"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
-
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var _ = Describe("EKSConfigReconciler", func() {
-	BeforeEach(func() {})
-	AfterEach(func() {})
+func TestEKSConfigReconciler(t *testing.T) {
+	t.Run("Should reconcile an EKSConfig and create data Secret", func(t *testing.T) {
+		g := NewWithT(t)
+		amcp := newAMCP("test-cluster")
+		cluster := newCluster(amcp.Name)
+		machine := newMachine(cluster, "test-machine")
+		config := newEKSConfig(machine)
+		t.Log(dump("amcp", amcp))
+		t.Log(dump("config", config))
+		t.Log(dump("machine", machine))
+		t.Log(dump("cluster", cluster))
+		expectedUserData, err := newUserData(cluster.Name, map[string]string{"test-arg": "test-value"})
+		g.Expect(err).To(BeNil())
+		g.Expect(testEnv.Client.Create(ctx, amcp)).To(Succeed())
 
-	Context("Reconcile an EKSConfig", func() {
-		It("should wait until infrastructure is ready", func() {
-			cluster := newCluster("test-cluster")
-			machine := newMachine(cluster, "test-machine")
-			config := newEKSConfig(machine, "test-config")
+		reconciler := EKSConfigReconciler{
+			Client: testEnv.Client,
+		}
+		t.Log(fmt.Sprintf("Calling reconcile on cluster '%s' and config '%s' should requeue", cluster.Name, config.Name))
+		g.Eventually(func(gomega Gomega) {
+			result, err := reconciler.joinWorker(ctx, cluster, config)
+			gomega.Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(result.Requeue).To(BeFalse())
+		}).Should(Succeed())
 
-			bytes, err := yaml.Marshal(machine)
-			Expect(err).To(BeNil())
+		t.Log(fmt.Sprintf("Secret '%s' should exist and be correct", config.Name))
+		secretList := &corev1.SecretList{}
+		testEnv.Client.List(ctx, secretList)
+		t.Log(dump("secrets", secretList))
+		secret := &corev1.Secret{}
+		g.Eventually(func(gomega Gomega) {
+			gomega.Expect(testEnv.Client.Get(ctx, client.ObjectKey{
+				Name:      config.Name,
+				Namespace: "default",
+			}, secret)).To(Succeed())
+		}).Should(Succeed())
 
-			owner := &unstructured.Unstructured{}
-			err = yaml.Unmarshal(bytes, owner)
-			Expect(err).To(BeNil())
-
-			reconciler := EKSConfigReconciler{
-				Log:    log.Log,
-				Client: testEnv.Client,
-			}
-
-			By("Calling reconcile should requeue")
-			result, err := reconciler.joinWorker(context.Background(), log.Log, cluster, config)
-			Expect(err).To(Succeed())
-			Expect(result.Requeue).To(BeFalse())
-		})
+		g.Expect(string(secret.Data["value"])).To(Equal(string(expectedUserData)))
 	})
-})
 
-// newCluster return a CAPI cluster object
+	t.Run("Should reconcile an EKSConfig and update data Secret", func(t *testing.T) {
+		g := NewWithT(t)
+		amcp := newAMCP("test-cluster")
+		cluster := newCluster(amcp.Name)
+		machine := newMachine(cluster, "test-machine")
+		config := newEKSConfig(machine)
+		t.Log(dump("amcp", amcp))
+		t.Log(dump("config", config))
+		t.Log(dump("machine", machine))
+		t.Log(dump("cluster", cluster))
+		oldUserData, err := newUserData(cluster.Name, map[string]string{"test-arg": "test-value"})
+		g.Expect(err).To(BeNil())
+		expectedUserData, err := newUserData(cluster.Name, map[string]string{"test-arg": "updated-test-value"})
+		g.Expect(err).To(BeNil())
+		g.Expect(testEnv.Client.Create(ctx, amcp)).To(Succeed())
+
+		amcpList := &ekscontrolplanev1.AWSManagedControlPlaneList{}
+		testEnv.Client.List(ctx, amcpList)
+		t.Log(dump("stored-amcps", amcpList))
+
+		reconciler := EKSConfigReconciler{
+			Client: testEnv.Client,
+		}
+		t.Log(fmt.Sprintf("Calling reconcile on cluster '%s' and config '%s' should requeue", cluster.Name, config.Name))
+		g.Eventually(func(gomega Gomega) {
+			result, err := reconciler.joinWorker(ctx, cluster, config)
+			gomega.Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(result.Requeue).To(BeFalse())
+		}).Should(Succeed())
+
+		t.Log(fmt.Sprintf("Secret '%s' should exist and be correct", config.Name))
+		secretList := &corev1.SecretList{}
+		testEnv.Client.List(ctx, secretList)
+		t.Log(dump("secrets", secretList))
+
+		secret := &corev1.Secret{}
+		g.Eventually(func(gomega Gomega) {
+			gomega.Expect(testEnv.Client.Get(ctx, client.ObjectKey{
+				Name:      config.Name,
+				Namespace: "default",
+			}, secret)).To(Succeed())
+			gomega.Expect(string(secret.Data["value"])).To(Equal(string(oldUserData)))
+		}).Should(Succeed())
+
+		// Secret already exists in testEnv so we update it
+		config.Spec.KubeletExtraArgs = map[string]string{
+			"test-arg": "updated-test-value",
+		}
+		t.Log(dump("config", config))
+		g.Eventually(func(gomega Gomega) {
+			result, err := reconciler.joinWorker(ctx, cluster, config)
+			gomega.Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(result.Requeue).To(BeFalse())
+		}).Should(Succeed())
+
+		t.Log(fmt.Sprintf("Secret '%s' should exist and be up to date", config.Name))
+
+		testEnv.Client.List(ctx, secretList)
+		t.Log(dump("secrets", secretList))
+		g.Eventually(func(gomega Gomega) {
+			gomega.Expect(testEnv.Client.Get(ctx, client.ObjectKey{
+				Name:      config.Name,
+				Namespace: "default",
+			}, secret)).To(Succeed())
+			gomega.Expect(string(secret.Data["value"])).To(Equal(string(expectedUserData)))
+		}).Should(Succeed())
+	})
+}
+
+// newCluster return a CAPI cluster object.
 func newCluster(name string) *clusterv1.Cluster {
-	return &clusterv1.Cluster{
+	cluster := &clusterv1.Cluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Cluster",
 			APIVersion: clusterv1.GroupVersion.String(),
@@ -82,11 +162,22 @@ func newCluster(name string) *clusterv1.Cluster {
 				Namespace: "default",
 			},
 		},
+		Status: clusterv1.ClusterStatus{
+			InfrastructureReady: true,
+		},
 	}
+	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+	return cluster
 }
 
-// newMachine return a CAPI machine object; if cluster is not nil, the machine is linked to the cluster as well
+func dump(desc string, o interface{}) string {
+	dat, _ := yaml.Marshal(o)
+	return fmt.Sprintf("%s:\n%s", desc, string(dat))
+}
+
+// newMachine return a CAPI machine object; if cluster is not nil, the machine is linked to the cluster as well.
 func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
+	generatedName := fmt.Sprintf("%s-%s", name, util.RandomString(5))
 	machine := &clusterv1.Machine{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Machine",
@@ -94,13 +185,13 @@ func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name:      name,
+			Name:      generatedName,
 		},
 		Spec: clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
 				ConfigRef: &corev1.ObjectReference{
 					Kind:       "EKSConfig",
-					APIVersion: bootstrapv1.GroupVersion.String(),
+					APIVersion: eksbootstrapv1.GroupVersion.String(),
 				},
 			},
 		},
@@ -114,20 +205,25 @@ func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
 	return machine
 }
 
-// newEKSConfig return an EKSConfig object; if machine is not nil, the EKSConfig is linked to the machine as well
-func newEKSConfig(machine *clusterv1.Machine, name string) *bootstrapv1.EKSConfig {
-	config := &bootstrapv1.EKSConfig{
+// newEKSConfig return an EKSConfig object; if machine is not nil, the EKSConfig is linked to the machine as well.
+func newEKSConfig(machine *clusterv1.Machine) *eksbootstrapv1.EKSConfig {
+	config := &eksbootstrapv1.EKSConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "EKSConfig",
-			APIVersion: bootstrapv1.GroupVersion.String(),
+			APIVersion: eksbootstrapv1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name:      name,
-			UID:       types.UID(fmt.Sprintf("%s uid", name)),
+		},
+		Spec: eksbootstrapv1.EKSConfigSpec{
+			KubeletExtraArgs: map[string]string{
+				"test-arg": "test-value",
+			},
 		},
 	}
 	if machine != nil {
+		config.ObjectMeta.Name = machine.Name
+		config.ObjectMeta.UID = types.UID(fmt.Sprintf("%s uid", machine.Name))
 		config.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
 			{
 				Kind:       "Machine",
@@ -140,4 +236,30 @@ func newEKSConfig(machine *clusterv1.Machine, name string) *bootstrapv1.EKSConfi
 		machine.Spec.Bootstrap.ConfigRef.Namespace = config.Namespace
 	}
 	return config
+}
+
+// newUserData generates user data ready to be passed to r.storeBootstrapData.
+func newUserData(clusterName string, kubeletExtraArgs map[string]string) ([]byte, error) {
+	return userdata.NewNode(&userdata.NodeInput{
+		ClusterName:      clusterName,
+		KubeletExtraArgs: kubeletExtraArgs,
+	})
+}
+
+// newAMCP returns an EKS AWSManagedControlPlane object.
+func newAMCP(name string) *ekscontrolplanev1.AWSManagedControlPlane {
+	generatedName := fmt.Sprintf("%s-%s", name, util.RandomString(5))
+	return &ekscontrolplanev1.AWSManagedControlPlane{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AWSManagedControlPlane",
+			APIVersion: ekscontrolplanev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generatedName,
+			Namespace: "default",
+		},
+		Spec: ekscontrolplanev1.AWSManagedControlPlaneSpec{
+			EKSClusterName: generatedName,
+		},
+	}
 }

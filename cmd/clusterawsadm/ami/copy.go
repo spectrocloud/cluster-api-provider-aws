@@ -27,11 +27,12 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	amiv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/ami/v1alpha1"
+	amiv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/ami/v1beta1"
 	ec2service "sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2"
 	"sigs.k8s.io/cluster-api/util"
 )
 
+// CopyInput defines input that can be copied to create an AWSAMI.
 type CopyInput struct {
 	SourceRegion      string
 	DestinationRegion string
@@ -44,8 +45,8 @@ type CopyInput struct {
 	Log               logr.Logger
 }
 
+// Copy will create an AWSAMI from a CopyInput.
 func Copy(input CopyInput) (*amiv1.AWSAMI, error) {
-
 	sourceSession, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Config:            aws.Config{Region: aws.String(input.SourceRegion)},
@@ -159,7 +160,6 @@ type copyWithSnapshotInput struct {
 }
 
 func copyWithSnapshot(input copyWithSnapshotInput) (string, string, error) {
-
 	ec2Client := ec2.New(input.sess)
 	imgName := *input.image.Name + util.RandomString(3) + strconv.Itoa(int(time.Now().Unix()))
 	log := input.log.WithValues("imageName", imgName)

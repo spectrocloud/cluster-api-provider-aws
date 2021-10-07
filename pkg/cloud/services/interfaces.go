@@ -17,20 +17,20 @@ limitations under the License.
 package services
 
 import (
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 )
 
 const (
-	// TemporaryResourceID is the name used temporarily when creating AWS resources
+	// TemporaryResourceID is the name used temporarily when creating AWS resources.
 	TemporaryResourceID = "temporary-resource-id"
-	// AnyIPv4CidrBlock is the CIDR block to match all IPv4 addresses
+	// AnyIPv4CidrBlock is the CIDR block to match all IPv4 addresses.
 	AnyIPv4CidrBlock = "0.0.0.0/0"
 )
 
 // ASGInterface encapsulates the methods exposed to the machinepool
-// actuator
+// actuator.
 type ASGInterface interface {
 	ASGIfExists(id *string) (*expinfrav1.AutoScalingGroup, error)
 	GetASGByName(scope *scope.MachinePoolScope) (*expinfrav1.AutoScalingGroup, error)
@@ -43,7 +43,7 @@ type ASGInterface interface {
 }
 
 // EC2MachineInterface encapsulates the methods exposed to the machine
-// actuator
+// actuator.
 type EC2MachineInterface interface {
 	InstanceIfExists(id *string) (*infrav1.Instance, error)
 	TerminateInstance(id string) error
@@ -61,7 +61,7 @@ type EC2MachineInterface interface {
 
 	DiscoverLaunchTemplateAMI(scope *scope.MachinePoolScope) (*string, error)
 	GetLaunchTemplate(id string) (lt *expinfrav1.AWSLaunchTemplate, userDataHash string, err error)
-	GetLaunchTemplateID(launchTemplateName string) (string, error)
+	GetLaunchTemplateID(id string) (string, error)
 	CreateLaunchTemplate(scope *scope.MachinePoolScope, imageID *string, userData []byte) (string, error)
 	CreateLaunchTemplateVersion(scope *scope.MachinePoolScope, imageID *string, userData []byte) error
 	PruneLaunchTemplateVersions(id string) error
@@ -70,7 +70,7 @@ type EC2MachineInterface interface {
 }
 
 // SecretInterface encapsulated the methods exposed to the
-// machine actuator
+// machine actuator.
 type SecretInterface interface {
 	Delete(m *scope.MachineScope) error
 	Create(m *scope.MachineScope, data []byte) (string, int32, error)

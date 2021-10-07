@@ -19,31 +19,31 @@ package cloud
 import (
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/throttle"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Session represents an AWS session
+// Session represents an AWS session.
 type Session interface {
 	Session() awsclient.ConfigProvider
 	ServiceLimiter(string) *throttle.ServiceLimiter
 }
 
-// ScopeUsage is used to indicate which controller is using a scope
+// ScopeUsage is used to indicate which controller is using a scope.
 type ScopeUsage interface {
 	// ControllerName returns the name of the controller that created the scope
 	ControllerName() string
 }
 
-// ClusterObject represents a AWS cluster object
+// ClusterObject represents a AWS cluster object.
 type ClusterObject interface {
 	conditions.Setter
 }
 
-// ClusterScoper is the interface for a cluster scope
+// ClusterScoper is the interface for a cluster scope.
 type ClusterScoper interface {
 	logr.Logger
 	Session

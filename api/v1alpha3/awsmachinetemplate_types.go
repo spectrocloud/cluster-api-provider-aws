@@ -26,8 +26,7 @@ type AWSMachineTemplateSpec struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=awsmachinetemplates,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=awsmachinetemplates,scope=Namespaced,categories=cluster-api,shortName=awsmt
 
 // AWSMachineTemplate is the Schema for the awsmachinetemplates API
 type AWSMachineTemplate struct {
@@ -39,7 +38,7 @@ type AWSMachineTemplate struct {
 
 // +kubebuilder:object:root=true
 
-// AWSMachineTemplateList contains a list of AWSMachineTemplate
+// AWSMachineTemplateList contains a list of AWSMachineTemplate.
 type AWSMachineTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

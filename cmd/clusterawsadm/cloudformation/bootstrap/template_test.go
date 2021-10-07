@@ -25,8 +25,8 @@ import (
 	"github.com/awslabs/goformation/v4/cloudformation"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 	"sigs.k8s.io/yaml"
 )
 
@@ -96,23 +96,22 @@ func Test_RenderCloudformation(t *testing.T) {
 			},
 		},
 		{
-			fixture: "with_eks_enable",
-			template: func() Template {
-				t := NewTemplate()
-				t.Spec.EKS.Enable = true
-				t.Spec.Nodes.EC2ContainerRegistryReadOnly = true
-				return t
-			},
-		},
-		{
 			fixture: "with_eks_default_roles",
 			template: func() Template {
 				t := NewTemplate()
-				t.Spec.EKS.Enable = true
 				t.Spec.Nodes.EC2ContainerRegistryReadOnly = true
 				t.Spec.EKS.DefaultControlPlaneRole.Disable = false
 				t.Spec.EKS.ManagedMachinePool.Disable = false
 				t.Spec.EKS.Fargate.Disable = false
+				return t
+			},
+		},
+		{
+			fixture: "with_eks_kms_prefix",
+			template: func() Template {
+				t := NewTemplate()
+				t.Spec.Nodes.EC2ContainerRegistryReadOnly = true
+				t.Spec.EKS.KMSAliasPrefix = "custom-prefix-*"
 				return t
 			},
 		},
@@ -152,6 +151,21 @@ func Test_RenderCloudformation(t *testing.T) {
 						Action:   iamv1.Actions{"test:user-action"},
 					},
 				}
+				t.Spec.ClusterAPIControllers.ExtraStatements = iamv1.Statements{
+					{
+						Effect:   iamv1.EffectAllow,
+						Resource: iamv1.Resources{iamv1.Any},
+						Action:   iamv1.Actions{"test:controller-action"},
+					},
+				}
+				return t
+			},
+		},
+		{
+			fixture: "with_eks_disable",
+			template: func() Template {
+				t := NewTemplate()
+				t.Spec.EKS.Disable = true
 				return t
 			},
 		},
@@ -172,7 +186,7 @@ func Test_RenderCloudformation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ioutil.WriteFile("/tmp/tmp1", tData, 600)
+		ioutil.WriteFile("/tmp/tmp1", tData, 0600) // nolint:gosec
 
 		if string(tData) != string(data) {
 			dmp := diffmatchpatch.New()

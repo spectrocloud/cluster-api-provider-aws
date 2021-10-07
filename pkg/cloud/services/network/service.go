@@ -19,17 +19,17 @@ package network
 import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 )
 
-// Scope is scope for use with the network service
+// Scope is scope for use with the network service.
 type Scope interface {
 	cloud.ClusterScoper
 
 	// Network returns the cluster network object.
-	Network() *infrav1.Network
+	Network() *infrav1.NetworkStatus
 	// VPC returns the cluster VPC.
 	VPC() *infrav1.VPCSpec
 	// Subnets returns the cluster subnets.

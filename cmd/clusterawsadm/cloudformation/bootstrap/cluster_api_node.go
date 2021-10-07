@@ -17,8 +17,8 @@ limitations under the License.
 package bootstrap
 
 import (
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 )
 
 func (t Template) secretPolicy(secureSecretsBackend infrav1.SecretBackend) iamv1.StatementEntry {
@@ -67,7 +67,7 @@ func (t Template) sessionManagerPolicy() iamv1.StatementEntry {
 func (t Template) nodeManagedPolicies() []string {
 	policies := t.Spec.Nodes.ExtraPolicyAttachments
 
-	if t.Spec.EKS.Enable {
+	if !t.Spec.EKS.Disable {
 		policies = append(policies,
 			t.generateAWSManagedPolicyARN("AmazonEKSWorkerNodePolicy"),
 			t.generateAWSManagedPolicyARN("AmazonEKS_CNI_Policy"),

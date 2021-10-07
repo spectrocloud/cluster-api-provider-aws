@@ -22,9 +22,9 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2/klogr"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 )
 
 func TestSubnetPlacement(t *testing.T) {
@@ -44,15 +44,15 @@ func TestSubnetPlacement(t *testing.T) {
 			specAZs:       []string{"eu-west-1b"},
 			parentAZs:     []string{"eu-west-1c"},
 			controlPlaneSubnets: infrav1.Subnets{
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az1",
 					AvailabilityZone: "eu-west-1a",
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az2",
 					AvailabilityZone: "eu-west-1b",
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az3",
 					AvailabilityZone: "eu-west-1c",
 				},
@@ -67,15 +67,15 @@ func TestSubnetPlacement(t *testing.T) {
 			specAZs:       []string{"eu-west-1b"},
 			parentAZs:     []string{"eu-west-1c"},
 			controlPlaneSubnets: infrav1.Subnets{
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az1",
 					AvailabilityZone: "eu-west-1a",
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az2",
 					AvailabilityZone: "eu-west-1b",
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az3",
 					AvailabilityZone: "eu-west-1c",
 				},
@@ -90,15 +90,15 @@ func TestSubnetPlacement(t *testing.T) {
 			specAZs:       []string{},
 			parentAZs:     []string{"eu-west-1c"},
 			controlPlaneSubnets: infrav1.Subnets{
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az1",
 					AvailabilityZone: "eu-west-1a",
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az2",
 					AvailabilityZone: "eu-west-1b",
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az3",
 					AvailabilityZone: "eu-west-1c",
 				},
@@ -113,17 +113,17 @@ func TestSubnetPlacement(t *testing.T) {
 			specAZs:       []string{},
 			parentAZs:     []string{},
 			controlPlaneSubnets: infrav1.Subnets{
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az1",
 					AvailabilityZone: "eu-west-1a",
 					IsPublic:         false,
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az2",
 					AvailabilityZone: "eu-west-1b",
 					IsPublic:         false,
 				},
-				&infrav1.SubnetSpec{
+				infrav1.SubnetSpec{
 					ID:               "az3",
 					AvailabilityZone: "eu-west-1c",
 					IsPublic:         true,
@@ -162,12 +162,10 @@ func TestSubnetPlacement(t *testing.T) {
 			if tc.expectError {
 				g.Expect(err).ToNot(BeNil())
 				return
-			} else {
-				g.Expect(err).To(BeNil())
 			}
 
+			g.Expect(err).To(BeNil())
 			g.Expect(actualSubnetIDs).To(Equal(tc.expectedSubnetIDs))
-
 		})
 	}
 }

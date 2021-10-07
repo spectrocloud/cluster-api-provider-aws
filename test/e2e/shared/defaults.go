@@ -27,7 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 )
 
@@ -46,11 +46,14 @@ const (
 	SpotInstancesFlavor          = "spot-instances"
 	SSMFlavor                    = "ssm"
 	UpgradeToMain                = "upgrade-to-main"
+	ExternalCloudProvider        = "external-cloud-provider"
 	SimpleMultitenancyFlavor     = "simple-multitenancy"
 	NestedMultitenancyFlavor     = "nested-multitenancy"
-	StorageClassFailureZoneLabel = "failure-domain.beta.kubernetes.io/zone"
+	KCPScaleInFlavor             = "kcp-scale-in"
+	StorageClassOutTreeZoneLabel = "topology.ebs.csi.aws.com/zone"
 )
 
+var ResourceQuotaFilePath = "/tmp/capa-e2e-resource-usage.lock"
 var (
 	MultiTenancySimpleRole = MultitenancyRole("Simple")
 	MultiTenancyJumpRole   = MultitenancyRole("Jump")
@@ -106,11 +109,57 @@ func (m MultitenancyRole) RoleARN(prov client.ConfigProvider) (string, error) {
 	return roleARN, nil
 }
 
+func getLimitedResources() map[string]*ServiceQuota {
+	serviceQuotas := map[string]*ServiceQuota{}
+	serviceQuotas["igw"] = &ServiceQuota{
+		ServiceCode:         "vpc",
+		QuotaName:           "Internet gateways per Region",
+		QuotaCode:           "L-A4707A72",
+		DesiredMinimumValue: 20,
+	}
+
+	serviceQuotas["ngw"] = &ServiceQuota{
+		ServiceCode:         "vpc",
+		QuotaName:           "NAT gateways per Availability Zone",
+		QuotaCode:           "L-FE5A380F",
+		DesiredMinimumValue: 20,
+	}
+
+	serviceQuotas["vpc"] = &ServiceQuota{
+		ServiceCode:         "vpc",
+		QuotaName:           "VPCs per Region",
+		QuotaCode:           "L-F678F1CE",
+		DesiredMinimumValue: 20,
+	}
+
+	serviceQuotas["ec2"] = &ServiceQuota{
+		ServiceCode:         "ec2",
+		QuotaName:           "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances",
+		QuotaCode:           "L-1216C47A",
+		DesiredMinimumValue: 20,
+	}
+
+	serviceQuotas["eip"] = &ServiceQuota{
+		ServiceCode:         "ec2",
+		QuotaName:           "EC2-VPC Elastic IPs",
+		QuotaCode:           "L-0263D0A3",
+		DesiredMinimumValue: 100,
+	}
+
+	serviceQuotas["classiclb"] = &ServiceQuota{
+		ServiceCode:         "elasticloadbalancing",
+		QuotaName:           "Classic Load Balancers per Region",
+		QuotaCode:           "L-E9E9831D",
+		DesiredMinimumValue: 20,
+	}
+	return serviceQuotas
+}
+
 // DefaultScheme returns the default scheme to use for testing
 func DefaultScheme() *runtime.Scheme {
 	sc := runtime.NewScheme()
 	framework.TryAddDefaultSchemes(sc)
-	_ = v1alpha3.AddToScheme(sc)
+	_ = infrav1.AddToScheme(sc)
 	_ = clientgoscheme.AddToScheme(sc)
 	return sc
 }
@@ -128,5 +177,5 @@ func CreateDefaultFlags(ctx *E2EContext) {
 	flag.BoolVar(&ctx.Settings.SkipCloudFormationDeletion, "skip-cloudformation-deletion", false, "if true, an AWS CloudFormation stack will not be deleted")
 	flag.BoolVar(&ctx.Settings.SkipCloudFormationCreation, "skip-cloudformation-creation", false, "if true, an AWS CloudFormation stack will not be created")
 	flag.StringVar(&ctx.Settings.DataFolder, "data-folder", "", "path to the data folder")
-	flag.StringVar(&ctx.Settings.SourceTemplate, "source-template", "infrastructure-aws/cluster-template.yaml", "path to the data folder")
+	flag.StringVar(&ctx.Settings.SourceTemplate, "source-template", "infrastructure-aws/generated/cluster-template.yaml", "path to the data folder")
 }

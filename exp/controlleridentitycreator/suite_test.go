@@ -22,17 +22,14 @@ import (
 	"path"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/test/helpers"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	// +kubebuilder:scaffold:imports
 )
@@ -42,29 +39,21 @@ import (
 
 var (
 	testEnv *helpers.TestEnvironment
+	ctx     = ctrl.SetupSignalHandler()
 )
 
-func TestAPIs(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
-}
-
 func TestMain(m *testing.M) {
+	code := 0
+	defer func() { os.Exit(code) }()
 	setup()
-	defer func() {
-		teardown()
-	}()
-	code := m.Run()
-	os.Exit(code)
+	defer teardown()
+	code = m.Run()
 }
 
 func setup() {
 	utilruntime.Must(infrav1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(controlplanev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(ekscontrolplanev1.AddToScheme(scheme.Scheme))
 
 	testEnvConfig := helpers.NewTestEnvironmentConfiguration([]string{
 		path.Join("config", "crd", "bases"),
@@ -85,21 +74,21 @@ func setup() {
 	if err = (&infrav1.AWSClusterRoleIdentity{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSClusterRoleIdentity webhook: %v", err))
 	}
-	if err := (&controlplanev1.AWSManagedControlPlane{}).SetupWebhookWithManager(testEnv); err != nil {
+	if err := (&ekscontrolplanev1.AWSManagedControlPlane{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSManagedControlPlane webhook: %v", err))
 	}
 
 	err = (&AWSControllerIdentityReconciler{
 		Client: testEnv,
 		Log:    log.Log,
-	}).SetupWithManager(testEnv.Manager, controller.Options{})
+	}).SetupWithManager(ctx, testEnv.Manager, controller.Options{})
 	if err != nil {
 		panic(fmt.Sprintf("Failed to add AWSControllerIdentityReconciler to the envtest manager: %v", err))
 	}
 
 	go func() {
 		fmt.Println("Starting the manager")
-		if err := testEnv.StartManager(); err != nil {
+		if err := testEnv.StartManager(ctx); err != nil {
 			panic(fmt.Sprintf("Failed to start the envtest manager: %v", err))
 		}
 	}()

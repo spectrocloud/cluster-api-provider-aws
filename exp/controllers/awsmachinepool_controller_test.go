@@ -21,32 +21,36 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"testing"
+
+	. "github.com/onsi/gomega"
 
 	"github.com/golang/mock/gomock"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/mock_services"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	// "sigs.k8s.io/cluster-api/controllers/noderefutil" //nolint:godot.
 	capierrors "sigs.k8s.io/cluster-api/errors"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
+	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 )
 
-var _ = Describe("AWSMachinePoolReconciler", func() {
+func TestAWSMachinePoolReconciler(t *testing.T) {
 	var (
 		reconciler     AWSMachinePoolReconciler
 		cs             *scope.ClusterScope
@@ -58,8 +62,7 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 		awsMachinePool *expinfrav1.AWSMachinePool
 		secret         *corev1.Secret
 	)
-
-	BeforeEach(func() {
+	setup := func(t *testing.T, g *WithT) {
 		var err error
 
 		if err := flag.Set("logtostderr", "false"); err != nil {
@@ -69,7 +72,6 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 			_ = fmt.Errorf("Error setting v flag")
 		}
 		ctx := context.TODO()
-		klog.SetOutput(GinkgoWriter)
 
 		awsMachinePool = &expinfrav1.AWSMachinePool{
 			ObjectMeta: metav1.ObjectMeta{
@@ -92,8 +94,8 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 			},
 		}
 
-		Expect(testEnv.Create(ctx, awsMachinePool)).To(Succeed())
-		Expect(testEnv.Create(ctx, secret)).To(Succeed())
+		g.Expect(testEnv.Create(ctx, awsMachinePool)).To(Succeed())
+		g.Expect(testEnv.Create(ctx, secret)).To(Succeed())
 
 		ms, err = scope.NewMachinePoolScope(
 			scope.MachinePoolScopeParams{
@@ -118,17 +120,12 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 				AWSMachinePool: awsMachinePool,
 			},
 		)
-		Expect(err).To(BeNil())
+		g.Expect(err).To(BeNil())
 
-		cs, err = scope.NewClusterScope(
-			scope.ClusterScopeParams{
-				Cluster:    &clusterv1.Cluster{},
-				AWSCluster: &infrav1.AWSCluster{},
-			},
-		)
-		Expect(err).To(BeNil())
+		cs, err = setupCluster("test-cluster")
+		g.Expect(err).To(BeNil())
 
-		mockCtrl = gomock.NewController(GinkgoT())
+		mockCtrl = gomock.NewController(t)
 		ec2Svc = mock_services.NewMockEC2MachineInterface(mockCtrl)
 		asgSvc = mock_services.NewMockASGInterface(mockCtrl)
 
@@ -144,28 +141,32 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 			},
 			Recorder: recorder,
 		}
-	})
-	AfterEach(func() {
+	}
+
+	teardown := func(t *testing.T, g *WithT) {
 		ctx := context.TODO()
 		mpPh, err := patch.NewHelper(awsMachinePool, testEnv)
-		Expect(err).ShouldNot(HaveOccurred())
+		g.Expect(err).ShouldNot(HaveOccurred())
 		awsMachinePool.SetFinalizers([]string{})
-		Expect(mpPh.Patch(ctx, awsMachinePool)).To(Succeed())
-		Expect(testEnv.Delete(ctx, awsMachinePool)).To(Succeed())
-		Expect(testEnv.Delete(ctx, secret)).To(Succeed())
+		g.Expect(mpPh.Patch(ctx, awsMachinePool)).To(Succeed())
+		g.Expect(testEnv.Delete(ctx, awsMachinePool)).To(Succeed())
+		g.Expect(testEnv.Delete(ctx, secret)).To(Succeed())
 		mockCtrl.Finish()
-	})
+	}
 
-	Context("Reconciling an AWSMachinePool", func() {
-		When("we can't reach amazon", func() {
+	t.Run("Reconciling an AWSMachinePool", func(t *testing.T) {
+		t.Run("when can't reach amazon", func(t *testing.T) {
 			expectedErr := errors.New("no connection available ")
-
-			BeforeEach(func() {
+			getASG := func(t *testing.T, g *WithT) {
 				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(nil, "", expectedErr).AnyTimes()
 				asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(nil, expectedErr).AnyTimes()
-			})
+			}
+			t.Run("should exit immediately on an error state", func(t *testing.T) {
+				g := NewWithT(t)
+				setup(t, g)
+				defer teardown(t, g)
+				getASG(t, g)
 
-			It("should exit immediately on an error state", func() {
 				er := capierrors.CreateMachineError
 				ms.AWSMachinePool.Status.FailureReason = &er
 				ms.AWSMachinePool.Status.FailureMessage = pointer.StringPtr("Couldn't create machine pool")
@@ -174,58 +175,77 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 				klog.SetOutput(buf)
 
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs)
-				Expect(buf).To(ContainSubstring("Error state detected, skipping reconciliation"))
+				g.Expect(buf).To(ContainSubstring("Error state detected, skipping reconciliation"))
 			})
+			t.Run("should add our finalizer to the machinepool", func(t *testing.T) {
+				g := NewWithT(t)
+				setup(t, g)
+				defer teardown(t, g)
+				getASG(t, g)
 
-			It("should add our finalizer to the machinepool", func() {
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs)
 
-				Expect(ms.AWSMachinePool.Finalizers).To(ContainElement(expinfrav1.MachinePoolFinalizer))
+				g.Expect(ms.AWSMachinePool.Finalizers).To(ContainElement(expinfrav1.MachinePoolFinalizer))
 			})
+			t.Run("should exit immediately if cluster infra isn't ready", func(t *testing.T) {
+				g := NewWithT(t)
+				setup(t, g)
+				defer teardown(t, g)
+				getASG(t, g)
 
-			It("should exit immediately if cluster infra isn't ready", func() {
 				ms.Cluster.Status.InfrastructureReady = false
 
 				buf := new(bytes.Buffer)
 				klog.SetOutput(buf)
 
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
-				Expect(err).To(BeNil())
-				Expect(buf.String()).To(ContainSubstring("Cluster infrastructure is not ready yet"))
-				expectConditions(ms.AWSMachinePool, []conditionAssertion{{expinfrav1.ASGReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForClusterInfrastructureReason}})
+				g.Expect(err).To(BeNil())
+				g.Expect(buf.String()).To(ContainSubstring("Cluster infrastructure is not ready yet"))
+				expectConditions(g, ms.AWSMachinePool, []conditionAssertion{{expinfrav1.ASGReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForClusterInfrastructureReason}})
 			})
+			t.Run("should exit immediately if bootstrap data secret reference isn't available", func(t *testing.T) {
+				g := NewWithT(t)
+				setup(t, g)
+				defer teardown(t, g)
+				getASG(t, g)
 
-			It("should exit immediately if bootstrap data secret reference isn't available", func() {
 				ms.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName = nil
 				buf := new(bytes.Buffer)
 				klog.SetOutput(buf)
 
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
 
-				Expect(err).To(BeNil())
-				Expect(buf.String()).To(ContainSubstring("Bootstrap data secret reference is not yet available"))
-				expectConditions(ms.AWSMachinePool, []conditionAssertion{{expinfrav1.ASGReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForBootstrapDataReason}})
+				g.Expect(err).To(BeNil())
+				g.Expect(buf.String()).To(ContainSubstring("Bootstrap data secret reference is not yet available"))
+				expectConditions(g, ms.AWSMachinePool, []conditionAssertion{{expinfrav1.ASGReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForBootstrapDataReason}})
 			})
 		})
-
-		When("there's a provider ID", func() {
+		t.Run("there's a provider ID", func(t *testing.T) {
 			id := "<cloudProvider>://<optional>/<segments>/<providerid>"
-			BeforeEach(func() {
+			setProviderID := func(t *testing.T, g *WithT) {
 				_, err := noderefutil.NewProviderID(id)
-				Expect(err).To(BeNil())
+				g.Expect(err).To(BeNil())
 
 				ms.AWSMachinePool.Spec.ProviderID = id
-			})
+			}
+			t.Run("should look up by provider ID when one exists", func(t *testing.T) {
+				g := NewWithT(t)
+				setup(t, g)
+				defer teardown(t, g)
+				setProviderID(t, g)
 
-			It("it should look up by provider ID when one exists", func() {
 				expectedErr := errors.New("no connection available ")
 				var launchtemplate *expinfrav1.AWSLaunchTemplate
 				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(launchtemplate, "", expectedErr)
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
-				Expect(errors.Cause(err)).To(MatchError(expectedErr))
+				g.Expect(errors.Cause(err)).To(MatchError(expectedErr))
 			})
+			t.Run("should try to create a new machinepool if none exists", func(t *testing.T) {
+				g := NewWithT(t)
+				setup(t, g)
+				defer teardown(t, g)
+				setProviderID(t, g)
 
-			It("should try to create a new machinepool if none exists", func() {
 				expectedErr := errors.New("Invalid instance")
 				asgSvc.EXPECT().ASGIfExists(gomock.Any()).Return(nil, nil).AnyTimes()
 				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(nil, "", nil)
@@ -233,36 +253,36 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 				ec2Svc.EXPECT().CreateLaunchTemplate(gomock.Any(), gomock.Any(), gomock.Any()).Return("", expectedErr).AnyTimes()
 
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
-				Expect(errors.Cause(err)).To(MatchError(expectedErr))
-			})
-		})
-
-		When("ASG creation succeeds", func() {
-			BeforeEach(func() {
-				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(nil, "", nil).AnyTimes()
-				ec2Svc.EXPECT().CreateLaunchTemplate(gomock.Any(), gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
-				asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(nil, nil).AnyTimes()
+				g.Expect(errors.Cause(err)).To(MatchError(expectedErr))
 			})
 		})
 	})
 
-	Context("deleting an AWSMachinePool", func() {
-		BeforeEach(func() {
+	t.Run("Deleting an AWSMachinePool", func(t *testing.T) {
+		finalizer := func(t *testing.T, g *WithT) {
 			ms.AWSMachinePool.Finalizers = []string{
 				expinfrav1.MachinePoolFinalizer,
 				metav1.FinalizerDeleteDependents,
 			}
-		})
+		}
+		t.Run("should exit immediately on an error state", func(t *testing.T) {
+			g := NewWithT(t)
+			setup(t, g)
+			defer teardown(t, g)
+			finalizer(t, g)
 
-		It("should exit immediately on an error state", func() {
 			expectedErr := errors.New("no connection available ")
 			asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(nil, expectedErr).AnyTimes()
 
 			_, err := reconciler.reconcileDelete(ms, cs, cs)
-			Expect(errors.Cause(err)).To(MatchError(expectedErr))
+			g.Expect(errors.Cause(err)).To(MatchError(expectedErr))
 		})
+		t.Run("should log and remove finalizer when no machinepool exists", func(t *testing.T) {
+			g := NewWithT(t)
+			setup(t, g)
+			defer teardown(t, g)
+			finalizer(t, g)
 
-		It("should log and remove finalizer when no machinepool exists", func() {
 			asgSvc.EXPECT().GetASGByName(gomock.Any()).Return(nil, nil)
 			ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(nil, "", nil).AnyTimes()
 
@@ -270,13 +290,17 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 			klog.SetOutput(buf)
 
 			_, err := reconciler.reconcileDelete(ms, cs, cs)
-			Expect(err).To(BeNil())
-			Expect(buf.String()).To(ContainSubstring("Unable to locate ASG"))
-			Expect(ms.AWSMachinePool.Finalizers).To(ConsistOf(metav1.FinalizerDeleteDependents))
-			Eventually(recorder.Events).Should(Receive(ContainSubstring("NoASGFound")))
+			g.Expect(err).To(BeNil())
+			g.Expect(buf.String()).To(ContainSubstring("Unable to locate ASG"))
+			g.Expect(ms.AWSMachinePool.Finalizers).To(ConsistOf(metav1.FinalizerDeleteDependents))
+			g.Eventually(recorder.Events).Should(Receive(ContainSubstring("NoASGFound")))
 		})
+		t.Run("should cause AWSMachinePool to go into NotReady", func(t *testing.T) {
+			g := NewWithT(t)
+			setup(t, g)
+			defer teardown(t, g)
+			finalizer(t, g)
 
-		It("should cause AWSMachinePool to go into NotReady", func() {
 			inProgressASG := expinfrav1.AutoScalingGroup{
 				Name:   "an-asg-that-is-currently-being-deleted",
 				Status: expinfrav1.ASGStatusDeleteInProgress,
@@ -287,12 +311,12 @@ var _ = Describe("AWSMachinePoolReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 			_, err := reconciler.reconcileDelete(ms, cs, cs)
-			Expect(err).To(BeNil())
-			Expect(ms.AWSMachinePool.Status.Ready).To(Equal(false))
-			Eventually(recorder.Events).Should(Receive(ContainSubstring("DeletionInProgress")))
+			g.Expect(err).To(BeNil())
+			g.Expect(ms.AWSMachinePool.Status.Ready).To(Equal(false))
+			g.Eventually(recorder.Events).Should(Receive(ContainSubstring("DeletionInProgress")))
 		})
 	})
-})
+}
 
 //TODO: This was taken from awsmachine_controller_test, i think it should be moved to elsewhere in both locations like test/helpers
 
@@ -303,14 +327,31 @@ type conditionAssertion struct {
 	reason        string
 }
 
-func expectConditions(m *expinfrav1.AWSMachinePool, expected []conditionAssertion) {
-	Expect(len(m.Status.Conditions)).To(BeNumerically(">=", len(expected)), "number of conditions")
+func expectConditions(g *WithT, m *expinfrav1.AWSMachinePool, expected []conditionAssertion) {
+	g.Expect(len(m.Status.Conditions)).To(BeNumerically(">=", len(expected)), "number of conditions")
 	for _, c := range expected {
 		actual := conditions.Get(m, c.conditionType)
-		Expect(actual).To(Not(BeNil()))
-		Expect(actual.Type).To(Equal(c.conditionType))
-		Expect(actual.Status).To(Equal(c.status))
-		Expect(actual.Severity).To(Equal(c.severity))
-		Expect(actual.Reason).To(Equal(c.reason))
+		g.Expect(actual).To(Not(BeNil()))
+		g.Expect(actual.Type).To(Equal(c.conditionType))
+		g.Expect(actual.Status).To(Equal(c.status))
+		g.Expect(actual.Severity).To(Equal(c.severity))
+		g.Expect(actual.Reason).To(Equal(c.reason))
 	}
+}
+
+func setupCluster(clusterName string) (*scope.ClusterScope, error) {
+	scheme := runtime.NewScheme()
+	_ = infrav1.AddToScheme(scheme)
+	awsCluster := &infrav1.AWSCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test"},
+		Spec:       infrav1.AWSClusterSpec{},
+	}
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(awsCluster).Build()
+	return scope.NewClusterScope(scope.ClusterScopeParams{
+		Cluster: &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+		},
+		AWSCluster: awsCluster,
+		Client:     client,
+	})
 }

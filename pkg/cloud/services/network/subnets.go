@@ -25,7 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/filter"
@@ -44,7 +44,7 @@ const (
 )
 
 func (s *Service) reconcileSubnets() error {
-	s.scope.V(2).Info("Reconciling subnets")
+	s.scope.Info("Reconciling subnets")
 
 	subnets := s.scope.Subnets()
 	defer func() {
@@ -68,6 +68,7 @@ func (s *Service) reconcileSubnets() error {
 		}
 		// If we a managed VPC and have no subnets then create subnets. There will be 1 public and 1 private subnet
 		// for each az in a region up to a maximum of 3 azs
+		s.scope.Info("no subnets specified, setting defaults")
 		subnets, err = s.getDefaultSubnets()
 		if err != nil {
 			record.Warnf(s.scope.InfraCluster(), "FailedDefaultSubnets", "Failed getting default subnets: %v", err)
@@ -75,6 +76,7 @@ func (s *Service) reconcileSubnets() error {
 		}
 		// Persist the new default subnets to AWSCluster
 		if err := s.scope.PatchObject(); err != nil {
+			s.scope.Error(err, "failed to patch object to save subnets")
 			return err
 		}
 	}
@@ -91,7 +93,7 @@ func (s *Service) reconcileSubnets() error {
 		}
 
 		for i, sub := range subnetCIDRs {
-			secondarySub := &infrav1.SubnetSpec{
+			secondarySub := infrav1.SubnetSpec{
 				CidrBlock:        sub.String(),
 				AvailabilityZone: zones[i],
 				IsPublic:         false,
@@ -99,29 +101,35 @@ func (s *Service) reconcileSubnets() error {
 					infrav1.NameAWSSubnetAssociation: infrav1.SecondarySubnetTagValue,
 				},
 			}
-			existingSubnet := existing.FindEqual(secondarySub)
+			existingSubnet := existing.FindEqual(&secondarySub)
 			if existingSubnet == nil {
 				subnets = append(subnets, secondarySub)
 			}
 		}
 	}
 
-	for _, sub := range subnets {
+	for i := range subnets {
+		sub := &subnets[i]
 		existingSubnet := existing.FindEqual(sub)
 		if existingSubnet != nil {
-			if !unmanagedVPC {
-				subnetTags := sub.Tags
-				// Make sure tags are up to date if we have a managed VPC.
-				if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
-					buildParams := s.getSubnetTagParams(existingSubnet.ID, existingSubnet.IsPublic, existingSubnet.AvailabilityZone, subnetTags)
-					tagsBuilder := tags.New(&buildParams, tags.WithEC2(s.EC2Client))
-					if err := tagsBuilder.Ensure(existingSubnet.Tags); err != nil {
-						return false, err
-					}
-					return true, nil
-				}, awserrors.SubnetNotFound); err != nil {
+			subnetTags := sub.Tags
+			// Make sure tags are up-to-date.
+			if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+				buildParams := s.getSubnetTagParams(unmanagedVPC, existingSubnet.ID, existingSubnet.IsPublic, existingSubnet.AvailabilityZone, subnetTags)
+				tagsBuilder := tags.New(&buildParams, tags.WithEC2(s.EC2Client))
+				if err := tagsBuilder.Ensure(existingSubnet.Tags); err != nil {
+					return false, err
+				}
+				return true, nil
+			}, awserrors.SubnetNotFound); err != nil {
+				if !unmanagedVPC {
 					record.Warnf(s.scope.InfraCluster(), "FailedTagSubnet", "Failed tagging managed Subnet %q: %v", existingSubnet.ID, err)
 					return errors.Wrapf(err, "failed to ensure tags on subnet %q", existingSubnet.ID)
+				} else {
+					// We may not have a permission to tag unmanaged subnets.
+					// When tagging unmanaged subnet fails, record an event and proceed.
+					record.Warnf(s.scope.InfraCluster(), "FailedTagSubnet", "Failed tagging unmanaged Subnet %q: %v", existingSubnet.ID, err)
+					break
 				}
 			}
 
@@ -131,7 +139,7 @@ func (s *Service) reconcileSubnets() error {
 		} else if unmanagedVPC {
 			// If there is no existing subnet and we have an umanaged vpc report an error
 			record.Warnf(s.scope.InfraCluster(), "FailedMatchSubnet", "Using unmanaged VPC and failed to find existing subnet for specified subnet id %d, cidr %q", sub.ID, sub.CidrBlock)
-			return errors.New(fmt.Sprintf("usign unmanaged vpc and subnet %s (cidr %s) specified but it doesn't exist in vpc %s", sub.ID, sub.CidrBlock, s.scope.VPC().ID))
+			return errors.New(fmt.Errorf("usign unmanaged vpc and subnet %s (cidr %s) specified but it doesn't exist in vpc %s", sub.ID, sub.CidrBlock, s.scope.VPC().ID).Error())
 		}
 	}
 
@@ -154,7 +162,8 @@ func (s *Service) reconcileSubnets() error {
 
 	// Proceed to create the rest of the subnets that don't have an ID.
 	if !unmanagedVPC {
-		for _, subnet := range subnets {
+		for i := range subnets {
+			subnet := &subnets[i]
 			if subnet.ID != "" {
 				continue
 			}
@@ -167,7 +176,7 @@ func (s *Service) reconcileSubnets() error {
 		}
 	}
 
-	s.scope.V(2).Info("Subnets available", "subnets", subnets)
+	s.scope.V(2).Info("reconciled subnets", "subnets", subnets)
 	conditions.MarkTrue(s.scope.InfraCluster(), infrav1.SubnetsReadyCondition)
 	return nil
 }
@@ -216,12 +225,12 @@ func (s *Service) getDefaultSubnets() (infrav1.Subnets, error) {
 
 	subnets := infrav1.Subnets{}
 	for i, zone := range zones {
-		subnets = append(subnets, &infrav1.SubnetSpec{
+		subnets = append(subnets, infrav1.SubnetSpec{
 			CidrBlock:        publicSubnetCIDRs[i].String(),
 			AvailabilityZone: zone,
 			IsPublic:         true,
 		})
-		subnets = append(subnets, &infrav1.SubnetSpec{
+		subnets = append(subnets, infrav1.SubnetSpec{
 			CidrBlock:        privateSubnetCIDRs[i].String(),
 			AvailabilityZone: zone,
 			IsPublic:         false,
@@ -281,11 +290,11 @@ func (s *Service) describeVpcSubnets() (infrav1.Subnets, error) {
 		return nil, err
 	}
 
-	subnets := make([]*infrav1.SubnetSpec, 0, len(out.Subnets))
+	subnets := make([]infrav1.SubnetSpec, 0, len(out.Subnets))
 	// Besides what the AWS API tells us directly about the subnets, we also want to discover whether the subnet is "public" (i.e. directly connected to the internet) and if there are any associated NAT gateways.
 	// We also look for a tag indicating that a particular subnet should be public, to try and determine whether a managed VPC's subnet should have such a route, but does not.
 	for _, ec2sn := range out.Subnets {
-		spec := &infrav1.SubnetSpec{
+		spec := infrav1.SubnetSpec{
 			ID:               *ec2sn.SubnetId,
 			CidrBlock:        *ec2sn.CidrBlock,
 			AvailabilityZone: *ec2sn.AvailabilityZone,
@@ -330,7 +339,7 @@ func (s *Service) createSubnet(sn *infrav1.SubnetSpec) (*infrav1.SubnetSpec, err
 		TagSpecifications: []*ec2.TagSpecification{
 			tags.BuildParamsToTagSpecification(
 				ec2.ResourceTypeSubnet,
-				s.getSubnetTagParams(services.TemporaryResourceID, sn.IsPublic, sn.AvailabilityZone, sn.Tags),
+				s.getSubnetTagParams(false, services.TemporaryResourceID, sn.IsPublic, sn.AvailabilityZone, sn.Tags),
 			),
 		},
 	})
@@ -339,6 +348,7 @@ func (s *Service) createSubnet(sn *infrav1.SubnetSpec) (*infrav1.SubnetSpec, err
 		return nil, errors.Wrap(err, "failed to create subnet")
 	}
 
+	s.scope.Info("created subnet", "id", *out.Subnet.SubnetId, "public", sn.IsPublic, "az", sn.AvailabilityZone, "cidr", sn.CidrBlock)
 	record.Eventf(s.scope.InfraCluster(), "SuccessfulCreateSubnet", "Created new managed Subnet %q", *out.Subnet.SubnetId)
 
 	wReq := &ec2.DescribeSubnetsInput{SubnetIds: []*string{out.Subnet.SubnetId}}
@@ -394,7 +404,7 @@ func (s *Service) deleteSubnet(id string) error {
 	return nil
 }
 
-func (s *Service) getSubnetTagParams(id string, public bool, zone string, manualTags infrav1.Tags) infrav1.BuildParams {
+func (s *Service) getSubnetTagParams(unmanagedVPC bool, id string, public bool, zone string, manualTags infrav1.Tags) infrav1.BuildParams {
 	var role string
 	additionalTags := s.scope.AdditionalTags()
 
@@ -413,19 +423,26 @@ func (s *Service) getSubnetTagParams(id string, public bool, zone string, manual
 		additionalTags[k] = v
 	}
 
-	var name strings.Builder
-	name.WriteString(s.scope.Name())
-	name.WriteString("-subnet-")
-	name.WriteString(role)
-	name.WriteString("-")
-	name.WriteString(zone)
+	if !unmanagedVPC {
+		var name strings.Builder
+		name.WriteString(s.scope.Name())
+		name.WriteString("-subnet-")
+		name.WriteString(role)
+		name.WriteString("-")
+		name.WriteString(zone)
 
-	return infrav1.BuildParams{
-		ClusterName: s.scope.Name(),
-		ResourceID:  id,
-		Lifecycle:   infrav1.ResourceLifecycleOwned,
-		Name:        aws.String(name.String()),
-		Role:        aws.String(role),
-		Additional:  additionalTags,
+		return infrav1.BuildParams{
+			ClusterName: s.scope.Name(),
+			ResourceID:  id,
+			Lifecycle:   infrav1.ResourceLifecycleOwned,
+			Name:        aws.String(name.String()),
+			Role:        aws.String(role),
+			Additional:  additionalTags,
+		}
+	} else {
+		return infrav1.BuildParams{
+			ResourceID: id,
+			Additional: additionalTags,
+		}
 	}
 }

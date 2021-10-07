@@ -24,8 +24,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
@@ -114,7 +114,6 @@ func (s *Service) ASGIfExists(name *string) (*expinfrav1.AutoScalingGroup, error
 	}
 	//TODO: double check if you're handling nil vals
 	return s.SDKToAutoScalingGroup(out.AutoScalingGroups[0])
-
 }
 
 // GetASGByName returns the existing ASG or nothing if it doesn't exist.
@@ -222,14 +221,14 @@ func (s *Service) runPool(i *expinfrav1.AutoScalingGroup, launchTemplateID strin
 		input.Tags = BuildTagsFromMap(i.Name, i.Tags)
 	}
 
-	_, err := s.ASGClient.CreateAutoScalingGroup(input)
-	if err != nil {
+	if _, err := s.ASGClient.CreateAutoScalingGroup(input); err != nil {
 		return errors.Wrap(err, "failed to create autoscaling group")
 	}
 
 	return nil
 }
 
+// DeleteASGAndWait will delete an ASG and wait until it is deleted.
 func (s *Service) DeleteASGAndWait(name string) error {
 	if err := s.DeleteASG(name); err != nil {
 		return err
@@ -248,6 +247,7 @@ func (s *Service) DeleteASGAndWait(name string) error {
 	return nil
 }
 
+// DeleteASG will delete the ASG of a service.
 func (s *Service) DeleteASG(name string) error {
 	s.scope.V(2).Info("Attempting to delete ASG", "name", name)
 
@@ -264,6 +264,7 @@ func (s *Service) DeleteASG(name string) error {
 	return nil
 }
 
+// UpdateASG will update the ASG of a service.
 func (s *Service) UpdateASG(scope *scope.MachinePoolScope) error {
 	subnetIDs := make([]string, len(scope.AWSMachinePool.Spec.Subnets))
 	for i, v := range scope.AWSMachinePool.Spec.Subnets {
@@ -304,6 +305,7 @@ func (s *Service) UpdateASG(scope *scope.MachinePoolScope) error {
 	return nil
 }
 
+// CanStartASGInstanceRefresh will start an ASG instance with refresh.
 func (s *Service) CanStartASGInstanceRefresh(scope *scope.MachinePoolScope) (bool, error) {
 	describeInput := &autoscaling.DescribeInstanceRefreshesInput{AutoScalingGroupName: aws.String(scope.Name())}
 	refreshes, err := s.ASGClient.DescribeInstanceRefreshes(describeInput)
@@ -326,6 +328,7 @@ func (s *Service) CanStartASGInstanceRefresh(scope *scope.MachinePoolScope) (boo
 	return true, nil
 }
 
+// StartASGInstanceRefresh will start an ASG instance with refresh.
 func (s *Service) StartASGInstanceRefresh(scope *scope.MachinePoolScope) error {
 	strategy := pointer.StringPtr(autoscaling.RefreshStrategyRolling)
 	var minHealthyPercentage, instanceWarmup *int64
@@ -386,7 +389,7 @@ func createSDKMixedInstancesPolicy(name string, i *expinfrav1.MixedInstancesPoli
 }
 
 // BuildTags takes the tag configuration from the resources and returns a slice of autoscaling Tags
-// usable in autoscaling API calls
+// usable in autoscaling API calls.
 func BuildTags(name string, params infrav1.BuildParams) []*autoscaling.Tag {
 	tags := make([]*autoscaling.Tag, 0)
 	resourceName := aws.String(name)
@@ -437,7 +440,7 @@ func BuildTags(name string, params infrav1.BuildParams) []*autoscaling.Tag {
 	return tags
 }
 
-// BuildTagsFromMap takes a map of keys and values and returns them as autoscaling group tags
+// BuildTagsFromMap takes a map of keys and values and returns them as autoscaling group tags.
 func BuildTagsFromMap(asgName string, inTags map[string]string) []*autoscaling.Tag {
 	if inTags == nil {
 		return nil

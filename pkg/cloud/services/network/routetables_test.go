@@ -21,15 +21,18 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2/mock_ec2iface"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 func TestReconcileRouteTables(t *testing.T) {
@@ -53,12 +56,12 @@ func TestReconcileRouteTables(t *testing.T) {
 					},
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-routetables-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-routetables-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -116,12 +119,12 @@ func TestReconcileRouteTables(t *testing.T) {
 					},
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-routetables-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-routetables-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -146,12 +149,12 @@ func TestReconcileRouteTables(t *testing.T) {
 					},
 				},
 				Subnets: infrav1.Subnets{
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-routetables-private",
 						IsPublic:         false,
 						AvailabilityZone: "us-east-1a",
 					},
-					&infrav1.SubnetSpec{
+					infrav1.SubnetSpec{
 						ID:               "subnet-routetables-public",
 						IsPublic:         true,
 						NatGatewayID:     aws.String("nat-01"),
@@ -233,17 +236,114 @@ func TestReconcileRouteTables(t *testing.T) {
 					Return(nil, nil)
 			},
 		},
+		{
+			name: "extra routes exist, do nothing",
+			input: &infrav1.NetworkSpec{
+				VPC: infrav1.VPCSpec{
+					InternetGatewayID: aws.String("igw-01"),
+					ID:                "vpc-routetables",
+					Tags: infrav1.Tags{
+						infrav1.ClusterTagKey("test-cluster"): "owned",
+					},
+				},
+				Subnets: infrav1.Subnets{
+					infrav1.SubnetSpec{
+						ID:               "subnet-routetables-private",
+						IsPublic:         false,
+						AvailabilityZone: "us-east-1a",
+					},
+					infrav1.SubnetSpec{
+						ID:               "subnet-routetables-public",
+						IsPublic:         true,
+						NatGatewayID:     aws.String("nat-01"),
+						AvailabilityZone: "us-east-1a",
+					},
+				},
+			},
+			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
+				m.DescribeRouteTables(gomock.AssignableToTypeOf(&ec2.DescribeRouteTablesInput{})).
+					Return(&ec2.DescribeRouteTablesOutput{
+						RouteTables: []*ec2.RouteTable{
+							{
+								RouteTableId: aws.String("route-table-private"),
+								Associations: []*ec2.RouteTableAssociation{
+									{
+										SubnetId: aws.String("subnet-routetables-private"),
+									},
+								},
+								Routes: []*ec2.Route{
+									{
+										DestinationCidrBlock: aws.String("0.0.0.0/0"),
+										NatGatewayId:         aws.String("nat-01"),
+									},
+									// Extra (managed outside of CAPA) route with Managed Prefix List destination.
+									{
+										DestinationPrefixListId: aws.String("pl-foobar"),
+									},
+								},
+								Tags: []*ec2.Tag{
+									{
+										Key:   aws.String("sigs.k8s.io/cluster-api-provider-aws/role"),
+										Value: aws.String("common"),
+									},
+									{
+										Key:   aws.String("Name"),
+										Value: aws.String("test-cluster-rt-private-us-east-1a"),
+									},
+									{
+										Key:   aws.String("sigs.k8s.io/cluster-api-provider-aws/cluster/test-cluster"),
+										Value: aws.String("owned"),
+									},
+								},
+							},
+							{
+								RouteTableId: aws.String("route-table-public"),
+								Associations: []*ec2.RouteTableAssociation{
+									{
+										SubnetId: aws.String("subnet-routetables-public"),
+									},
+								},
+								Routes: []*ec2.Route{
+									{
+										DestinationCidrBlock: aws.String("0.0.0.0/0"),
+										GatewayId:            aws.String("igw-01"),
+									},
+								},
+								Tags: []*ec2.Tag{
+									{
+										Key:   aws.String("sigs.k8s.io/cluster-api-provider-aws/role"),
+										Value: aws.String("common"),
+									},
+									{
+										Key:   aws.String("Name"),
+										Value: aws.String("test-cluster-rt-public-us-east-1a"),
+									},
+									{
+										Key:   aws.String("sigs.k8s.io/cluster-api-provider-aws/cluster/test-cluster"),
+										Value: aws.String("owned"),
+									},
+								},
+							},
+						},
+					}, nil)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
 
+			scheme := runtime.NewScheme()
+			_ = infrav1.AddToScheme(scheme)
+			client := fake.NewClientBuilder().WithScheme(scheme).Build()
 			scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+				Client: client,
 				Cluster: &clusterv1.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				},
 				AWSCluster: &infrav1.AWSCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "test"},
 					Spec: infrav1.AWSClusterSpec{
 						NetworkSpec: *tc.input,
 					},
@@ -267,7 +367,6 @@ func TestReconcileRouteTables(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type routeTableInputMatcher struct {

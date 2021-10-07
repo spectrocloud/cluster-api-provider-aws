@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: "${CLUSTER_NAME}"
@@ -9,18 +9,21 @@ spec:
       cidrBlocks: ["192.168.0.0/16"]
   infrastructureRef:
     kind: AWSManagedControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     name: "${CLUSTER_NAME}-control-plane"
   controlPlaneRef:
     kind: AWSManagedControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     name: "${CLUSTER_NAME}-control-plane"
 ---
 kind: AWSManagedControlPlane
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
 spec:
   region: "${AWS_REGION}"
   sshKeyName: "${AWS_SSH_KEY_NAME}"
   version: "${KUBERNETES_VERSION}"
+  identityRef:
+    kind: AWSClusterStaticIdentity
+    name: e2e-account

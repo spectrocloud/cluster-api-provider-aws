@@ -29,11 +29,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext) *corev1.Namespace {
@@ -46,6 +48,8 @@ func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext
 	})
 
 	e2eCtx.Environment.Namespaces[namespace] = cancelWatches
+	Expect(e2eCtx.E2EConfig).ToNot(BeNil(), "Invalid argument. e2eConfig can't be nil")
+	Expect(e2eCtx.E2EConfig.Variables).To(HaveKey(KubernetesVersion))
 
 	return namespace
 }
@@ -58,10 +62,12 @@ func DumpSpecResourcesAndCleanup(ctx context.Context, specName string, namespace
 	Byf("Dumping all EC2 instances in the %q namespace", namespace.Name)
 	DumpMachines(ctx, e2eCtx, namespace)
 	if !e2eCtx.Settings.SkipCleanup {
+		intervals := e2eCtx.E2EConfig.GetIntervals(specName, "wait-delete-cluster")
+		Byf("Deleting all clusters in the %q namespace with intervals %q", namespace.Name, intervals)
 		framework.DeleteAllClustersAndWait(ctx, framework.DeleteAllClustersAndWaitInput{
 			Client:    e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 			Namespace: namespace.Name,
-		}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-delete-cluster")...)
+		}, intervals...)
 
 		Byf("Deleting namespace used for hosting the %q test spec", specName)
 		framework.DeleteNamespace(ctx, framework.DeleteNamespaceInput{
@@ -125,7 +131,7 @@ func DumpMachine(ctx context.Context, e2eCtx *E2EContext, machine infrav1.AWSMac
 		[]command{
 			{
 				title: "systemd",
-				cmd:   "journalctl --no-pager --output=short-precise",
+				cmd:   "journalctl --no-pager --output=short-precise | grep -v  'audit:\\|audit\\['",
 			},
 			{
 				title: "kern",
@@ -201,4 +207,22 @@ func SetEnvVar(key, value string, private bool) {
 
 	Byf("Setting environment variable: key=%s, value=%s", key, printableValue)
 	os.Setenv(key, value)
+}
+
+func CreateAWSClusterControllerIdentity(k8sclient crclient.Client) {
+	controllerIdentity := &infrav1.AWSClusterControllerIdentity{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: infrav1.GroupVersion.String(),
+			Kind:       string(infrav1.ControllerIdentityKind),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: infrav1.AWSClusterControllerIdentityName,
+		},
+		Spec: infrav1.AWSClusterControllerIdentitySpec{
+			AWSClusterIdentitySpec: infrav1.AWSClusterIdentitySpec{
+				AllowedNamespaces: &infrav1.AllowedNamespaces{},
+			},
+		},
+	}
+	k8sclient.Create(context.TODO(), controllerIdentity)
 }

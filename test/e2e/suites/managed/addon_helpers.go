@@ -22,12 +22,12 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/aws-sdk-go/aws/client"
 
-	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 )
 
 type waitForEKSAddonToHaveStatusInput struct {
@@ -45,7 +45,7 @@ func waitForEKSAddonToHaveStatus(ctx context.Context, input waitForEKSAddonToHav
 	Expect(input.AddonVersion).ShouldNot(HaveLen(0), "Invalid argument. input.AddonVersion can't be empty")
 	Expect(input.AddonStatus).ShouldNot(HaveLen(0), "Invalid argument. input.AddonStatus can't be empty")
 
-	By(fmt.Sprintf("Ensuring EKS addon %s has status %s for EKS cluster %s", input.AddonName, input.AddonStatus, input.ControlPlane.Spec.EKSClusterName))
+	ginkgo.By(fmt.Sprintf("Ensuring EKS addon %s has status %s for EKS cluster %s", input.AddonName, input.AddonStatus, input.ControlPlane.Spec.EKSClusterName))
 
 	Eventually(func() (bool, error) {
 		installedAddon, err := getEKSClusterAddon(input.ControlPlane.Spec.EKSClusterName, input.AddonName, input.AWSSession)

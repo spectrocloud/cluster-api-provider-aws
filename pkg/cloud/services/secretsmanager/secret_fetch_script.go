@@ -16,7 +16,7 @@ limitations under the License.
 
 package secretsmanager
 
-// nolint
+// nolint: gosec
 const secretFetchScript = `#cloud-boothook
 #!/bin/bash
 

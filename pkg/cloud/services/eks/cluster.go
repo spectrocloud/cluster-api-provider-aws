@@ -22,6 +22,8 @@ import (
 	"net"
 	"time"
 
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/internal/cmp"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -36,11 +38,11 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/internal/tristate"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 )
 
 func (s *Service) reconcileCluster(ctx context.Context) error {
@@ -114,6 +116,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		return errors.Wrap(err, "failed reconciling cluster config")
 	}
 
+	if err := s.reconcileEKSEncryptionConfig(cluster.EncryptionConfig); err != nil {
+		return errors.Wrap(err, "failed reconciling eks encryption config")
+	}
+
 	if err := s.reconcileTags(cluster); err != nil {
 		return errors.Wrap(err, "failed updating cluster tags")
 	}
@@ -137,12 +143,12 @@ func (s *Service) setStatus(cluster *eks.Cluster) error {
 	case eks.ClusterStatusActive:
 		s.scope.ControlPlane.Status.Ready = true
 		s.scope.ControlPlane.Status.FailureMessage = nil
-		if conditions.IsTrue(s.scope.ControlPlane, controlplanev1.EKSControlPlaneCreatingCondition) {
+		if conditions.IsTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneCreatingCondition) {
 			record.Eventf(s.scope.ControlPlane, "SuccessfulCreateEKSControlPlane", "Created new EKS control plane %s", s.scope.KubernetesClusterName())
-			conditions.MarkFalse(s.scope.ControlPlane, controlplanev1.EKSControlPlaneCreatingCondition, "created", clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneCreatingCondition, "created", clusterv1.ConditionSeverityInfo, "")
 		}
-		if conditions.IsTrue(s.scope.ControlPlane, controlplanev1.EKSControlPlaneUpdatingCondition) {
-			conditions.MarkFalse(s.scope.ControlPlane, controlplanev1.EKSControlPlaneUpdatingCondition, "updated", clusterv1.ConditionSeverityInfo, "")
+		if conditions.IsTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneUpdatingCondition) {
+			conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneUpdatingCondition, "updated", clusterv1.ConditionSeverityInfo, "")
 			record.Eventf(s.scope.ControlPlane, "SuccessfulUpdateEKSControlPlane", "Updated EKS control plane %s", s.scope.KubernetesClusterName())
 		}
 		// TODO FailureReason
@@ -159,7 +165,7 @@ func (s *Service) setStatus(cluster *eks.Cluster) error {
 	return nil
 }
 
-// deleteCluster deletes an EKS cluster
+// deleteCluster deletes an EKS cluster.
 func (s *Service) deleteCluster() error {
 	eksClusterName := s.scope.KubernetesClusterName()
 
@@ -213,19 +219,29 @@ func (s *Service) deleteClusterAndWait(cluster *eks.Cluster) error {
 	return nil
 }
 
-func makeEksEncryptionConfigs(encryptionConfig *controlplanev1.EncryptionConfig) []*eks.EncryptionConfig {
+func makeEksEncryptionConfigs(encryptionConfig *ekscontrolplanev1.EncryptionConfig) []*eks.EncryptionConfig {
+	cfg := []*eks.EncryptionConfig{}
+
 	if encryptionConfig == nil {
-		return []*eks.EncryptionConfig{}
+		return cfg
 	}
-	return []*eks.EncryptionConfig{{
+	//TODO: change EncryptionConfig so that provider and resources are required  if encruptionConfig is specified
+	if encryptionConfig.Provider == nil || len(*encryptionConfig.Provider) == 0 {
+		return cfg
+	}
+	if len(encryptionConfig.Resources) == 0 {
+		return cfg
+	}
+
+	return append(cfg, &eks.EncryptionConfig{
 		Provider: &eks.Provider{
 			KeyArn: encryptionConfig.Provider,
 		},
 		Resources: encryptionConfig.Resources,
-	}}
+	})
 }
 
-func makeVpcConfig(subnets infrav1.Subnets, endpointAccess controlplanev1.EndpointAccess, securityGroups map[infrav1.SecurityGroupRole]infrav1.SecurityGroup) (*eks.VpcConfigRequest, error) {
+func makeVpcConfig(subnets infrav1.Subnets, endpointAccess ekscontrolplanev1.EndpointAccess, securityGroups map[infrav1.SecurityGroupRole]infrav1.SecurityGroup) (*eks.VpcConfigRequest, error) {
 	// TODO: Do we need to just add the private subnets?
 	if len(subnets) < 2 {
 		return nil, awserrors.NewFailedDependency("at least 2 subnets is required")
@@ -237,7 +253,8 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess controlplanev1.Endpoi
 	}
 
 	subnetIds := make([]*string, 0)
-	for _, subnet := range subnets {
+	for i := range subnets {
+		subnet := subnets[i]
 		subnetIds = append(subnetIds, &subnet.ID)
 	}
 
@@ -267,7 +284,7 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess controlplanev1.Endpoi
 	return vpcConfig, nil
 }
 
-func makeEksLogging(loggingSpec *controlplanev1.ControlPlaneLoggingSpec) *eks.Logging {
+func makeEksLogging(loggingSpec *ekscontrolplanev1.ControlPlaneLoggingSpec) *eks.Logging {
 	if loggingSpec == nil {
 		return nil
 	}
@@ -356,7 +373,7 @@ func (s *Service) createCluster(eksClusterName string) (*eks.Cluster, error) {
 			}
 			return false, err
 		}
-		conditions.MarkTrue(s.scope.ControlPlane, controlplanev1.EKSControlPlaneCreatingCondition)
+		conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneCreatingCondition)
 		record.Eventf(s.scope.ControlPlane, "InitiatedCreateEKSControlPlane", "Initiated creation of a new EKS control plane %s", s.scope.KubernetesClusterName())
 		return true, nil
 	}, awserrors.ResourceNotFound); err != nil { //TODO: change the error that can be retried
@@ -420,7 +437,7 @@ func (s *Service) reconcileClusterConfig(cluster *eks.Cluster) error {
 				}
 				return false, err
 			}
-			conditions.MarkTrue(s.scope.ControlPlane, controlplanev1.EKSControlPlaneUpdatingCondition)
+			conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneUpdatingCondition)
 			record.Eventf(s.scope.ControlPlane, "InitiatedUpdateEKSControlPlane", "Initiated update of a new EKS control plane %s", s.scope.KubernetesClusterName())
 			return true, nil
 		}); err != nil {
@@ -475,6 +492,33 @@ func (s *Service) reconcileVpcConfig(vpcConfig *eks.VpcConfigResponse) (*eks.Vpc
 	return nil, nil
 }
 
+func (s *Service) reconcileEKSEncryptionConfig(currentClusterConfig []*eks.EncryptionConfig) error {
+	s.Info("reconciling encryption configuration")
+	if currentClusterConfig == nil {
+		currentClusterConfig = []*eks.EncryptionConfig{}
+	}
+
+	encryptionConfigs := s.scope.ControlPlane.Spec.EncryptionConfig
+	updatedEncryptionConfigs := makeEksEncryptionConfigs(encryptionConfigs)
+
+	switch {
+	case compareEncryptionConfig(currentClusterConfig, updatedEncryptionConfigs):
+		s.V(2).Info("encryption configuration unchanged, no action")
+		return nil
+	case len(currentClusterConfig) == 0 && len(updatedEncryptionConfigs) > 0:
+		s.V(2).Info("enabling encryption for eks cluster", "cluster", s.scope.KubernetesClusterName())
+		if err := s.updateEncryptionConfig(updatedEncryptionConfigs); err != nil {
+			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane encryption configuration: %v", err)
+			return errors.Wrapf(err, "failed to update EKS cluster")
+		}
+	default:
+		record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "failed to update the EKS control plane: disabling EKS encryption is not allowed after it has been enabled")
+		return errors.Errorf("failed to update the EKS control plane: disabling EKS encryption is not allowed after it has been enabled")
+	}
+
+	return nil
+}
+
 func parseEKSVersion(raw string) *version.Version {
 	v := version.MustParseGeneric(raw)
 	return version.MustParseGeneric(fmt.Sprintf("%d.%d", v.Major(), v.Minor()))
@@ -516,7 +560,7 @@ func (s *Service) reconcileClusterVersion(cluster *eks.Cluster) error {
 				return false, err
 			}
 
-			conditions.MarkTrue(s.scope.ControlPlane, controlplanev1.EKSControlPlaneUpdatingCondition)
+			conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneUpdatingCondition)
 			record.Eventf(s.scope.ControlPlane, "InitiatedUpdateEKSControlPlane", "Initiated update of EKS control plane %s to version %s", s.scope.KubernetesClusterName(), nextVersionString)
 
 			return true, nil
@@ -550,6 +594,39 @@ func (s *Service) describeEKSCluster(eksClusterName string) (*eks.Cluster, error
 	return out.Cluster, nil
 }
 
+func (s *Service) updateEncryptionConfig(updatedEncryptionConfigs []*eks.EncryptionConfig) error {
+	input := &eks.AssociateEncryptionConfigInput{
+		ClusterName:      aws.String(s.scope.KubernetesClusterName()),
+		EncryptionConfig: updatedEncryptionConfigs,
+	}
+	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+		if _, err := s.EKSClient.AssociateEncryptionConfig(input); err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				return false, aerr
+			}
+			return false, err
+		}
+
+		// Wait until status transitions to UPDATING because there's a short
+		// window after UpdateClusterVersion returns where the cluster
+		// status is ACTIVE and the update would be tried again
+		if err := s.EKSClient.WaitUntilClusterUpdating(
+			&eks.DescribeClusterInput{Name: aws.String(s.scope.KubernetesClusterName())},
+			request.WithWaiterLogger(&awslog{s}),
+		); err != nil {
+			return false, err
+		}
+
+		conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneUpdatingCondition)
+		record.Eventf(s.scope.ControlPlane, "InitiatedUpdateEncryptionConfig", "Initiated update of encryption config in EKS control plane %s", s.scope.KubernetesClusterName())
+
+		return true, nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 // An internal type to satisfy aws' log interface.
 type awslog struct {
 	logr.Logger
@@ -559,7 +636,7 @@ func (a *awslog) Log(args ...interface{}) {
 	a.WithName("aws").Info(fmt.Sprintln(args...))
 }
 
-// WaitUntilClusterUpdating is adapted from aws-sdk-go/service/eks/waiters.go
+// WaitUntilClusterUpdating is adapted from aws-sdk-go/service/eks/waiters.go.
 func (c EKSClient) WaitUntilClusterUpdating(input *eks.DescribeClusterInput, opts ...request.WaiterOption) error {
 	ctx := aws.BackgroundContext()
 	statusPath := "cluster.status"
@@ -599,4 +676,19 @@ func (c EKSClient) WaitUntilClusterUpdating(input *eks.DescribeClusterInput, opt
 	w.ApplyOptions(opts...)
 
 	return w.WaitWithContext(ctx)
+}
+
+func compareEncryptionConfig(updatedEncryptionConfig, existingEncryptionConfig []*eks.EncryptionConfig) bool {
+	if len(updatedEncryptionConfig) != len(existingEncryptionConfig) {
+		return false
+	}
+	for index, encryptionConfig := range updatedEncryptionConfig {
+		if encryptionConfig.Provider != existingEncryptionConfig[index].Provider {
+			return false
+		}
+		if cmp.Equals(encryptionConfig.Resources, existingEncryptionConfig[index].Resources) {
+			return false
+		}
+	}
+	return true
 }

@@ -36,7 +36,7 @@ const (
 	backupAWSRegion = "us-east-1"
 
 	// CredentialHelp provides an explanation as to how credentials are resolved by
-	// clusterawsadm
+	// clusterawsadm.
 	CredentialHelp = `
 	The utility will attempt to find credentials in the following order:
 
@@ -56,7 +56,8 @@ const (
 	  3. Check for the DEFAULT_AWS_REGION environment variable.
 	  4. Check that a region is specified in the shared configuration file.
 	`
-
+	// EncodingHelp provides an explanation for how clusterawsadm will generate ini-files
+	// for the resolved credentials.
 	EncodingHelp = `
 	The utility will then generate an ini-file with a default profile corresponding to
 	the resolved credentials.
@@ -78,7 +79,7 @@ const (
 
 var errInvalidOutputFlag = errors.New("invalid output flag. Expected rawSharedConfig or base64SharedConfig")
 
-// RootCmd is the root of the `alpha bootstrap command`
+// RootCmd is the root of the `alpha bootstrap command`.
 func RootCmd() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "credentials",
@@ -88,10 +89,7 @@ func RootCmd() *cobra.Command {
 			` + CredentialHelp + EncodingHelp),
 		Example: cmd.Examples(examples),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := cmd.Help(); err != nil {
-				return err
-			}
-			return nil
+			return cmd.Help()
 		},
 	}
 	newCmd.AddCommand(generateAWSDefaultProfileWithChain())

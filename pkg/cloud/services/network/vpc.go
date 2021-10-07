@@ -23,7 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/filter"
@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/tags"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 )
 
@@ -43,7 +43,7 @@ func (s *Service) reconcileVPC() error {
 	s.scope.V(2).Info("Reconciling VPC")
 
 	// If the ID is not nil, VPC is either managed or unmanaged but should exist in the AWS.
-	if s.scope.VPC().ID != "" { // nolint:nestif
+	if s.scope.VPC().ID != "" {
 		vpc, err := s.describeVPCByID()
 		if err != nil {
 			return errors.Wrap(err, ".spec.vpc.id is set but VPC resource is missing in AWS; failed to describe VPC resources. (might be in creation process)")
@@ -91,6 +91,10 @@ func (s *Service) reconcileVPC() error {
 	s.scope.VPC().Tags = vpc.Tags
 	s.scope.VPC().ID = vpc.ID
 
+	s.scope.VPC().CidrBlock = vpc.CidrBlock
+	s.scope.VPC().Tags = vpc.Tags
+	s.scope.VPC().ID = vpc.ID
+
 	// Make sure attributes are configured
 	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 		if err := s.ensureManagedVPCAttributes(vpc); err != nil {
@@ -117,6 +121,10 @@ func (s *Service) ensureManagedVPCAttributes(vpc *infrav1.VPCSpec) error {
 	}
 	vpcAttr, err := s.EC2Client.DescribeVpcAttribute(descAttrInput)
 	if err != nil {
+		// If the returned error is a 'NotFound' error it should trigger retry
+		if code, ok := awserrors.Code(errors.Cause(err)); ok && code == awserrors.VPCNotFound {
+			return err
+		}
 		errs = append(errs, errors.Wrap(err, "failed to describe enableDnsHostnames vpc attribute"))
 	} else if !aws.BoolValue(vpcAttr.EnableDnsHostnames.Value) {
 		attrInput := &ec2.ModifyVpcAttributeInput{
@@ -136,6 +144,10 @@ func (s *Service) ensureManagedVPCAttributes(vpc *infrav1.VPCSpec) error {
 	}
 	vpcAttr, err = s.EC2Client.DescribeVpcAttribute(descAttrInput)
 	if err != nil {
+		// If the returned error is a 'NotFound' error it should trigger retry
+		if code, ok := awserrors.Code(errors.Cause(err)); ok && code == awserrors.VPCNotFound {
+			return err
+		}
 		errs = append(errs, errors.Wrap(err, "failed to describe enableDnsSupport vpc attribute"))
 	} else if !aws.BoolValue(vpcAttr.EnableDnsSupport.Value) {
 		attrInput := &ec2.ModifyVpcAttributeInput{

@@ -19,13 +19,17 @@ package v1alpha3
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	"sigs.k8s.io/cluster-api/errors"
 )
 
+// Constants.
 const (
-	MachinePoolFinalizer        = "awsmachinepool.infrastructure.cluster.x-k8s.io"
+	// MachinePoolFinalizer is the finalizer for the machine pool.
+	MachinePoolFinalizer = "awsmachinepool.infrastructure.cluster.x-k8s.io"
+
+	// LaunchTemplateLatestVersion defines the launching of the latest version of the template.
 	LaunchTemplateLatestVersion = "$Latest"
 )
 
@@ -35,12 +39,12 @@ type AWSMachinePoolSpec struct {
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
 
-	// The minimum size of the group.
+	// MinSize defines the minimum size of the group.
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1
 	MinSize int32 `json:"minSize"`
 
-	// The maximum size of the group.
+	// MaxSize defines the maximum size of the group.
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1
 	MaxSize int32 `json:"maxSize"`
@@ -50,12 +54,12 @@ type AWSMachinePoolSpec struct {
 
 	// Subnets is an array of subnet configurations
 	// +optional
-	Subnets []infrav1.AWSResourceReference `json:"subnets,omitempty"`
+	Subnets []infrav1alpha3.AWSResourceReference `json:"subnets,omitempty"`
 
 	// AdditionalTags is an optional set of tags to add to an instance, in addition to the ones added by default by the
 	// AWS provider.
 	// +optional
-	AdditionalTags infrav1.Tags `json:"additionalTags,omitempty"`
+	AdditionalTags infrav1alpha3.Tags `json:"additionalTags,omitempty"`
 
 	// AWSLaunchTemplate specifies the launch template and version to use when an instance is launched.
 	// +kubebuilder:validation:Required
@@ -83,6 +87,7 @@ type AWSMachinePoolSpec struct {
 	CapacityRebalance bool `json:"capacityRebalance,omitempty"`
 }
 
+// RefreshPreferences defines the specs for instance refreshing.
 type RefreshPreferences struct {
 	// The strategy to use for the instance refresh. The only valid value is Rolling.
 	// A rolling update is an update that is applied to all instances in an Auto
@@ -114,11 +119,11 @@ type AWSMachinePoolStatus struct {
 
 	// Conditions defines current service state of the AWSMachinePool.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions clusterv1alpha3.Conditions `json:"conditions,omitempty"`
 
 	// Instances contains the status for each instance in the pool
 	// +optional
-	Instances []*AWSMachinePoolInstanceStatus `json:"instances"`
+	Instances []AWSMachinePoolInstanceStatus `json:"instances,omitempty"`
 
 	// The ID of the launch template
 	LaunchTemplateID string `json:"launchTemplateID,omitempty"`
@@ -163,6 +168,8 @@ type AWSMachinePoolStatus struct {
 
 	ASGStatus *ASGStatus `json:"asgStatus,omitempty"`
 }
+
+// AWSMachinePoolInstanceStatus defines the status of the AWSMachinePoolInstance.
 type AWSMachinePoolInstanceStatus struct {
 	// InstanceID is the identification of the Machine Instance within ASG
 	// +optional
@@ -175,7 +182,7 @@ type AWSMachinePoolInstanceStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=awsmachinepools,scope=Namespaced,categories=cluster-api
+// +kubebuilder:resource:path=awsmachinepools,scope=Namespaced,categories=cluster-api,shortName=awsmp
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Machine ready status"
 // +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".status.replicas",description="Machine ready status"
 // +kubebuilder:printcolumn:name="MinSize",type="integer",JSONPath=".spec.minSize",description="Minimum instanes in ASG"
@@ -193,7 +200,7 @@ type AWSMachinePool struct {
 
 // +kubebuilder:object:root=true
 
-// AWSMachinePoolList contains a list of AWSMachinePool
+// AWSMachinePoolList contains a list of AWSMachinePool.
 type AWSMachinePoolList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -204,18 +211,22 @@ func init() {
 	SchemeBuilder.Register(&AWSMachinePool{}, &AWSMachinePoolList{})
 }
 
-func (r *AWSMachinePool) GetConditions() clusterv1.Conditions {
+// GetConditions returns the observations of the operational state of the AWSMachinePool resource.
+func (r *AWSMachinePool) GetConditions() clusterv1alpha3.Conditions {
 	return r.Status.Conditions
 }
 
-func (r *AWSMachinePool) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSMachinePool to the predescribed clusterv1alpha3.Conditions.
+func (r *AWSMachinePool) SetConditions(conditions clusterv1alpha3.Conditions) {
 	r.Status.Conditions = conditions
 }
 
+// GetObjectKind will return the ObjectKind of an AWSMachinePool.
 func (r *AWSMachinePool) GetObjectKind() schema.ObjectKind {
 	return &r.TypeMeta
 }
 
+// GetObjectKind will return the ObjectKind of an AWSMachinePoolList.
 func (r *AWSMachinePoolList) GetObjectKind() schema.ObjectKind {
 	return &r.TypeMeta
 }

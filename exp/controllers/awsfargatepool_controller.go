@@ -18,13 +18,17 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/eks"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/predicates"
@@ -35,35 +39,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	controlplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/eks"
 )
 
-// AWSFargateProfileReconciler reconciles a AWSFargateProfile object
+// AWSFargateProfileReconciler reconciles a AWSFargateProfile object.
 type AWSFargateProfileReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Recorder  record.EventRecorder
-	Endpoints []scope.ServiceEndpoint
-
-	EnableIAM bool
+	Recorder         record.EventRecorder
+	Endpoints        []scope.ServiceEndpoint
+	EnableIAM        bool
+	WatchFilterValue string
 }
 
-// SetupWithManager is used to setup the controller
-func (r *AWSFargateProfileReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
-	managedControlPlaneToFargateProfileMap := managedControlPlaneToFargateProfileMapFunc(r.Client, r.Log)
+// SetupWithManager is used to setup the controller.
+func (r *AWSFargateProfileReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
+	managedControlPlaneToFargateProfileMap := managedControlPlaneToFargateProfileMapFunc(r.Client, ctrl.LoggerFrom(ctx))
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrav1exp.AWSFargateProfile{}).
+		For(&expinfrav1.AWSFargateProfile{}).
 		WithOptions(options).
-		WithEventFilter(predicates.ResourceNotPaused(r.Log)).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), r.WatchFilterValue)).
 		Watches(
-			&source.Kind{Type: &controlplanev1.AWSManagedControlPlane{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: managedControlPlaneToFargateProfileMap,
-			},
+			&source.Kind{Type: &ekscontrolplanev1.AWSManagedControlPlane{}},
+			handler.EnqueueRequestsFromMapFunc(managedControlPlaneToFargateProfileMap),
 		).
 		Complete(r)
 }
@@ -74,12 +70,11 @@ func (r *AWSFargateProfileReconciler) SetupWithManager(mgr ctrl.Manager, options
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=awsfargateprofiles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=awsfargateprofiles/status,verbs=get;update;patch
 
-// Reconcile reconciles AWSFargateProfiles
-func (r *AWSFargateProfileReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	logger := r.Log.WithValues("namespace", req.Namespace, "AWSFargateProfile", req.Name)
-	ctx := context.Background()
+// Reconcile reconciles AWSFargateProfiles.
+func (r *AWSFargateProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	log := ctrl.LoggerFrom(ctx)
 
-	fargateProfile := &infrav1exp.AWSFargateProfile{}
+	fargateProfile := &expinfrav1.AWSFargateProfile{}
 	if err := r.Get(ctx, req.NamespacedName, fargateProfile); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -89,26 +84,23 @@ func (r *AWSFargateProfileReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	cluster, err := util.GetClusterByName(ctx, r.Client, fargateProfile.Namespace, fargateProfile.Spec.ClusterName)
 	if err != nil {
-		logger.Info("Failed to retrieve Cluster from AWSFargateProfile")
+		log.Info("Failed to retrieve Cluster from AWSFargateProfile")
 		return reconcile.Result{}, nil
 	}
 
-	logger = logger.WithValues("Cluster", cluster.Name)
+	log = log.WithValues("Cluster", cluster.Name)
 
 	controlPlaneKey := client.ObjectKey{
 		Namespace: fargateProfile.Namespace,
 		Name:      cluster.Spec.ControlPlaneRef.Name,
 	}
-	controlPlane := &controlplanev1.AWSManagedControlPlane{}
+	controlPlane := &ekscontrolplanev1.AWSManagedControlPlane{}
 	if err := r.Client.Get(ctx, controlPlaneKey, controlPlane); err != nil {
-		logger.Info("Failed to retrieve ControlPlane from AWSFargateProfile")
+		log.Info("Failed to retrieve ControlPlane from AWSFargateProfile")
 		return reconcile.Result{}, nil
 	}
 
-	logger = logger.WithValues("AWSManagedControlPlane", controlPlane.Name)
-
 	fargateProfileScope, err := scope.NewFargateProfileScope(scope.FargateProfileScopeParams{
-		Logger:         logger,
 		Client:         r.Client,
 		ControllerName: "awsfargateprofile",
 		Cluster:        cluster,
@@ -123,8 +115,8 @@ func (r *AWSFargateProfileReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 
 	defer func() {
 		applicableConditions := []clusterv1.ConditionType{
-			infrav1exp.IAMFargateRolesReadyCondition,
-			infrav1exp.EKSFargateProfileReadyCondition,
+			expinfrav1.IAMFargateRolesReadyCondition,
+			expinfrav1.EKSFargateProfileReadyCondition,
 		}
 
 		conditions.SetSummary(fargateProfileScope.FargateProfile, conditions.WithConditions(applicableConditions...), conditions.WithStepCounter())
@@ -135,8 +127,8 @@ func (r *AWSFargateProfileReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result
 	}()
 
 	if !controlPlane.Status.Ready {
-		logger.Info("Control plane is not ready yet")
-		conditions.MarkFalse(fargateProfile, clusterv1.ReadyCondition, infrav1exp.WaitingForEKSControlPlaneReason, clusterv1.ConditionSeverityInfo, "")
+		log.Info("Control plane is not ready yet")
+		conditions.MarkFalse(fargateProfile, clusterv1.ReadyCondition, expinfrav1.WaitingForEKSControlPlaneReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
@@ -153,7 +145,7 @@ func (r *AWSFargateProfileReconciler) reconcileNormal(
 ) (ctrl.Result, error) {
 	fargateProfileScope.Info("Reconciling AWSFargateProfile")
 
-	controllerutil.AddFinalizer(fargateProfileScope.FargateProfile, infrav1exp.FargateProfileFinalizer)
+	controllerutil.AddFinalizer(fargateProfileScope.FargateProfile, expinfrav1.FargateProfileFinalizer)
 	if err := fargateProfileScope.PatchObject(); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -182,19 +174,21 @@ func (r *AWSFargateProfileReconciler) reconcileDelete(
 	}
 
 	if res.IsZero() {
-		controllerutil.RemoveFinalizer(fargateProfileScope.FargateProfile, infrav1exp.FargateProfileFinalizer)
+		controllerutil.RemoveFinalizer(fargateProfileScope.FargateProfile, expinfrav1.FargateProfileFinalizer)
 	}
 
 	return res, nil
 }
 
-func managedControlPlaneToFargateProfileMapFunc(c client.Client, log logr.Logger) handler.ToRequestsFunc {
-	return func(o handler.MapObject) []reconcile.Request {
+func managedControlPlaneToFargateProfileMapFunc(c client.Client, log logr.Logger) handler.MapFunc {
+	return func(o client.Object) []ctrl.Request {
 		ctx := context.Background()
-		awsControlPlane, ok := o.Object.(*controlplanev1.AWSManagedControlPlane)
+
+		awsControlPlane, ok := o.(*ekscontrolplanev1.AWSManagedControlPlane)
 		if !ok {
-			return nil
+			panic(fmt.Sprintf("Expected a AWSManagedControlPlane but got a %T", o))
 		}
+
 		if !awsControlPlane.ObjectMeta.DeletionTimestamp.IsZero() {
 			return nil
 		}
@@ -208,7 +202,7 @@ func managedControlPlaneToFargateProfileMapFunc(c client.Client, log logr.Logger
 			return nil
 		}
 
-		fargateProfileForClusterList := infrav1exp.AWSFargateProfileList{}
+		fargateProfileForClusterList := expinfrav1.AWSFargateProfileList{}
 		if err := c.List(
 			ctx, &fargateProfileForClusterList, client.InNamespace(clusterKey.Namespace), client.MatchingLabels{clusterv1.ClusterLabelName: clusterKey.Name},
 		); err != nil {

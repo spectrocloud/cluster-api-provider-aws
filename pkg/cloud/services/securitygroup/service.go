@@ -19,17 +19,17 @@ package securitygroup
 import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 )
 
-// Scope is a scope for use with the security group reconciling service
+// Scope is a scope for use with the security group reconciling service.
 type Scope interface {
 	cloud.ClusterScoper
 
 	// Network returns the cluster network object.
-	Network() *infrav1.Network
+	Network() *infrav1.NetworkStatus
 
 	// SecurityGroups returns the cluster security groups as a map, it creates the map if empty.
 	SecurityGroups() map[infrav1.SecurityGroupRole]infrav1.SecurityGroup
@@ -66,7 +66,7 @@ func NewService(sgScope Scope) *Service {
 }
 
 // NewServiceWithRoles returns a new service given the api clients with a defined
-// set of roles
+// set of roles.
 func NewServiceWithRoles(sgScope Scope, roles []infrav1.SecurityGroupRole) *Service {
 	return &Service{
 		scope:     sgScope,

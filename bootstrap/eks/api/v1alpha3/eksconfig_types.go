@@ -18,11 +18,8 @@ package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // EKSConfigSpec defines the desired state of EKSConfig
 type EKSConfigSpec struct {
@@ -54,12 +51,11 @@ type EKSConfigStatus struct {
 
 	// Conditions defines current service state of the EKSConfig.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions clusterv1alpha3.Conditions `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=eksconfigs,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=eksconfigs,scope=Namespaced,categories=cluster-api,shortName=eksc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Bootstrap configuration is ready"
 // +kubebuilder:printcolumn:name="DataSecretName",type="string",JSONPath=".status.dataSecretName",description="Name of Secret containing bootstrap data"
@@ -73,17 +69,19 @@ type EKSConfig struct {
 	Status EKSConfigStatus `json:"status,omitempty"`
 }
 
-func (r *EKSConfig) GetConditions() clusterv1.Conditions {
+// GetConditions returns the observations of the operational state of the EKSConfig resource.
+func (r *EKSConfig) GetConditions() clusterv1alpha3.Conditions {
 	return r.Status.Conditions
 }
 
-func (r *EKSConfig) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the EKSConfig to the predescribed clusterv1alpha3.Conditions.
+func (r *EKSConfig) SetConditions(conditions clusterv1alpha3.Conditions) {
 	r.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true
 
-// EKSConfigList contains a list of EKSConfig
+// EKSConfigList contains a list of EKSConfig.
 type EKSConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

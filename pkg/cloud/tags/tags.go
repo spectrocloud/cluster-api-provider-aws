@@ -27,25 +27,28 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks/eksiface"
 	"github.com/pkg/errors"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 )
 
 var (
+	// ErrBuildParamsRequired defines an error for when no build params are supplied.
 	ErrBuildParamsRequired = errors.New("no build params supplied")
-	ErrApplyFuncRequired   = errors.New("no tags apply function supplied")
+
+	// ErrApplyFuncRequired defines an error for when tags are not supplied.
+	ErrApplyFuncRequired = errors.New("no tags apply function supplied")
 )
 
-// BuilderOption represents an option when creating a tags builder
+// BuilderOption represents an option when creating a tags builder.
 type BuilderOption func(*Builder)
 
-// Builder is the interface for a tags builder
+// Builder is the interface for a tags builder.
 type Builder struct {
 	params    *infrav1.BuildParams
 	applyFunc func(params *infrav1.BuildParams) error
 }
 
 // New creates a new TagsBuilder with the specified build parameters
-// and with optional configuration
+// and with optional configuration.
 func New(params *infrav1.BuildParams, opts ...BuilderOption) *Builder {
 	builder := &Builder{
 		params: params,
@@ -82,17 +85,24 @@ func (b *Builder) Ensure(current infrav1.Tags) error {
 	return nil
 }
 
-// WithEC2 is used to denote that the tags builder will be using EC2
+// WithEC2 is used to denote that the tags builder will be using EC2.
 func WithEC2(ec2client ec2iface.EC2API) BuilderOption {
 	return func(b *Builder) {
 		b.applyFunc = func(params *infrav1.BuildParams) error {
 			tags := infrav1.Build(*params)
-
 			awsTags := make([]*ec2.Tag, 0, len(tags))
-			for k, v := range tags {
+
+			// For testing, we need sorted keys
+			sortedKeys := make([]string, 0, len(tags))
+			for k := range tags {
+				sortedKeys = append(sortedKeys, k)
+			}
+			sort.Strings(sortedKeys)
+
+			for _, key := range sortedKeys {
 				tag := &ec2.Tag{
-					Key:   aws.String(k),
-					Value: aws.String(v),
+					Key:   aws.String(key),
+					Value: aws.String(tags[key]),
 				}
 				awsTags = append(awsTags, tag)
 			}
@@ -108,7 +118,7 @@ func WithEC2(ec2client ec2iface.EC2API) BuilderOption {
 	}
 }
 
-// WithEKS is used to specify that the tags builder will be targetting EKS
+// WithEKS is used to specify that the tags builder will be targeting EKS.
 func WithEKS(eksclient eksiface.EKSAPI) BuilderOption {
 	return func(b *Builder) {
 		b.applyFunc = func(params *infrav1.BuildParams) error {
@@ -146,7 +156,7 @@ func computeDiff(current infrav1.Tags, buildParams infrav1.BuildParams) infrav1.
 	return want.Difference(current)
 }
 
-// BuildParamsToTagSpecification builds a TagSpecification for the specified resource type
+// BuildParamsToTagSpecification builds a TagSpecification for the specified resource type.
 func BuildParamsToTagSpecification(ec2ResourceType string, params infrav1.BuildParams) *ec2.TagSpecification {
 	tags := infrav1.Build(params)
 

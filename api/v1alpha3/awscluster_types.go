@@ -18,7 +18,7 @@ package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 const (
@@ -26,11 +26,11 @@ const (
 	// removing it from the apiserver.
 	ClusterFinalizer = "awscluster.infrastructure.cluster.x-k8s.io"
 
-	// AWSClusterControllerIdentityName is the name of the AWSClusterControllerIdentity singleton
+	// AWSClusterControllerIdentityName is the name of the AWSClusterControllerIdentity singleton.
 	AWSClusterControllerIdentityName = "default"
 )
 
-// AWSClusterSpec defines the desired state of AWSCluster
+// AWSClusterSpec defines the desired state of AWSCluster.
 type AWSClusterSpec struct {
 	// NetworkSpec encapsulates all things related to AWS network.
 	NetworkSpec NetworkSpec `json:"networkSpec,omitempty"`
@@ -44,7 +44,7 @@ type AWSClusterSpec struct {
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint clusterv1alpha3.APIEndpoint `json:"controlPlaneEndpoint"`
 
 	// AdditionalTags is an optional set of tags to add to AWS resources managed by the AWS provider, in addition to the
 	// ones added by default.
@@ -91,16 +91,17 @@ type AWSClusterSpec struct {
 	IdentityRef *AWSIdentityReference `json:"identityRef,omitempty"`
 }
 
+// AWSIdentityKind defines allowed AWS identity types.
 type AWSIdentityKind string
 
 var (
-	// ControllerIdentityKind defines identity reference kind as AWSClusterControllerIdentity
+	// ControllerIdentityKind defines identity reference kind as AWSClusterControllerIdentity.
 	ControllerIdentityKind = AWSIdentityKind("AWSClusterControllerIdentity")
 
-	// ClusterRoleIdentityKind defines identity reference kind as AWSClusterRoleIdentity
+	// ClusterRoleIdentityKind defines identity reference kind as AWSClusterRoleIdentity.
 	ClusterRoleIdentityKind = AWSIdentityKind("AWSClusterRoleIdentity")
 
-	// ClusterStaticIdentityKind defines identity reference kind as AWSClusterStaticIdentity
+	// ClusterStaticIdentityKind defines identity reference kind as AWSClusterStaticIdentity.
 	ClusterStaticIdentityKind = AWSIdentityKind("AWSClusterStaticIdentity")
 )
 
@@ -115,6 +116,7 @@ type AWSIdentityReference struct {
 	Kind AWSIdentityKind `json:"kind"`
 }
 
+// Bastion defines a bastion host.
 type Bastion struct {
 	// Enabled allows this provider to create a bastion host instance
 	// with a public ip to access the VPC private network.
@@ -142,11 +144,11 @@ type Bastion struct {
 	AMI string `json:"ami,omitempty"`
 }
 
-// AWSLoadBalancerSpec defines the desired state of an AWS load balancer
+// AWSLoadBalancerSpec defines the desired state of an AWS load balancer.
 type AWSLoadBalancerSpec struct {
-	// Scheme sets the scheme of the load balancer (defaults to Internet-facing)
-	// +kubebuilder:default=Internet-facing
-	// +kubebuilder:validation:Enum=Internet-facing;internal
+	// Scheme sets the scheme of the load balancer (defaults to internet-facing)
+	// +kubebuilder:default=internet-facing
+	// +kubebuilder:validation:Enum=internet-facing;Internet-facing;internal
 	// +optional
 	Scheme *ClassicELBScheme `json:"scheme,omitempty"`
 
@@ -165,33 +167,33 @@ type AWSLoadBalancerSpec struct {
 	// +optional
 	Subnets []string `json:"subnets,omitempty"`
 
-	// AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs.
+	// AdditionalSecurityGroups sets the security groups used by the load balancer. Expected to be security group IDs
 	// This is optional - if not provided new security groups will be created for the load balancer
 	// +optional
 	AdditionalSecurityGroups []string `json:"additionalSecurityGroups,omitempty"`
 }
 
-// AWSClusterStatus defines the observed state of AWSCluster
+// AWSClusterStatus defines the observed state of AWSCluster.
 type AWSClusterStatus struct {
 	// +kubebuilder:default=false
-	Ready          bool                     `json:"ready"`
-	Network        Network                  `json:"network,omitempty"`
-	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
-	Bastion        *Instance                `json:"bastion,omitempty"`
-	Conditions     clusterv1.Conditions     `json:"conditions,omitempty"`
+	Ready          bool                           `json:"ready"`
+	Network        Network                        `json:"network,omitempty"`
+	FailureDomains clusterv1alpha3.FailureDomains `json:"failureDomains,omitempty"`
+	Bastion        *Instance                      `json:"bastion,omitempty"`
+	Conditions     clusterv1alpha3.Conditions     `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=awsclusters,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=awsclusters,scope=Namespaced,categories=cluster-api,shortName=awsc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this AWSCluster belongs"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Cluster infrastructure is ready for EC2 instances"
 // +kubebuilder:printcolumn:name="VPC",type="string",JSONPath=".spec.networkSpec.vpc.id",description="AWS VPC the cluster is using"
-// +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".status.apiEndpoints[0]",description="API Endpoint",priority=1
+// +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".spec.controlPlaneEndpoint",description="API Endpoint",priority=1
 // +kubebuilder:printcolumn:name="Bastion IP",type="string",JSONPath=".status.bastion.publicIp",description="Bastion IP address for breakglass access"
+// +k8s:defaulter-gen=true
 
-// AWSCluster is the Schema for the awsclusters API
+// AWSCluster is the Schema for the awsclusters API.
 type AWSCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -202,18 +204,20 @@ type AWSCluster struct {
 
 // +kubebuilder:object:root=true
 
-// AWSClusterList contains a list of AWSCluster
+// AWSClusterList contains a list of AWSCluster.
 type AWSClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AWSCluster `json:"items"`
 }
 
-func (r *AWSCluster) GetConditions() clusterv1.Conditions {
+// GetConditions returns the observations of the operational state of the AWSCluster resource.
+func (r *AWSCluster) GetConditions() clusterv1alpha3.Conditions {
 	return r.Status.Conditions
 }
 
-func (r *AWSCluster) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSCluster to the predescribed clusterv1alpha3.Conditions.
+func (r *AWSCluster) SetConditions(conditions clusterv1alpha3.Conditions) {
 	r.Status.Conditions = conditions
 }
 

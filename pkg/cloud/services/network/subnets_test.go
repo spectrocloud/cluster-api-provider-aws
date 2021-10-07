@@ -18,17 +18,21 @@ package network
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/golang/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2/mock_ec2iface"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
@@ -48,7 +52,7 @@ func TestReconcileSubnets(t *testing.T) {
 				VPC: infrav1.VPCSpec{
 					ID: subnetsVPCID,
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						ID: "subnet-1",
 					},
@@ -123,6 +127,36 @@ func TestReconcileSubnets(t *testing.T) {
 						},
 					}),
 					gomock.Any()).Return(nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-1"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-2"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/internal-elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, nil)
 			},
 		},
 		{
@@ -131,7 +165,7 @@ func TestReconcileSubnets(t *testing.T) {
 				VPC: infrav1.VPCSpec{
 					ID: subnetsVPCID,
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						ID: "subnet-1",
 					},
@@ -189,8 +223,136 @@ func TestReconcileSubnets(t *testing.T) {
 						},
 					}),
 					gomock.Any()).Return(nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-1"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/internal-elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-2"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/internal-elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, nil)
 			},
 			errorExpected: false,
+		},
+		{
+			name: "Unmanaged VPC, 2 existing matching subnets, subnet tagging fails, should succeed",
+			input: &infrav1.NetworkSpec{
+				VPC: infrav1.VPCSpec{
+					ID: subnetsVPCID,
+				},
+				Subnets: []infrav1.SubnetSpec{
+					{
+						ID: "subnet-1",
+					},
+					{
+						ID: "subnet-2",
+					},
+				},
+			},
+			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
+				m.DescribeSubnets(gomock.Eq(&ec2.DescribeSubnetsInput{
+					Filters: []*ec2.Filter{
+						{
+							Name:   aws.String("state"),
+							Values: []*string{aws.String("pending"), aws.String("available")},
+						},
+						{
+							Name:   aws.String("vpc-id"),
+							Values: []*string{aws.String(subnetsVPCID)},
+						},
+					},
+				})).
+					Return(&ec2.DescribeSubnetsOutput{
+						Subnets: []*ec2.Subnet{
+							{
+								VpcId:               aws.String(subnetsVPCID),
+								SubnetId:            aws.String("subnet-1"),
+								AvailabilityZone:    aws.String("us-east-1a"),
+								CidrBlock:           aws.String("10.0.10.0/24"),
+								MapPublicIpOnLaunch: aws.Bool(false),
+							},
+							{
+								VpcId:               aws.String(subnetsVPCID),
+								SubnetId:            aws.String("subnet-2"),
+								AvailabilityZone:    aws.String("us-east-1a"),
+								CidrBlock:           aws.String("10.0.20.0/24"),
+								MapPublicIpOnLaunch: aws.Bool(false),
+							},
+						},
+					}, nil)
+
+				m.DescribeRouteTables(gomock.AssignableToTypeOf(&ec2.DescribeRouteTablesInput{})).
+					Return(&ec2.DescribeRouteTablesOutput{
+						RouteTables: []*ec2.RouteTable{
+							{
+								VpcId: aws.String(subnetsVPCID),
+								Associations: []*ec2.RouteTableAssociation{
+									{
+										SubnetId:     aws.String("subnet-1"),
+										RouteTableId: aws.String("rt-12345"),
+									},
+								},
+								Routes: []*ec2.Route{
+									{
+										GatewayId: aws.String("igw-12345"),
+									},
+								},
+							},
+						},
+					}, nil)
+
+				m.DescribeNatGatewaysPages(
+					gomock.Eq(&ec2.DescribeNatGatewaysInput{
+						Filter: []*ec2.Filter{
+							{
+								Name:   aws.String("vpc-id"),
+								Values: []*string{aws.String(subnetsVPCID)},
+							},
+							{
+								Name:   aws.String("state"),
+								Values: []*string{aws.String("pending"), aws.String("available")},
+							},
+						},
+					}),
+					gomock.Any()).Return(nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-1"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, fmt.Errorf("tagging failed"))
+			},
 		},
 		{
 			name: "Unmanaged VPC, 2 existing subnets in vpc, 0 subnet in spec, should fail",
@@ -198,7 +360,7 @@ func TestReconcileSubnets(t *testing.T) {
 				VPC: infrav1.VPCSpec{
 					ID: subnetsVPCID,
 				},
-				Subnets: []*infrav1.SubnetSpec{},
+				Subnets: []infrav1.SubnetSpec{},
 			},
 			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
 				m.DescribeSubnets(gomock.Eq(&ec2.DescribeSubnetsInput{
@@ -258,7 +420,7 @@ func TestReconcileSubnets(t *testing.T) {
 				VPC: infrav1.VPCSpec{
 					ID: subnetsVPCID,
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						AvailabilityZone: "us-east-1a",
 						CidrBlock:        "10.1.0.0/16",
@@ -312,7 +474,7 @@ func TestReconcileSubnets(t *testing.T) {
 				VPC: infrav1.VPCSpec{
 					ID: subnetsVPCID,
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						AvailabilityZone: "us-east-1a",
 						CidrBlock:        "10.0.10.0/24",
@@ -374,6 +536,36 @@ func TestReconcileSubnets(t *testing.T) {
 						},
 					}),
 					gomock.Any()).Return(nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-1"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/internal-elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, nil)
+
+				m.CreateTags(gomock.Eq(&ec2.CreateTagsInput{
+					Resources: aws.StringSlice([]string{"subnet-2"}),
+					Tags: []*ec2.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/test-cluster"),
+							Value: aws.String("shared"),
+						},
+						{
+							Key:   aws.String("kubernetes.io/role/internal-elb"),
+							Value: aws.String("1"),
+						},
+					},
+				})).
+					Return(&ec2.CreateTagsOutput{}, nil)
 			},
 			errorExpected: false,
 		},
@@ -386,7 +578,7 @@ func TestReconcileSubnets(t *testing.T) {
 						infrav1.ClusterTagKey("test-cluster"): "owned",
 					},
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						AvailabilityZone: "us-east-1a",
 						CidrBlock:        "10.1.0.0/16",
@@ -543,7 +735,7 @@ func TestReconcileSubnets(t *testing.T) {
 						infrav1.ClusterTagKey("test-cluster"): "owned",
 					},
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						AvailabilityZone: "us-east-1a",
 						CidrBlock:        "10.1.0.0/16",
@@ -596,7 +788,7 @@ func TestReconcileSubnets(t *testing.T) {
 					},
 					CidrBlock: defaultVPCCidr,
 				},
-				Subnets: []*infrav1.SubnetSpec{},
+				Subnets: []infrav1.SubnetSpec{},
 			},
 			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
 				m.DescribeAvailabilityZones(gomock.Any()).
@@ -752,7 +944,7 @@ func TestReconcileSubnets(t *testing.T) {
 					},
 					CidrBlock: defaultVPCCidr,
 				},
-				Subnets: []*infrav1.SubnetSpec{},
+				Subnets: []infrav1.SubnetSpec{},
 			},
 			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
 				m.DescribeAvailabilityZones(gomock.Any()).
@@ -1016,7 +1208,7 @@ func TestReconcileSubnets(t *testing.T) {
 					AvailabilityZoneUsageLimit: aws.Int(1),
 					AvailabilityZoneSelection:  &infrav1.AZSelectionSchemeOrdered,
 				},
-				Subnets: []*infrav1.SubnetSpec{},
+				Subnets: []infrav1.SubnetSpec{},
 			},
 			expect: func(m *mock_ec2iface.MockEC2APIMockRecorder) {
 				m.DescribeAvailabilityZones(gomock.Any()).
@@ -1174,7 +1366,7 @@ func TestReconcileSubnets(t *testing.T) {
 						infrav1.ClusterTagKey("test-cluster"): "owned",
 					},
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						ID:               "subnet-1",
 						AvailabilityZone: "us-east-1a",
@@ -1304,11 +1496,16 @@ func TestReconcileSubnets(t *testing.T) {
 			defer mockCtrl.Finish()
 			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
 
+			scheme := runtime.NewScheme()
+			_ = infrav1.AddToScheme(scheme)
+			client := fake.NewClientBuilder().WithScheme(scheme).Build()
 			scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+				Client: client,
 				Cluster: &clusterv1.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				},
 				AWSCluster: &infrav1.AWSCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "test"},
 					Spec: infrav1.AWSClusterSpec{
 						NetworkSpec: *tc.input,
 					},
@@ -1339,7 +1536,7 @@ func TestDiscoverSubnets(t *testing.T) {
 		name   string
 		input  *infrav1.NetworkSpec
 		mocks  func(m *mock_ec2iface.MockEC2APIMockRecorder)
-		expect []*infrav1.SubnetSpec
+		expect []infrav1.SubnetSpec
 	}{
 		{
 			name: "provided VPC finds internet routes",
@@ -1347,7 +1544,7 @@ func TestDiscoverSubnets(t *testing.T) {
 				VPC: infrav1.VPCSpec{
 					ID: subnetsVPCID,
 				},
-				Subnets: []*infrav1.SubnetSpec{
+				Subnets: []infrav1.SubnetSpec{
 					{
 						ID:               "subnet-1",
 						AvailabilityZone: "us-east-1a",
@@ -1456,8 +1653,11 @@ func TestDiscoverSubnets(t *testing.T) {
 						},
 					}),
 					gomock.Any()).Return(nil)
+
+				m.CreateTags(gomock.AssignableToTypeOf(&ec2.CreateTagsInput{})).
+					Return(&ec2.CreateTagsOutput{}, nil).AnyTimes()
 			},
-			expect: []*infrav1.SubnetSpec{
+			expect: []infrav1.SubnetSpec{
 				{
 					ID:               "subnet-1",
 					AvailabilityZone: "us-east-1a",
@@ -1487,11 +1687,16 @@ func TestDiscoverSubnets(t *testing.T) {
 			defer mockCtrl.Finish()
 			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
 
+			scheme := runtime.NewScheme()
+			_ = infrav1.AddToScheme(scheme)
+			client := fake.NewClientBuilder().WithScheme(scheme).Build()
 			scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
+				Client: client,
 				Cluster: &clusterv1.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				},
 				AWSCluster: &infrav1.AWSCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "test"},
 					Spec: infrav1.AWSClusterSpec{
 						NetworkSpec: *tc.input,
 					},
@@ -1511,7 +1716,7 @@ func TestDiscoverSubnets(t *testing.T) {
 			}
 
 			subnets := s.scope.Subnets()
-			out := make(map[string]*infrav1.SubnetSpec)
+			out := make(map[string]infrav1.SubnetSpec)
 			for _, sn := range subnets {
 				out[sn.ID] = sn
 			}

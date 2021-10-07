@@ -1,17 +1,18 @@
 
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   creationTimestamp: null
   name: mutating-webhook-configuration
 webhooks:
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awscluster
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awscluster
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: default.awscluster.infrastructure.cluster.x-k8s.io
@@ -19,19 +20,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsclusters
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awsclustercontrolleridentity
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsclustercontrolleridentity
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: default.awsclustercontrolleridentity.infrastructure.cluster.x-k8s.io
@@ -39,19 +41,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsclustercontrolleridentities
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awsclusterroleidentity
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsclusterroleidentity
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: default.awsclusterroleidentity.infrastructure.cluster.x-k8s.io
@@ -59,38 +62,82 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsclusterroleidentities
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmachine
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsclusterstaticidentity
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.awsclusterstaticidentity.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsclusterstaticidentities
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsclustertemplate
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.awsclustertemplate.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsclustertemplates
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachine
   failurePolicy: Fail
   name: mutation.awsmachine.infrastructure.cluster.x-k8s.io
   rules:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmachines
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awsfargateprofile
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsfargateprofile
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: default.awsfargateprofile.infrastructure.cluster.x-k8s.io
@@ -98,19 +145,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsfargateprofiles
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmachinepool
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachinepool
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: default.awsmachinepool.infrastructure.cluster.x-k8s.io
@@ -118,19 +166,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmachinepools
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmanagedmachinepool
+      path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsmanagedmachinepool
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: default.awsmanagedmachinepool.infrastructure.cluster.x-k8s.io
@@ -138,27 +187,91 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmanagedmachinepools
   sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfig
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.eksconfigs.bootstrap.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - bootstrap.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - eksconfig
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfigtemplate
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.eksconfigtemplates.bootstrap.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - bootstrap.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - eksconfigtemplate
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-controlplane-cluster-x-k8s-io-v1beta1-awsmanagedcontrolplane
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: default.awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - controlplane.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsmanagedcontrolplanes
+  sideEffects: None
 
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   creationTimestamp: null
   name: validating-webhook-configuration
 webhooks:
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awscluster
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awscluster
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awscluster.infrastructure.cluster.x-k8s.io
@@ -166,19 +279,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsclusters
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsclustercontrolleridentity
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsclustercontrolleridentity
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsclustercontrolleridentity.infrastructure.cluster.x-k8s.io
@@ -186,19 +300,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsclustercontrolleridentities
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsclusterroleidentity
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsclusterroleidentity
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsclusterroleidentity.infrastructure.cluster.x-k8s.io
@@ -206,19 +321,62 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsclusterroleidentities
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmachine
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsclusterstaticidentity
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.awsclusterstaticidentity.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsclusterstaticidentities
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsclustertemplate
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.awsclustertemplate.infrastructure.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsclustertemplates
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachine
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsmachine.infrastructure.cluster.x-k8s.io
@@ -226,19 +384,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmachines
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmachinetemplate
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachinetemplate
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsmachinetemplate.infrastructure.x-k8s.io
@@ -246,19 +405,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmachinetemplates
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsfargateprofile
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsfargateprofile
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsfargateprofile.infrastructure.cluster.x-k8s.io
@@ -266,19 +426,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsfargateprofiles
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmachinepool
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachinepool
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsmachinepool.infrastructure.cluster.x-k8s.io
@@ -286,19 +447,20 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmachinepools
   sideEffects: None
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-infrastructure-cluster-x-k8s-io-v1alpha3-awsmanagedmachinepool
+      path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmanagedmachinepool
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.awsmanagedmachinepool.infrastructure.cluster.x-k8s.io
@@ -306,10 +468,73 @@ webhooks:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
     apiVersions:
-    - v1alpha3
+    - v1beta1
     operations:
     - CREATE
     - UPDATE
     resources:
     - awsmanagedmachinepools
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfig
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.eksconfigs.bootstrap.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - bootstrap.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - eksconfig
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfigtemplate
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.eksconfigtemplates.bootstrap.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - bootstrap.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - eksconfigtemplate
+  sideEffects: None
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-controlplane-cluster-x-k8s-io-v1beta1-awsmanagedcontrolplane
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: validation.awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io
+  rules:
+  - apiGroups:
+    - controlplane.cluster.x-k8s.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsmanagedcontrolplanes
   sideEffects: None

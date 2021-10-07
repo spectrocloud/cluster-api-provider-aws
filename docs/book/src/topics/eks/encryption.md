@@ -25,6 +25,7 @@ If you would like to use a different alias prefix then you can use the `kmsAlias
 
 ```bash
 clusterawsadm bootstrap iam create-stack --config custom-prefix.yaml
+
 ```
 
 And the contents of the configuration file:
@@ -36,4 +37,5 @@ spec:
   eks:
     enable: true
     kmsAliasPrefix: "my-prefix-*
+
 ```

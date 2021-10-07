@@ -23,19 +23,21 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1alpha3"
+
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks/identityprovider"
 )
 
 var (
-	// ErrUnknowTaintEffect is an error when a unknown TaintEffect is used
+	// ErrUnknowTaintEffect is an error when a unknown TaintEffect is used.
 	ErrUnknowTaintEffect = errors.New("uknown taint effect")
 
 	// ErrUnknownCapacityType is an error when a unknown CapacityType is used.
 	ErrUnknownCapacityType = errors.New("unknown capacity type")
 )
 
-// AddonSDKToAddonState is used to convert an AWS SDK Addon to a control plane AddonState
+// AddonSDKToAddonState is used to convert an AWS SDK Addon to a control plane AddonState.
 func AddonSDKToAddonState(eksAddon *eks.Addon) *ekscontrolplanev1.AddonState {
 	addonState := &ekscontrolplanev1.AddonState{
 		Name:                  aws.StringValue(eksAddon.AddonName),
@@ -45,14 +47,14 @@ func AddonSDKToAddonState(eksAddon *eks.Addon) *ekscontrolplanev1.AddonState {
 		ModifiedAt:            metav1.NewTime(*eksAddon.ModifiedAt),
 		Status:                eksAddon.Status,
 		ServiceAccountRoleArn: eksAddon.ServiceAccountRoleArn,
-		Issues:                []*ekscontrolplanev1.AddonIssue{},
+		Issues:                []ekscontrolplanev1.AddonIssue{},
 	}
 	if eksAddon.Health != nil {
 		for _, issue := range eksAddon.Health.Issues {
-			addonState.Issues = append(addonState.Issues, &ekscontrolplanev1.AddonIssue{
+			addonState.Issues = append(addonState.Issues, ekscontrolplanev1.AddonIssue{
 				Code:        issue.Code,
 				Message:     issue.Message,
-				ResourceIDs: issue.ResourceIds,
+				ResourceIDs: FromAWSStringSlice(issue.ResourceIds),
 			})
 		}
 	}
@@ -60,8 +62,18 @@ func AddonSDKToAddonState(eksAddon *eks.Addon) *ekscontrolplanev1.AddonState {
 	return addonState
 }
 
+// FromAWSStringSlice will converts an AWS string pointer slice.
+func FromAWSStringSlice(from []*string) []string {
+	converted := []string{}
+	for _, s := range from {
+		converted = append(converted, *s)
+	}
+
+	return converted
+}
+
 // TaintToSDK is used to a CAPA Taint to AWS SDK taint.
-func TaintToSDK(taint infrav1exp.Taint) (*eks.Taint, error) {
+func TaintToSDK(taint expinfrav1.Taint) (*eks.Taint, error) {
 	convertedEffect, err := TaintEffectToSDK(taint.Effect)
 	if err != nil {
 		return nil, fmt.Errorf("converting taint effect %s: %w", taint.Effect, err)
@@ -71,11 +83,10 @@ func TaintToSDK(taint infrav1exp.Taint) (*eks.Taint, error) {
 		Key:    aws.String(taint.Key),
 		Value:  aws.String(taint.Value),
 	}, nil
-
 }
 
 // TaintsToSDK is used to convert an array of CAPA Taints to AWS SDK taints.
-func TaintsToSDK(taints infrav1exp.Taints) ([]*eks.Taint, error) {
+func TaintsToSDK(taints expinfrav1.Taints) ([]*eks.Taint, error) {
 	converted := []*eks.Taint{}
 
 	for _, taint := range taints {
@@ -89,15 +100,15 @@ func TaintsToSDK(taints infrav1exp.Taints) ([]*eks.Taint, error) {
 	return converted, nil
 }
 
-// TaintsFromSDK is used to convert an array of AWS SDK taints to CAPA Taints
-func TaintsFromSDK(taints []*eks.Taint) (infrav1exp.Taints, error) {
-	converted := infrav1exp.Taints{}
+// TaintsFromSDK is used to convert an array of AWS SDK taints to CAPA Taints.
+func TaintsFromSDK(taints []*eks.Taint) (expinfrav1.Taints, error) {
+	converted := expinfrav1.Taints{}
 	for _, taint := range taints {
 		convertedEffect, err := TaintEffectFromSDK(*taint.Effect)
 		if err != nil {
 			return nil, fmt.Errorf("converting taint effect %s: %w", *taint.Effect, err)
 		}
-		converted = append(converted, infrav1exp.Taint{
+		converted = append(converted, expinfrav1.Taint{
 			Effect: convertedEffect,
 			Key:    *taint.Key,
 			Value:  *taint.Value,
@@ -107,40 +118,58 @@ func TaintsFromSDK(taints []*eks.Taint) (infrav1exp.Taints, error) {
 	return converted, nil
 }
 
-// TaintEffectToSDK is used to convert a TaintEffect to the AWS SDK taint effect value
-func TaintEffectToSDK(effect infrav1exp.TaintEffect) (string, error) {
+// TaintEffectToSDK is used to convert a TaintEffect to the AWS SDK taint effect value.
+func TaintEffectToSDK(effect expinfrav1.TaintEffect) (string, error) {
 	switch effect {
-	case infrav1exp.TaintEffectNoExecute:
+	case expinfrav1.TaintEffectNoExecute:
 		return eks.TaintEffectNoExecute, nil
-	case infrav1exp.TaintEffectPreferNoSchedule:
+	case expinfrav1.TaintEffectPreferNoSchedule:
 		return eks.TaintEffectPreferNoSchedule, nil
-	case infrav1exp.TaintEffectNoSchedule:
+	case expinfrav1.TaintEffectNoSchedule:
 		return eks.TaintEffectNoSchedule, nil
 	default:
 		return "", ErrUnknowTaintEffect
 	}
 }
 
-// TaintEffectFromSDK is used to convert a AWS SDK taint effect value to a TaintEffect
-func TaintEffectFromSDK(effect string) (infrav1exp.TaintEffect, error) {
+// TaintEffectFromSDK is used to convert a AWS SDK taint effect value to a TaintEffect.
+func TaintEffectFromSDK(effect string) (expinfrav1.TaintEffect, error) {
 	switch effect {
 	case eks.TaintEffectNoExecute:
-		return infrav1exp.TaintEffectNoExecute, nil
+		return expinfrav1.TaintEffectNoExecute, nil
 	case eks.TaintEffectPreferNoSchedule:
-		return infrav1exp.TaintEffectPreferNoSchedule, nil
+		return expinfrav1.TaintEffectPreferNoSchedule, nil
 	case eks.TaintEffectNoSchedule:
-		return infrav1exp.TaintEffectNoSchedule, nil
+		return expinfrav1.TaintEffectNoSchedule, nil
 	default:
 		return "", ErrUnknowTaintEffect
 	}
 }
 
+func ConvertSDKToIdentityProvider(in *ekscontrolplanev1.OIDCIdentityProviderConfig) *identityprovider.OidcIdentityProviderConfig {
+	if in != nil {
+		return &identityprovider.OidcIdentityProviderConfig{
+			ClientID:                   in.ClientID,
+			GroupsClaim:                in.GroupsClaim,
+			GroupsPrefix:               in.GroupsPrefix,
+			IdentityProviderConfigName: in.IdentityProviderConfigName,
+			IssuerURL:                  in.IssuerURL,
+			RequiredClaims:             aws.StringMap(in.RequiredClaims),
+			Tags:                       in.Tags,
+			UsernameClaim:              in.UsernameClaim,
+			UsernamePrefix:             in.UsernamePrefix,
+		}
+	}
+
+	return nil
+}
+
 // CapacityTypeToSDK is used to convert a CapacityType to the AWS SDK capacity type value.
-func CapacityTypeToSDK(capacityType infrav1exp.ManagedMachinePoolCapacityType) (string, error) {
+func CapacityTypeToSDK(capacityType expinfrav1.ManagedMachinePoolCapacityType) (string, error) {
 	switch capacityType {
-	case infrav1exp.ManagedMachinePoolCapacityTypeOnDemand:
+	case expinfrav1.ManagedMachinePoolCapacityTypeOnDemand:
 		return eks.CapacityTypesOnDemand, nil
-	case infrav1exp.ManagedMachinePoolCapacityTypeSpot:
+	case expinfrav1.ManagedMachinePoolCapacityTypeSpot:
 		return eks.CapacityTypesSpot, nil
 	default:
 		return "", ErrUnknownCapacityType

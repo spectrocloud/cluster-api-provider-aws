@@ -18,12 +18,12 @@ package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
 const (
-	// ManagedControlPlaneFinalizer allows the controller to clean up resources on delete
+	// ManagedControlPlaneFinalizer allows the controller to clean up resources on delete.
 	ManagedControlPlaneFinalizer = "awsmanagedcontrolplane.controlplane.cluster.x-k8s.io"
 )
 
@@ -37,10 +37,10 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 
 	// IdentityRef is a reference to a identity to be used when reconciling the managed control plane.
 	// +optional
-	IdentityRef *infrav1.AWSIdentityReference `json:"identityRef,omitempty"`
+	IdentityRef *infrav1alpha3.AWSIdentityReference `json:"identityRef,omitempty"`
 
 	// NetworkSpec encapsulates all things related to AWS network.
-	NetworkSpec infrav1.NetworkSpec `json:"networkSpec,omitempty"`
+	NetworkSpec infrav1alpha3.NetworkSpec `json:"networkSpec,omitempty"`
 
 	// SecondaryCidrBlock is the additional CIDR range to use for pod IPs.
 	// Must be within the 100.64.0.0/10 or 198.19.0.0/16 range.
@@ -89,7 +89,7 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// AdditionalTags is an optional set of tags to add to AWS resources managed by the AWS provider, in addition to the
 	// ones added by default.
 	// +optional
-	AdditionalTags infrav1.Tags `json:"additionalTags,omitempty"`
+	AdditionalTags infrav1alpha3.Tags `json:"additionalTags,omitempty"`
 
 	// IAMAuthenticatorConfig allows the specification of any additional user or role mappings
 	// for use when generating the aws-iam-authenticator configuration. If this is nil the
@@ -103,7 +103,7 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint clusterv1alpha3.APIEndpoint `json:"controlPlaneEndpoint"`
 
 	// ImageLookupFormat is the AMI naming format to look up machine images when
 	// a machine does not specify an AMI. When set, this will be used for all
@@ -134,7 +134,7 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 
 	// Bastion contains options to configure the bastion host.
 	// +optional
-	Bastion infrav1.Bastion `json:"bastion"`
+	Bastion infrav1alpha3.Bastion `json:"bastion"`
 
 	// TokenMethod is used to specify the method for obtaining a client token for communicating with EKS
 	// iam-authenticator - obtains a client token using iam-authentictor
@@ -167,7 +167,7 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	DisableVPCCNI bool `json:"disableVPCCNI,omitempty"`
 }
 
-// EndpointAccess specifies how control plane endpoints are accessible
+// EndpointAccess specifies how control plane endpoints are accessible.
 type EndpointAccess struct {
 	// Public controls whether control plane endpoints are publicly accessible
 	// +optional
@@ -180,15 +180,15 @@ type EndpointAccess struct {
 	Private *bool `json:"private,omitempty"`
 }
 
-// EncryptionConfig specifies the encryption configuration for the EKS clsuter
+// EncryptionConfig specifies the encryption configuration for the EKS clsuter.
 type EncryptionConfig struct {
 	// Provider specifies the ARN or alias of the CMK (in AWS KMS)
 	Provider *string `json:"provider,omitempty"`
-	//Resources specifies the resources to be encrypted
+	// Resources specifies the resources to be encrypted
 	Resources []*string `json:"resources,omitempty"`
 }
 
-// OIDCProviderStatus holds the status of the AWS OIDC identity provider
+// OIDCProviderStatus holds the status of the AWS OIDC identity provider.
 type OIDCProviderStatus struct {
 	// ARN holds the ARN of the provider
 	ARN string `json:"arn,omitempty"`
@@ -208,13 +208,13 @@ type IdentityProviderStatus struct {
 type AWSManagedControlPlaneStatus struct {
 	// Networks holds details about the AWS networking resources used by the control plane
 	// +optional
-	Network infrav1.Network `json:"network,omitempty"`
+	Network infrav1alpha3.Network `json:"network,omitempty"`
 	// FailureDomains specifies a list fo available availability zones that can be used
 	// +optional
-	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
+	FailureDomains clusterv1alpha3.FailureDomains `json:"failureDomains,omitempty"`
 	// Bastion holds details of the instance that is used as a bastion jump box
 	// +optional
-	Bastion *infrav1.Instance `json:"bastion,omitempty"`
+	Bastion *infrav1alpha3.Instance `json:"bastion,omitempty"`
 	// OIDCProvider holds the status of the identity provider for this cluster
 	// +optional
 	OIDCProvider OIDCProviderStatus `json:"oidcProvider,omitempty"`
@@ -235,19 +235,15 @@ type AWSManagedControlPlaneStatus struct {
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
 	// Conditions specifies the cpnditions for the managed control plane
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions clusterv1alpha3.Conditions `json:"conditions,omitempty"`
 	// Addons holds the current status of the EKS addons
 	// +optional
-	Addons []*AddonState `json:"addons,omitempty"`
-
-	// +optional
-	IdentityProviderStatus IdentityProviderStatus `json:"identityProviderStatus,omitempty"`
+	Addons []AddonState `json:"addons,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=awsmanagedcontrolplanes,shortName=awsmcp,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=awsmanagedcontrolplanes,shortName=awsmcp,scope=Namespaced,categories=cluster-api,shortName=awsmcp
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this AWSManagedControl belongs"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Control plane infrastructure is ready for worker nodes"
@@ -266,20 +262,20 @@ type AWSManagedControlPlane struct {
 
 // +kubebuilder:object:root=true
 
-// AWSManagedControlPlaneList contains a list of AWSManagedControlPlane
+// AWSManagedControlPlaneList contains a list of AWSManagedControlPlane.
 type AWSManagedControlPlaneList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AWSManagedControlPlane `json:"items"`
 }
 
-// GetConditions returns the control planes conditions
-func (r *AWSManagedControlPlane) GetConditions() clusterv1.Conditions {
+// GetConditions returns the control planes conditions.
+func (r *AWSManagedControlPlane) GetConditions() clusterv1alpha3.Conditions {
 	return r.Status.Conditions
 }
 
-// SetConditions sets the status conditions for the AWSManagedControlPlane
-func (r *AWSManagedControlPlane) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the status conditions for the AWSManagedControlPlane.
+func (r *AWSManagedControlPlane) SetConditions(conditions clusterv1alpha3.Conditions) {
 	r.Status.Conditions = conditions
 }
 

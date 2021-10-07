@@ -21,10 +21,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// AWSClusterIdentitySpec defines the Spec struct for AWSClusterIdentity types.
 type AWSClusterIdentitySpec struct {
 	// AllowedNamespaces is used to identify which namespaces are allowed to use the identity from.
 	// Namespaces can be selected either using an array of namespaces or with label selector.
-	// An empty allowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
+	// An empty AllowedNamespaces object indicates that AWSClusters can use this identity from any namespace.
 	// If this object is nil, no namespaces will be allowed (default behaviour, if this field is not provided)
 	// A namespace should be either in the NamespaceList or match with Selector to use the identity.
 	//
@@ -33,6 +34,10 @@ type AWSClusterIdentitySpec struct {
 	AllowedNamespaces *AllowedNamespaces `json:"allowedNamespaces"`
 }
 
+// AllowedNamespaces is a selector of namespaces that AWSClusters can
+// use this ClusterPrincipal from. This is a standard Kubernetes LabelSelector,
+// a label query over a set of resources. The result of matchLabels and
+// matchExpressions are ANDed.
 type AllowedNamespaces struct {
 	// An nil or empty list indicates that AWSClusters cannot use the identity from any namespace.
 	//
@@ -40,17 +45,13 @@ type AllowedNamespaces struct {
 	// +nullable
 	NamespaceList []string `json:"list"`
 
-	// AllowedNamespaces is a selector of namespaces that AWSClusters can
-	// use this ClusterPrincipal from. This is a standard Kubernetes LabelSelector,
-	// a label query over a set of resources. The result of matchLabels and
-	// matchExpressions are ANDed.
-	//
 	// An empty selector indicates that AWSClusters cannot use this
 	// AWSClusterIdentity from any namespace.
 	// +optional
 	Selector metav1.LabelSelector `json:"selector"`
 }
 
+// AWSRoleSpec defines the specifications for all identities based around AWS roles.
 type AWSRoleSpec struct {
 	// The Amazon Resource Name (ARN) of the role to assume.
 	RoleArn string `json:"roleARN"`
@@ -70,8 +71,8 @@ type AWSRoleSpec struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=awsclusterstaticidentities,scope=Cluster,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=awsclusterstaticidentities,scope=Cluster,categories=cluster-api,shortName=awssi
+// +k8s:defaulter-gen=true
 
 // AWSClusterStaticIdentity is the Schema for the awsclusterstaticidentities API
 // It represents a reference to an AWS access key ID and secret access key, stored in a secret.
@@ -85,13 +86,14 @@ type AWSClusterStaticIdentity struct {
 
 // +kubebuilder:object:root=true
 
-// AWSClusterStaticIdentityList contains a list of AWSClusterStaticIdentity
+// AWSClusterStaticIdentityList contains a list of AWSClusterStaticIdentity.
 type AWSClusterStaticIdentityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AWSClusterStaticIdentity `json:"items"`
 }
 
+// AWSClusterStaticIdentitySpec defines the specifications for AWSClusterStaticIdentity.
 type AWSClusterStaticIdentitySpec struct {
 	AWSClusterIdentitySpec `json:",inline"`
 	// Reference to a secret containing the credentials. The secret should
@@ -103,8 +105,8 @@ type AWSClusterStaticIdentitySpec struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=awsclusterroleidentities,scope=Cluster,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=awsclusterroleidentities,scope=Cluster,categories=cluster-api,shortName=awsri
+// +k8s:defaulter-gen=true
 
 // AWSClusterRoleIdentity is the Schema for the awsclusterroleidentities API
 // It is used to assume a role using the provided sourceRef.
@@ -118,13 +120,14 @@ type AWSClusterRoleIdentity struct {
 
 // +kubebuilder:object:root=true
 
-// AWSClusterRoleIdentityList contains a list of AWSClusterRoleIdentity
+// AWSClusterRoleIdentityList contains a list of AWSClusterRoleIdentity.
 type AWSClusterRoleIdentityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AWSClusterRoleIdentity `json:"items"`
 }
 
+// AWSClusterRoleIdentitySpec defines the specifications for AWSClusterRoleIdentity.
 type AWSClusterRoleIdentitySpec struct {
 	AWSClusterIdentitySpec `json:",inline"`
 	AWSRoleSpec            `json:",inline"`
@@ -146,8 +149,8 @@ type AWSClusterRoleIdentitySpec struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=awsclustercontrolleridentities,scope=Cluster,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=awsclustercontrolleridentities,scope=Cluster,categories=cluster-api,shortName=awsci
+// +k8s:defaulter-gen=true
 
 // AWSClusterControllerIdentity is the Schema for the awsclustercontrolleridentities API
 // It is used to grant access to use Cluster API Provider AWS Controller credentials.
@@ -160,14 +163,16 @@ type AWSClusterControllerIdentity struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:defaulter-gen=true
 
-// AWSClusterControllerIdentityList contains a list of AWSClusterControllerIdentity
+// AWSClusterControllerIdentityList contains a list of AWSClusterControllerIdentity.
 type AWSClusterControllerIdentityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AWSClusterControllerIdentity `json:"items"`
 }
 
+// AWSClusterControllerIdentitySpec defines the specifications for AWSClusterControllerIdentity.
 type AWSClusterControllerIdentitySpec struct {
 	AWSClusterIdentitySpec `json:",inline"`
 }

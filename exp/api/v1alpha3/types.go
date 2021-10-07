@@ -18,7 +18,7 @@ package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
 )
 
 // EBS can be used to automatically set up EBS volumes when an instance is launched.
@@ -41,7 +41,7 @@ type EBS struct {
 	VolumeType string `json:"volumeType,omitempty"`
 }
 
-// BlockDeviceMappings specifies the block devices for the instance.
+// BlockDeviceMapping specifies the block devices for the instance.
 // You can specify virtual devices and EBS volumes.
 type BlockDeviceMapping struct {
 	// The device name exposed to the EC2 instance (for example, /dev/sdh or xvdh).
@@ -53,7 +53,7 @@ type BlockDeviceMapping struct {
 	Ebs EBS `json:"ebs,omitempty"`
 }
 
-// AwsLaunchTemplate defines the desired state of AWSLaunchTemplate
+// AWSLaunchTemplate defines the desired state of AWSLaunchTemplate
 type AWSLaunchTemplate struct {
 	// The name of the launch template.
 	Name string `json:"name,omitempty"`
@@ -65,7 +65,7 @@ type AWSLaunchTemplate struct {
 
 	// AMI is the reference to the AMI from which to create the machine instance.
 	// +optional
-	AMI infrav1.AWSResourceReference `json:"ami,omitempty"`
+	AMI infrav1alpha3.AWSResourceReference `json:"ami,omitempty"`
 
 	// ImageLookupFormat is the AMI naming format to look up the image for this
 	// machine It will be ignored if an explicit AMI is set. Supports
@@ -93,10 +93,10 @@ type AWSLaunchTemplate struct {
 
 	// RootVolume encapsulates the configuration options for the root volume
 	// +optional
-	RootVolume *infrav1.Volume `json:"rootVolume,omitempty"`
+	RootVolume *infrav1alpha3.Volume `json:"rootVolume,omitempty"`
 
 	// SSHKeyName is the name of the ssh key to attach to the instance. Valid values are empty string
-	//(do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
+	// (do not use SSH keys), a valid SSH key name, or omitted (use the default SSH key name)
 	// +optional
 	SSHKeyName *string `json:"sshKeyName,omitempty"`
 
@@ -111,7 +111,7 @@ type AWSLaunchTemplate struct {
 	// instances. These security groups would be set in addition to any security groups defined
 	// at the cluster level or in the actuator.
 	// +optional
-	AdditionalSecurityGroups []infrav1.AWSResourceReference `json:"additionalSecurityGroups,omitempty"`
+	AdditionalSecurityGroups []infrav1alpha3.AWSResourceReference `json:"additionalSecurityGroups,omitempty"`
 }
 
 // Overrides are used to override the instance type specified by the launch template with multiple
@@ -125,7 +125,7 @@ type OnDemandAllocationStrategy string
 
 var (
 	// OnDemandAllocationStrategyPrioritized uses the order of instance type overrides
-	// for the LaunchTemplate to define the launch priority of each instance type
+	// for the LaunchTemplate to define the launch priority of each instance type.
 	OnDemandAllocationStrategyPrioritized = OnDemandAllocationStrategy("prioritized")
 )
 
@@ -135,11 +135,11 @@ type SpotAllocationStrategy string
 var (
 	// SpotAllocationStrategyLowestPrice will make the Auto Scaling group launch
 	// instances using the Spot pools with the lowest price, and evenly allocates
-	// your instances across the number of Spot pools that you specify
+	// your instances across the number of Spot pools that you specify.
 	SpotAllocationStrategyLowestPrice = SpotAllocationStrategy("lowest-price")
 
 	// SpotAllocationStrategyCapacityOptimized will make the Auto Scaling group launch
-	// instances using Spot pools that are optimally chosen based on the available Spot capacity
+	// instances using Spot pools that are optimally chosen based on the available Spot capacity.
 	SpotAllocationStrategyCapacityOptimized = SpotAllocationStrategy("capacity-optimized")
 )
 
@@ -160,39 +160,39 @@ type InstancesDistribution struct {
 	OnDemandPercentageAboveBaseCapacity *int64 `json:"onDemandPercentageAboveBaseCapacity,omitempty"`
 }
 
-// MixedInstancesPolicy for an Auto Scaling group
+// MixedInstancesPolicy for an Auto Scaling group.
 type MixedInstancesPolicy struct {
 	InstancesDistribution *InstancesDistribution `json:"instancesDistribution,omitempty"`
 	Overrides             []Overrides            `json:"overrides,omitempty"`
 }
 
-// Tags
+// Tags is a mapping for tags.
 type Tags map[string]string
 
 // AutoScalingGroup describes an AWS autoscaling group.
 type AutoScalingGroup struct {
 	// The tags associated with the instance.
-	ID                string          `json:"id,omitempty"`
-	Tags              infrav1.Tags    `json:"tags,omitempty"`
-	Name              string          `json:"name,omitempty"`
-	DesiredCapacity   *int32          `json:"desiredCapacity,omitempty"`
-	MaxSize           int32           `json:"maxSize,omitempty"`
-	MinSize           int32           `json:"minSize,omitempty"`
-	PlacementGroup    string          `json:"placementGroup,omitempty"`
-	Subnets           []string        `json:"subnets,omitempty"`
-	DefaultCoolDown   metav1.Duration `json:"defaultCoolDown,omitempty"`
-	CapacityRebalance bool            `json:"capacityRebalance,omitempty"`
+	ID                string             `json:"id,omitempty"`
+	Tags              infrav1alpha3.Tags `json:"tags,omitempty"`
+	Name              string             `json:"name,omitempty"`
+	DesiredCapacity   *int32             `json:"desiredCapacity,omitempty"`
+	MaxSize           int32              `json:"maxSize,omitempty"`
+	MinSize           int32              `json:"minSize,omitempty"`
+	PlacementGroup    string             `json:"placementGroup,omitempty"`
+	Subnets           []string           `json:"subnets,omitempty"`
+	DefaultCoolDown   metav1.Duration    `json:"defaultCoolDown,omitempty"`
+	CapacityRebalance bool               `json:"capacityRebalance,omitempty"`
 
 	MixedInstancesPolicy *MixedInstancesPolicy `json:"mixedInstancesPolicy,omitempty"`
 	Status               ASGStatus
-	Instances            []infrav1.Instance `json:"instances,omitempty"`
+	Instances            []infrav1alpha3.Instance `json:"instances,omitempty"`
 }
 
 // ASGStatus is a status string returned by the autoscaling API
 type ASGStatus string
 
 var (
-	// ASGStatusDeleteInProgress is the string representing an ASG that is currently deleting
+	// ASGStatusDeleteInProgress is the string representing an ASG that is currently deleting.
 	ASGStatusDeleteInProgress = ASGStatus("Delete in progress")
 )
 

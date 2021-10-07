@@ -31,8 +31,7 @@ type EKSConfigTemplateResource struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=eksconfigtemplates,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
+// +kubebuilder:resource:path=eksconfigtemplates,scope=Namespaced,categories=cluster-api,shortName=eksct
 
 // EKSConfigTemplate is the Schema for the eksconfigtemplates API
 type EKSConfigTemplate struct {
@@ -44,7 +43,7 @@ type EKSConfigTemplate struct {
 
 // +kubebuilder:object:root=true
 
-// EKSConfigTemplateList contains a list of EKSConfigTemplate
+// EKSConfigTemplateList contains a list of EKSConfigTemplate.
 type EKSConfigTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

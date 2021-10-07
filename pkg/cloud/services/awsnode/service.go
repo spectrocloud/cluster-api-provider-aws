@@ -19,11 +19,11 @@ package awsnode
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 )
 
-// Scope is a scope for use with the awsnode reconciling service
+// Scope is a scope for use with the awsnode reconciling service.
 type Scope interface {
 	cloud.ClusterScoper
 
@@ -39,11 +39,13 @@ type Scope interface {
 	DisableVPCCNI() bool
 }
 
+// Service defines the spec for a service.
 type Service struct {
 	scope  Scope
 	client client.Client
 }
 
+// NewService will create a new service.
 func NewService(awsnodeScope Scope) *Service {
 	client, _ := awsnodeScope.RemoteClient()
 	return &Service{

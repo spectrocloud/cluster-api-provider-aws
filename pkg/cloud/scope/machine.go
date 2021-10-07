@@ -27,11 +27,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -159,12 +160,12 @@ func (m *MachineScope) SetInstanceState(v infrav1.InstanceState) {
 	m.AWSMachine.Status.InstanceState = &v
 }
 
-// SetReady sets the AWSMachine Ready Status
+// SetReady sets the AWSMachine Ready Status.
 func (m *MachineScope) SetReady() {
 	m.AWSMachine.Status.Ready = true
 }
 
-// SetNotReady sets the AWSMachine Ready Status to false
+// SetNotReady sets the AWSMachine Ready Status to false.
 func (m *MachineScope) SetNotReady() {
 	m.AWSMachine.Status.Ready = false
 }
@@ -205,31 +206,31 @@ func (m *MachineScope) UserDataIsUncompressed() bool {
 }
 
 // GetSecretPrefix returns the prefix for the secrets belonging
-// to the AWSMachine in AWS Secrets Manager
+// to the AWSMachine in AWS Secrets Manager.
 func (m *MachineScope) GetSecretPrefix() string {
 	return m.AWSMachine.Spec.CloudInit.SecretPrefix
 }
 
 // SetSecretPrefix sets the prefix for the secrets belonging
-// to the AWSMachine in AWS Secrets Manager
+// to the AWSMachine in AWS Secrets Manager.
 func (m *MachineScope) SetSecretPrefix(value string) {
 	m.AWSMachine.Spec.CloudInit.SecretPrefix = value
 }
 
 // DeleteSecretPrefix deletes the prefix for the secret belonging
-// to the AWSMachine in AWS Secrets Manager
+// to the AWSMachine in AWS Secrets Manager.
 func (m *MachineScope) DeleteSecretPrefix() {
 	m.AWSMachine.Spec.CloudInit.SecretPrefix = ""
 }
 
 // GetSecretCount returns the number of AWS Secret Manager entries making up
-// the complete userdata
+// the complete userdata.
 func (m *MachineScope) GetSecretCount() int32 {
 	return m.AWSMachine.Spec.CloudInit.SecretCount
 }
 
 // SetSecretCount sets the number of AWS Secret Manager entries making up
-// the complete userdata
+// the complete userdata.
 func (m *MachineScope) SetSecretCount(i int32) {
 	m.AWSMachine.Spec.CloudInit.SecretCount = i
 }
@@ -316,34 +317,45 @@ func (m *MachineScope) AdditionalTags() infrav1.Tags {
 	return tags
 }
 
+// HasFailed returns the failure state of the machine scope.
 func (m *MachineScope) HasFailed() bool {
 	return m.AWSMachine.Status.FailureReason != nil || m.AWSMachine.Status.FailureMessage != nil
 }
 
+// InstanceIsRunning returns the instance state of the machine scope.
 func (m *MachineScope) InstanceIsRunning() bool {
 	state := m.GetInstanceState()
 	return state != nil && infrav1.InstanceRunningStates.Has(string(*state))
 }
 
+// InstanceIsOperational returns the operational state of the machine scope.
 func (m *MachineScope) InstanceIsOperational() bool {
 	state := m.GetInstanceState()
 	return state != nil && infrav1.InstanceOperationalStates.Has(string(*state))
 }
 
+// InstanceIsInKnownState checks if the machine scope's instance state is known.
 func (m *MachineScope) InstanceIsInKnownState() bool {
 	state := m.GetInstanceState()
 	return state != nil && infrav1.InstanceKnownStates.Has(string(*state))
 }
 
+// AWSMachineIsDeleted checks if the machine was deleted.
 func (m *MachineScope) AWSMachineIsDeleted() bool {
 	return !m.AWSMachine.ObjectMeta.DeletionTimestamp.IsZero()
 }
 
+// IsEKSManaged checks if the machine is EKS managed.
 func (m *MachineScope) IsEKSManaged() bool {
 	return m.InfraCluster.InfraCluster().GetObjectKind().GroupVersionKind().Kind == "AWSManagedControlPlane"
 }
 
-// SetInterruptible sets the AWSMachine status Interruptible
+// IsExternallyManaged checks if the machine is externally managed.
+func (m *MachineScope) IsExternallyManaged() bool {
+	return annotations.IsExternallyManaged(m.InfraCluster.InfraCluster())
+}
+
+// SetInterruptible sets the AWSMachine status Interruptible.
 func (m *MachineScope) SetInterruptible() {
 	if m.AWSMachine.Spec.SpotMarketOptions != nil {
 		m.AWSMachine.Status.Interruptible = true

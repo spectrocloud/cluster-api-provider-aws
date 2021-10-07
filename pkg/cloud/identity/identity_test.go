@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/sts/mock_stsiface"
 )
 
@@ -44,9 +44,8 @@ func TestAWSStaticPrincipalTypeProvider(t *testing.T) {
 			"SecretAccessKey": []byte("static-SecretAccessKey"),
 		},
 	}
-	var staticProvider AWSPrincipalTypeProvider
 
-	staticProvider = NewAWSStaticPrincipalTypeProvider(&infrav1.AWSClusterStaticIdentity{}, secret)
+	var staticProvider AWSPrincipalTypeProvider = NewAWSStaticPrincipalTypeProvider(&infrav1.AWSClusterStaticIdentity{}, secret)
 
 	stsMock := mock_stsiface.NewMockSTSAPI(mockCtrl)
 	roleIdentity := &infrav1.AWSClusterRoleIdentity{
@@ -58,8 +57,8 @@ func TestAWSStaticPrincipalTypeProvider(t *testing.T) {
 			},
 		},
 	}
-	var roleProvider AWSPrincipalTypeProvider
-	roleProvider = &AWSRolePrincipalTypeProvider{
+
+	var roleProvider AWSPrincipalTypeProvider = &AWSRolePrincipalTypeProvider{
 		credentials:    nil,
 		Principal:      roleIdentity,
 		sourceProvider: &staticProvider,
@@ -75,8 +74,8 @@ func TestAWSStaticPrincipalTypeProvider(t *testing.T) {
 			},
 		},
 	}
-	var roleProvider2 AWSPrincipalTypeProvider
-	roleProvider2 = &AWSRolePrincipalTypeProvider{
+
+	var roleProvider2 AWSPrincipalTypeProvider = &AWSRolePrincipalTypeProvider{
 		credentials:    nil,
 		Principal:      roleIdentity2,
 		sourceProvider: &roleProvider,
@@ -190,9 +189,9 @@ func TestAWSStaticPrincipalTypeProvider(t *testing.T) {
 			if tc.expectErr {
 				g.Expect(err).ToNot(BeNil())
 				return
-			} else {
-				g.Expect(err).To(BeNil())
 			}
+
+			g.Expect(err).To(BeNil())
 
 			if !reflect.DeepEqual(tc.value, value) {
 				t.Fatal("Did not get expected result")

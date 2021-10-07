@@ -29,7 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/filter"
@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/userdata"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -155,7 +155,7 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte) (*i
 		}
 
 		if scope.IsEKSManaged() && imageLookupFormat == "" && imageLookupOrg == "" && imageLookupBaseOS == "" {
-			input.ImageID, err = s.eksAMILookup(*scope.Machine.Spec.Version)
+			input.ImageID, err = s.eksAMILookup(*scope.Machine.Spec.Version, scope.AWSMachine.Spec.AMI.EKSOptimizedLookupType)
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +173,7 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte) (*i
 	}
 	input.SubnetID = subnetID
 
-	if !scope.IsEKSManaged() && s.scope.Network().APIServerELB.DNSName == "" {
+	if !scope.IsExternallyManaged() && !scope.IsEKSManaged() && s.scope.Network().APIServerELB.DNSName == "" {
 		record.Eventf(s.scope.InfraCluster(), "FailedCreateInstance", "Failed to run controlplane, APIServer ELB not available")
 
 		return nil, awserrors.NewFailedDependency("failed to run controlplane, APIServer ELB not available")
@@ -210,7 +210,9 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte) (*i
 		// fallback to AWSCluster.Spec.SSHKeyName if it is defined
 		prioritizedSSHKeyName = *scope.InfraCluster.SSHKeyName()
 	default:
-		prioritizedSSHKeyName = defaultSSHKeyName
+		if !scope.IsExternallyManaged() {
+			prioritizedSSHKeyName = defaultSSHKeyName
+		}
 	}
 
 	// Only set input.SSHKeyName if the user did not explicitly request no ssh key be set (explicitly setting "" on either the Machine or related Cluster)
@@ -260,41 +262,40 @@ func (s *Service) findSubnet(scope *scope.MachineScope) (string, error) {
 
 	switch {
 	case scope.AWSMachine.Spec.Subnet != nil && scope.AWSMachine.Spec.Subnet.ID != nil:
-		if failureDomain != nil {
-			subnet := s.scope.Subnets().FindByID(*scope.AWSMachine.Spec.Subnet.ID)
-			if subnet == nil {
-				record.Warnf(scope.AWSMachine, "FailedCreate",
-					"Failed to create instance: subnet with id %q not found", aws.StringValue(scope.AWSMachine.Spec.Subnet.ID))
-				return "", awserrors.NewFailedDependency(
-					fmt.Sprintf("failed to run machine %q, subnet with id %q not found",
-						scope.Name(),
-						aws.StringValue(scope.AWSMachine.Spec.Subnet.ID),
-					),
-				)
-			}
-
-			if subnet.AvailabilityZone != *failureDomain {
-				record.Warnf(scope.AWSMachine, "FailedCreate",
-					"Failed to create instance: subnet's availability zone %q does not match with the failure domain %q",
-					subnet.AvailabilityZone,
-					*failureDomain)
-				return "", awserrors.NewFailedDependency(
-					fmt.Sprintf("failed to run machine %q, subnet's availability zone %q does not match with the failure domain %q",
-						scope.Name(),
-						subnet.AvailabilityZone,
-						*failureDomain,
-					),
-				)
+		subnet := s.scope.Subnets().FindByID(*scope.AWSMachine.Spec.Subnet.ID)
+		if subnet == nil {
+			errMessage := fmt.Sprintf("failed to run machine %q, subnet with id %q not found",
+				scope.Name(), aws.StringValue(scope.AWSMachine.Spec.Subnet.ID))
+			record.Warnf(scope.AWSMachine, "FailedCreate", errMessage)
+			return "", awserrors.NewFailedDependency(errMessage)
+		}
+		if scope.AWSMachine.Spec.PublicIP != nil && *scope.AWSMachine.Spec.PublicIP {
+			if !subnet.IsPublic {
+				errMessage := fmt.Sprintf("failed to run machine %q with public IP, a specified subnet %q is a private subnet",
+					scope.Name(), aws.StringValue(scope.AWSMachine.Spec.Subnet.ID))
+				record.Eventf(scope.AWSMachine, "FailedCreate", errMessage)
+				return "", awserrors.NewFailedDependency(errMessage)
 			}
 		}
-		return *scope.AWSMachine.Spec.Subnet.ID, nil
+		if failureDomain != nil && subnet.AvailabilityZone != *failureDomain {
+			errMessage := fmt.Sprintf("failed to run machine %q, subnet's availability zone %q does not match with the failure domain %q",
+				scope.Name(), subnet.AvailabilityZone, *failureDomain)
+			record.Warnf(scope.AWSMachine, "FailedCreate", errMessage)
+			return "", awserrors.NewFailedDependency(errMessage)
+		}
+		return subnet.ID, nil
 	case scope.AWSMachine.Spec.Subnet != nil && scope.AWSMachine.Spec.Subnet.Filters != nil:
 		criteria := []*ec2.Filter{
 			filter.EC2.SubnetStates(ec2.SubnetStatePending, ec2.SubnetStateAvailable),
-			filter.EC2.VPC(s.scope.VPC().ID),
+		}
+		if !scope.IsExternallyManaged() {
+			criteria = append(criteria, filter.EC2.VPC(s.scope.VPC().ID))
 		}
 		if failureDomain != nil {
 			criteria = append(criteria, filter.EC2.AvailabilityZone(*failureDomain))
+		}
+		if scope.AWSMachine.Spec.PublicIP != nil && *scope.AWSMachine.Spec.PublicIP {
+			criteria = append(criteria, &ec2.Filter{Name: aws.String("map-public-ip-on-launch"), Values: aws.StringSlice([]string{"true"})})
 		}
 		for _, f := range scope.AWSMachine.Spec.Subnet.Filters {
 			criteria = append(criteria, &ec2.Filter{Name: aws.String(f.Name), Values: aws.StringSlice(f.Values)})
@@ -304,29 +305,38 @@ func (s *Service) findSubnet(scope *scope.MachineScope) (string, error) {
 			return "", errors.Wrapf(err, "failed to filter subnets for criteria %q", criteria)
 		}
 		if len(subnets) == 0 {
-			record.Warnf(scope.AWSMachine, "FailedCreate",
-				"Failed to create instance: no subnets available matching filters %q", scope.AWSMachine.Spec.Subnet.Filters)
-			return "", awserrors.NewFailedDependency(
-				fmt.Sprintf("failed to run machine %q, no subnets available matching filters %q",
-					scope.Name(),
-					scope.AWSMachine.Spec.Subnet.Filters,
-				),
-			)
+			errMessage := fmt.Sprintf("failed to run machine %q, no subnets available matching filters %q",
+				scope.Name(), scope.AWSMachine.Spec.Subnet.Filters)
+			record.Warnf(scope.AWSMachine, "FailedCreate", errMessage)
+			return "", awserrors.NewFailedDependency(errMessage)
 		}
 		return *subnets[0].SubnetId, nil
-
 	case failureDomain != nil:
+		if scope.AWSMachine.Spec.PublicIP != nil && *scope.AWSMachine.Spec.PublicIP {
+			subnets := s.scope.Subnets().FilterPublic().FilterByZone(*failureDomain)
+			if len(subnets) == 0 {
+				errMessage := fmt.Sprintf("failed to run machine %q with public IP, no public subnets available in availability zone %q",
+					scope.Name(), *failureDomain)
+				record.Warnf(scope.AWSMachine, "FailedCreate", errMessage)
+				return "", awserrors.NewFailedDependency(errMessage)
+			}
+			return subnets[0].ID, nil
+		}
+
 		subnets := s.scope.Subnets().FilterPrivate().FilterByZone(*failureDomain)
 		if len(subnets) == 0 {
-			record.Warnf(scope.AWSMachine, "FailedCreate",
-				"Failed to create instance: no subnets available in availability zone %q", *failureDomain)
-
-			return "", awserrors.NewFailedDependency(
-				fmt.Sprintf("failed to run machine %q, no subnets available in availability zone %q",
-					scope.Name(),
-					*failureDomain,
-				),
-			)
+			errMessage := fmt.Sprintf("failed to run machine %q, no subnets available in availability zone %q",
+				scope.Name(), *failureDomain)
+			record.Warnf(scope.AWSMachine, "FailedCreate", errMessage)
+			return "", awserrors.NewFailedDependency(errMessage)
+		}
+		return subnets[0].ID, nil
+	case scope.AWSMachine.Spec.PublicIP != nil && *scope.AWSMachine.Spec.PublicIP:
+		subnets := s.scope.Subnets().FilterPublic()
+		if len(subnets) == 0 {
+			errMessage := fmt.Sprintf("failed to run machine %q with public IP, no public subnets available", scope.Name())
+			record.Eventf(scope.AWSMachine, "FailedCreate", errMessage)
+			return "", awserrors.NewFailedDependency(errMessage)
 		}
 		return subnets[0].ID, nil
 
@@ -336,14 +346,15 @@ func (s *Service) findSubnet(scope *scope.MachineScope) (string, error) {
 	default:
 		sns := s.scope.Subnets().FilterPrivate()
 		if len(sns) == 0 {
-			record.Eventf(s.scope.InfraCluster(), "FailedCreateInstance", "Failed to run machine %q, no subnets available", scope.Name())
-			return "", awserrors.NewFailedDependency(fmt.Sprintf("failed to run machine %q, no subnets available", scope.Name()))
+			errMessage := fmt.Sprintf("failed to run machine %q, no subnets available", scope.Name())
+			record.Eventf(s.scope.InfraCluster(), "FailedCreateInstance", errMessage)
+			return "", awserrors.NewFailedDependency(errMessage)
 		}
 		return sns[0].ID, nil
 	}
 }
 
-// getFilteredSubnets fetches subnets filtered based on the criteria passed
+// getFilteredSubnets fetches subnets filtered based on the criteria passed.
 func (s *Service) getFilteredSubnets(criteria ...*ec2.Filter) ([]*ec2.Subnet, error) {
 	out, err := s.EC2Client.DescribeSubnets(&ec2.DescribeSubnetsInput{Filters: criteria})
 	if err != nil {
@@ -353,8 +364,12 @@ func (s *Service) getFilteredSubnets(criteria ...*ec2.Filter) ([]*ec2.Subnet, er
 }
 
 // GetCoreSecurityGroups looks up the security group IDs managed by this actuator
-// They are considered "core" to its proper functioning
+// They are considered "core" to its proper functioning.
 func (s *Service) GetCoreSecurityGroups(scope *scope.MachineScope) ([]string, error) {
+	if scope.IsExternallyManaged() {
+		return nil, nil
+	}
+
 	// These are common across both controlplane and node machines
 	sgRoles := []infrav1.SecurityGroupRole{
 		infrav1.SecurityGroupNode,
@@ -385,8 +400,8 @@ func (s *Service) GetCoreSecurityGroups(scope *scope.MachineScope) ([]string, er
 	return ids, nil
 }
 
-// GetCoreSecurityGroups looks up the security group IDs managed by this actuator
-// They are considered "core" to its proper functioning
+// GetCoreNodeSecurityGroups looks up the security group IDs managed by this actuator
+// They are considered "core" to its proper functioning.
 func (s *Service) GetCoreNodeSecurityGroups(scope *scope.MachinePoolScope) ([]string, error) {
 	// These are common across both controlplane and node machines
 	sgRoles := []infrav1.SecurityGroupRole{
@@ -494,61 +509,20 @@ func (s *Service) runInstance(role string, i *infrav1.Instance) (*infrav1.Instan
 			return nil, err
 		}
 
-		ebsRootDevice := &ec2.EbsBlockDevice{
-			DeleteOnTermination: aws.Bool(true),
-			VolumeSize:          aws.Int64(i.RootVolume.Size),
-			Encrypted:           aws.Bool(i.RootVolume.Encrypted),
-		}
-
-		if i.RootVolume.IOPS != 0 {
-			ebsRootDevice.Iops = aws.Int64(i.RootVolume.IOPS)
-		}
-
-		if i.RootVolume.EncryptionKey != "" {
-			ebsRootDevice.Encrypted = aws.Bool(true)
-			ebsRootDevice.KmsKeyId = aws.String(i.RootVolume.EncryptionKey)
-		}
-
-		if i.RootVolume.Type != "" {
-			ebsRootDevice.VolumeType = aws.String(i.RootVolume.Type)
-		}
-
-		blockdeviceMappings = append(blockdeviceMappings, &ec2.BlockDeviceMapping{
-			DeviceName: rootDeviceName,
-			Ebs:        ebsRootDevice,
-		})
+		i.RootVolume.DeviceName = aws.StringValue(rootDeviceName)
+		blockDeviceMapping := volumeToBlockDeviceMapping(i.RootVolume)
+		blockdeviceMappings = append(blockdeviceMappings, blockDeviceMapping)
 	}
 
-	if i.NonRootVolumes != nil {
-		for _, nonRootVolume := range i.NonRootVolumes {
-			if nonRootVolume.DeviceName == "" {
-				return nil, errors.Errorf("non root volume should have device name specified")
-			}
+	for vi := range i.NonRootVolumes {
+		nonRootVolume := i.NonRootVolumes[vi]
 
-			ebsDevice := &ec2.EbsBlockDevice{
-				DeleteOnTermination: aws.Bool(true),
-				VolumeSize:          aws.Int64(nonRootVolume.Size),
-				Encrypted:           aws.Bool(nonRootVolume.Encrypted),
-			}
-
-			if nonRootVolume.IOPS != 0 {
-				ebsDevice.Iops = aws.Int64(nonRootVolume.IOPS)
-			}
-
-			if nonRootVolume.EncryptionKey != "" {
-				ebsDevice.Encrypted = aws.Bool(true)
-				ebsDevice.KmsKeyId = aws.String(nonRootVolume.EncryptionKey)
-			}
-
-			if nonRootVolume.Type != "" {
-				ebsDevice.VolumeType = aws.String(nonRootVolume.Type)
-			}
-
-			blockdeviceMappings = append(blockdeviceMappings, &ec2.BlockDeviceMapping{
-				DeviceName: &nonRootVolume.DeviceName,
-				Ebs:        ebsDevice,
-			})
+		if nonRootVolume.DeviceName == "" {
+			return nil, errors.Errorf("non root volume should have device name specified")
 		}
+
+		blockDeviceMapping := volumeToBlockDeviceMapping(&nonRootVolume)
+		blockdeviceMappings = append(blockdeviceMappings, blockDeviceMapping)
 	}
 
 	if len(blockdeviceMappings) != 0 {
@@ -604,6 +578,36 @@ func (s *Service) runInstance(role string, i *infrav1.Instance) (*infrav1.Instan
 	}
 
 	return s.SDKToInstance(out.Instances[0])
+}
+
+func volumeToBlockDeviceMapping(v *infrav1.Volume) *ec2.BlockDeviceMapping {
+	ebsDevice := &ec2.EbsBlockDevice{
+		DeleteOnTermination: aws.Bool(true),
+		VolumeSize:          aws.Int64(v.Size),
+		Encrypted:           v.Encrypted,
+	}
+
+	if v.Throughput != nil {
+		ebsDevice.Throughput = v.Throughput
+	}
+
+	if v.IOPS != 0 {
+		ebsDevice.Iops = aws.Int64(v.IOPS)
+	}
+
+	if v.EncryptionKey != "" {
+		ebsDevice.Encrypted = aws.Bool(true)
+		ebsDevice.KmsKeyId = aws.String(v.EncryptionKey)
+	}
+
+	if v.Type != "" {
+		ebsDevice.VolumeType = aws.String(string(v.Type))
+	}
+
+	return &ec2.BlockDeviceMapping{
+		DeviceName: &v.DeviceName,
+		Ebs:        ebsDevice,
+	}
 }
 
 // GetInstanceSecurityGroups returns a map from ENI id to the security groups applied to that ENI
@@ -743,6 +747,18 @@ func (s *Service) getImageSnapshotSize(imageID string) (*int64, error) {
 		return nil, errors.Errorf("no images returned when looking up ID %q", imageID)
 	}
 
+	if len(output.Images[0].BlockDeviceMappings) == 0 {
+		return nil, errors.Errorf("no block device mappings returned when looking up ID %q", imageID)
+	}
+
+	if output.Images[0].BlockDeviceMappings[0].Ebs == nil {
+		return nil, errors.Errorf("no EBS returned when looking up ID %q", imageID)
+	}
+
+	if output.Images[0].BlockDeviceMappings[0].Ebs.VolumeSize == nil {
+		return nil, errors.Errorf("no EBS volume size returned when looking up ID %q", imageID)
+	}
+
 	return output.Images[0].BlockDeviceMappings[0].Ebs.VolumeSize, nil
 }
 
@@ -785,6 +801,10 @@ func (s *Service) SDKToInstance(v *ec2.Instance) (*infrav1.Instance, error) {
 	i.Addresses = s.getInstanceAddresses(v)
 
 	i.AvailabilityZone = aws.StringValue(v.Placement.AvailabilityZone)
+
+	for _, volume := range v.BlockDeviceMappings {
+		i.VolumeIDs = append(i.VolumeIDs, *volume.Ebs.VolumeId)
+	}
 
 	return i, nil
 }
@@ -895,7 +915,7 @@ func (s *Service) DetachSecurityGroupsFromNetworkInterface(groups []string, inte
 }
 
 // checkRootVolume checks the input root volume options against the requested AMI's defaults
-// and returns the AMI's root device name
+// and returns the AMI's root device name.
 func (s *Service) checkRootVolume(rootVolume *infrav1.Volume, imageID string) (*string, error) {
 	rootDeviceName, err := s.getImageRootDevice(imageID)
 	if err != nil {
@@ -964,7 +984,7 @@ func getInstanceMarketOptionsRequest(spotMarketOptions *infrav1.SpotMarketOption
 	return instanceMarketOptionsRequest
 }
 
-// GetFilteredSecurityGroupID get security group ID using filters
+// GetFilteredSecurityGroupID get security group ID using filters.
 func (s *Service) GetFilteredSecurityGroupID(securityGroup infrav1.AWSResourceReference) (string, error) {
 	if securityGroup.Filters == nil {
 		return "", nil

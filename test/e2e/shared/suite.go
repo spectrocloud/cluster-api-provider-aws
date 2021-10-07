@@ -28,27 +28,31 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/gofrs/flock"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"sigs.k8s.io/yaml"
-
+	"github.com/aws/aws-sdk-go/service/iam"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/test/framework/kubernetesversions"
+	"sigs.k8s.io/yaml"
 )
 
 type synchronizedBeforeTestSuiteConfig struct {
-	ArtifactFolder          string               `json:"artifactFolder,omitempty"`
-	ConfigPath              string               `json:"configPath,omitempty"`
-	ClusterctlConfigPath    string               `json:"clusterctlConfigPath,omitempty"`
-	KubeconfigPath          string               `json:"kubeconfigPath,omitempty"`
-	Region                  string               `json:"region,omitempty"`
-	E2EConfig               clusterctl.E2EConfig `json:"e2eConfig,omitempty"`
-	KubetestConfigFilePath  string               `json:"kubetestConfigFilePath,omitempty"`
-	UseCIArtifacts          bool                 `json:"useCIArtifacts,omitempty"`
-	GinkgoNodes             int                  `json:"ginkgoNodes,omitempty"`
-	GinkgoSlowSpecThreshold int                  `json:"ginkgoSlowSpecThreshold,omitempty"`
+	ArtifactFolder           string               `json:"artifactFolder,omitempty"`
+	ConfigPath               string               `json:"configPath,omitempty"`
+	ClusterctlConfigPath     string               `json:"clusterctlConfigPath,omitempty"`
+	KubeconfigPath           string               `json:"kubeconfigPath,omitempty"`
+	Region                   string               `json:"region,omitempty"`
+	E2EConfig                clusterctl.E2EConfig `json:"e2eConfig,omitempty"`
+	BootstrapAccessKey       *iam.AccessKey       `json:"bootstrapAccessKey,omitempty"`
+	KubetestConfigFilePath   string               `json:"kubetestConfigFilePath,omitempty"`
+	UseCIArtifacts           bool                 `json:"useCIArtifacts,omitempty"`
+	GinkgoNodes              int                  `json:"ginkgoNodes,omitempty"`
+	GinkgoSlowSpecThreshold  int                  `json:"ginkgoSlowSpecThreshold,omitempty"`
+	Base64EncodedCredentials string               `json:"base64EncodedCredentials,omitempty"`
 }
 
 // Node1BeforeSuite is the common setup down on the first ginkgo node before the test suite runs
@@ -60,13 +64,14 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 	e2eCtx.E2EConfig = LoadE2EConfig(e2eCtx.Settings.ConfigPath)
 	sourceTemplate, err := ioutil.ReadFile(filepath.Join(e2eCtx.Settings.DataFolder, e2eCtx.Settings.SourceTemplate))
 	Expect(err).NotTo(HaveOccurred())
+	e2eCtx.StartOfSuite = time.Now()
 
 	var clusterctlCITemplate clusterctl.Files
 	if !e2eCtx.IsManaged {
 		// Create CI manifest for upgrading to Kubernetes main test
 		platformKustomization, err := ioutil.ReadFile(filepath.Join(e2eCtx.Settings.DataFolder, "ci-artifacts-platform-kustomization-for-upgrade.yaml"))
 		Expect(err).NotTo(HaveOccurred())
-		sourceTemplateForUpgrade, err := ioutil.ReadFile(filepath.Join(e2eCtx.Settings.DataFolder, "infrastructure-aws/cluster-template-upgrade-to-main.yaml"))
+		sourceTemplateForUpgrade, err := ioutil.ReadFile(filepath.Join(e2eCtx.Settings.DataFolder, "infrastructure-aws/generated/cluster-template-upgrade-to-main.yaml"))
 		Expect(err).NotTo(HaveOccurred())
 
 		ciTemplateForUpgradePath, err := kubernetesversions.GenerateCIArtifactsInjectedTemplateForDebian(
@@ -132,10 +137,16 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 	ensureNoServiceLinkedRoles(e2eCtx.AWSSession)
 	ensureSSHKeyPair(e2eCtx.AWSSession, DefaultSSHKeyPairName)
 	e2eCtx.Environment.BootstrapAccessKey = newUserAccessKey(e2eCtx.AWSSession, boostrapTemplate.Spec.BootstrapUser.UserName)
-	e2eCtx.BootstratpUserAWSSession = NewAWSSessionWithKey(e2eCtx.Environment.BootstrapAccessKey)
+	e2eCtx.BootstrapUserAWSSession = NewAWSSessionWithKey(e2eCtx.Environment.BootstrapAccessKey)
+	bucket, imageSha, err := ensureTestImageUploaded(e2eCtx)
+	Expect(err).NotTo(HaveOccurred())
+	e2eCtx.E2EConfig.Variables["CAPI_IMAGES_BUCKET"] = bucket
+	e2eCtx.E2EConfig.Variables["E2E_IMAGE_SHA"] = imageSha
 
 	// Image ID is needed when using a CI Kubernetes version. This is used in conformance test and upgrade to main test.
-	e2eCtx.E2EConfig.Variables["IMAGE_ID"] = conformanceImageID(e2eCtx)
+	if !e2eCtx.IsManaged {
+		e2eCtx.E2EConfig.Variables["IMAGE_ID"] = conformanceImageID(e2eCtx)
+	}
 
 	Byf("Creating a clusterctl local repository into %q", e2eCtx.Settings.ArtifactFolder)
 	e2eCtx.Environment.ClusterctlConfigPath = createClusterctlLocalRepository(e2eCtx.E2EConfig, filepath.Join(e2eCtx.Settings.ArtifactFolder, "repository"))
@@ -143,22 +154,32 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 	By("Setting up the bootstrap cluster")
 	e2eCtx.Environment.BootstrapClusterProvider, e2eCtx.Environment.BootstrapClusterProxy = setupBootstrapCluster(e2eCtx.E2EConfig, e2eCtx.Environment.Scheme, e2eCtx.Settings.UseExistingCluster)
 
-	SetEnvVar("AWS_B64ENCODED_CREDENTIALS", encodeCredentials(e2eCtx.Environment.BootstrapAccessKey, boostrapTemplate.Spec.Region), true)
+	base64EncodedCredentials := encodeCredentials(e2eCtx.Environment.BootstrapAccessKey, boostrapTemplate.Spec.Region)
+	SetEnvVar("AWS_B64ENCODED_CREDENTIALS", base64EncodedCredentials, true)
+
+	By("Writing AWS service quotas to a file for parallel tests")
+	quotas := EnsureServiceQuotas(e2eCtx.BootstrapUserAWSSession)
+	WriteResourceQuotesToFile(ResourceQuotaFilePath, quotas)
+	WriteResourceQuotesToFile(path.Join(e2eCtx.Settings.ArtifactFolder, "initial-resource-quotas.yaml"), quotas)
 
 	By("Initializing the bootstrap cluster")
 	initBootstrapCluster(e2eCtx)
 
+	CreateAWSClusterControllerIdentity(e2eCtx.Environment.BootstrapClusterProxy.GetClient())
+
 	conf := synchronizedBeforeTestSuiteConfig{
-		ArtifactFolder:          e2eCtx.Settings.ArtifactFolder,
-		ConfigPath:              e2eCtx.Settings.ConfigPath,
-		ClusterctlConfigPath:    e2eCtx.Environment.ClusterctlConfigPath,
-		KubeconfigPath:          e2eCtx.Environment.BootstrapClusterProxy.GetKubeconfigPath(),
-		Region:                  getBootstrapTemplate(e2eCtx).Spec.Region,
-		E2EConfig:               *e2eCtx.E2EConfig,
-		KubetestConfigFilePath:  e2eCtx.Settings.KubetestConfigFilePath,
-		UseCIArtifacts:          e2eCtx.Settings.UseCIArtifacts,
-		GinkgoNodes:             e2eCtx.Settings.GinkgoNodes,
-		GinkgoSlowSpecThreshold: e2eCtx.Settings.GinkgoSlowSpecThreshold,
+		ArtifactFolder:           e2eCtx.Settings.ArtifactFolder,
+		ConfigPath:               e2eCtx.Settings.ConfigPath,
+		ClusterctlConfigPath:     e2eCtx.Environment.ClusterctlConfigPath,
+		KubeconfigPath:           e2eCtx.Environment.BootstrapClusterProxy.GetKubeconfigPath(),
+		Region:                   getBootstrapTemplate(e2eCtx).Spec.Region,
+		E2EConfig:                *e2eCtx.E2EConfig,
+		BootstrapAccessKey:       e2eCtx.Environment.BootstrapAccessKey,
+		KubetestConfigFilePath:   e2eCtx.Settings.KubetestConfigFilePath,
+		UseCIArtifacts:           e2eCtx.Settings.UseCIArtifacts,
+		GinkgoNodes:              e2eCtx.Settings.GinkgoNodes,
+		GinkgoSlowSpecThreshold:  e2eCtx.Settings.GinkgoSlowSpecThreshold,
+		Base64EncodedCredentials: base64EncodedCredentials,
 	}
 
 	data, err := yaml.Marshal(conf)
@@ -176,17 +197,19 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 	e2eCtx.Environment.ClusterctlConfigPath = conf.ClusterctlConfigPath
 	e2eCtx.Environment.BootstrapClusterProxy = framework.NewClusterProxy("bootstrap", conf.KubeconfigPath, e2eCtx.Environment.Scheme)
 	e2eCtx.E2EConfig = &conf.E2EConfig
+	e2eCtx.BootstrapUserAWSSession = NewAWSSessionWithKey(conf.BootstrapAccessKey)
+	e2eCtx.Settings.FileLock = flock.New(ResourceQuotaFilePath)
 	e2eCtx.Settings.KubetestConfigFilePath = conf.KubetestConfigFilePath
 	e2eCtx.Settings.UseCIArtifacts = conf.UseCIArtifacts
 	e2eCtx.Settings.GinkgoNodes = conf.GinkgoNodes
 	e2eCtx.Settings.GinkgoSlowSpecThreshold = conf.GinkgoSlowSpecThreshold
+	e2eCtx.AWSSession = NewAWSSession()
 	azs := GetAvailabilityZones(e2eCtx.AWSSession)
 	SetEnvVar(AwsAvailabilityZone1, *azs[0].ZoneName, false)
 	SetEnvVar(AwsAvailabilityZone2, *azs[1].ZoneName, false)
 	SetEnvVar("AWS_REGION", conf.Region, false)
 	SetEnvVar("AWS_SSH_KEY_NAME", DefaultSSHKeyPairName, false)
-	Expect(SetMultitenancyEnvVars(e2eCtx.AWSSession)).To(Succeed())
-	e2eCtx.AWSSession = NewAWSSession()
+	SetEnvVar("AWS_B64ENCODED_CREDENTIALS", conf.Base64EncodedCredentials, true)
 	e2eCtx.Environment.ResourceTicker = time.NewTicker(time.Second * 5)
 	e2eCtx.Environment.ResourceTickerDone = make(chan bool)
 	// Get EC2 logs every minute
@@ -194,7 +217,6 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 	e2eCtx.Environment.MachineTickerDone = make(chan bool)
 	resourceCtx, resourceCancel := context.WithCancel(context.Background())
 	machineCtx, machineCancel := context.WithCancel(context.Background())
-
 	// Dump resources every 5 seconds
 	go func() {
 		defer GinkgoRecover()
@@ -230,28 +252,31 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 
 // Node1AfterSuite is cleanup that runs on the first ginkgo node after the test suite finishes
 func Node1AfterSuite(e2eCtx *E2EContext) {
-	if e2eCtx.Environment.ResourceTickerDone != nil {
-		e2eCtx.Environment.ResourceTickerDone <- true
-	}
-	if e2eCtx.Environment.MachineTickerDone != nil {
-		e2eCtx.Environment.MachineTickerDone <- true
-	}
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Minute)
-	defer cancel()
+	ctx, cancel := context.WithTimeout(context.TODO(), 15*time.Minute)
 	DumpEKSClusters(ctx, e2eCtx)
-	for k := range e2eCtx.Environment.Namespaces {
-		DumpSpecResourcesAndCleanup(ctx, "", k, e2eCtx)
-		DumpMachines(ctx, e2eCtx, k)
-	}
-}
-
-// AllNodesAfterSuite is cleanup that runs on all ginkgo parallel nodes after the test suite finishes
-func AllNodesAfterSuite(e2eCtx *E2EContext) {
+	DumpCloudTrailEvents(e2eCtx)
+	defer cancel()
 	By("Tearing down the management cluster")
 	if !e2eCtx.Settings.SkipCleanup {
 		tearDown(e2eCtx.Environment.BootstrapClusterProvider, e2eCtx.Environment.BootstrapClusterProxy)
 		if !e2eCtx.Settings.SkipCloudFormationDeletion {
 			deleteCloudFormationStack(e2eCtx.AWSSession, getBootstrapTemplate(e2eCtx))
 		}
+	}
+}
+
+// AllNodesAfterSuite is cleanup that runs on all ginkgo parallel nodes after the test suite finishes
+func AllNodesAfterSuite(e2eCtx *E2EContext) {
+	if e2eCtx.Environment.ResourceTickerDone != nil {
+		e2eCtx.Environment.ResourceTickerDone <- true
+	}
+	if e2eCtx.Environment.MachineTickerDone != nil {
+		e2eCtx.Environment.MachineTickerDone <- true
+	}
+	ctx, cancel := context.WithTimeout(context.TODO(), 45*time.Minute)
+	defer cancel()
+	for k := range e2eCtx.Environment.Namespaces {
+		DumpSpecResourcesAndCleanup(ctx, "", k, e2eCtx)
+		DumpMachines(ctx, e2eCtx, k)
 	}
 }

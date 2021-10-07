@@ -30,13 +30,13 @@ import (
 	amazoncni "github.com/aws/amazon-vpc-cni-k8s/pkg/apis/crd/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 )
 
@@ -130,7 +130,7 @@ func (s *ManagedControlPlaneScope) RemoteClient() (client.Client, error) {
 		Namespace: s.Namespace(),
 	}
 
-	restConfig, err := remote.RESTConfig(context.Background(), s.Client, clusterKey)
+	restConfig, err := remote.RESTConfig(context.Background(), s.controllerName, s.Client, clusterKey)
 	if err != nil {
 		return nil, fmt.Errorf("getting remote client for %s/%s: %w", s.Namespace(), s.Name(), err)
 	}
@@ -139,7 +139,7 @@ func (s *ManagedControlPlaneScope) RemoteClient() (client.Client, error) {
 }
 
 // Network returns the control plane network object.
-func (s *ManagedControlPlaneScope) Network() *infrav1.Network {
+func (s *ManagedControlPlaneScope) Network() *infrav1.NetworkStatus {
 	return &s.ControlPlane.Status.Network
 }
 
@@ -148,7 +148,7 @@ func (s *ManagedControlPlaneScope) VPC() *infrav1.VPCSpec {
 	return &s.ControlPlane.Spec.NetworkSpec.VPC
 }
 
-// ServiceLimiter returns the AWS SDK session. Used for creating clients
+// ServiceLimiter returns the AWS SDK session. Used for creating clients.
 func (s *ManagedControlPlaneScope) ServiceLimiter(service string) *throttle.ServiceLimiter {
 	if sl, ok := s.serviceLimiters[service]; ok {
 		return sl
@@ -184,6 +184,7 @@ func (s *ManagedControlPlaneScope) SecurityGroups() map[infrav1.SecurityGroupRol
 	return s.ControlPlane.Status.Network.SecurityGroups
 }
 
+// SecondaryCidrBlock returns the SecondaryCidrBlock of the control plane.
 func (s *ManagedControlPlaneScope) SecondaryCidrBlock() *string {
 	return s.ControlPlane.Spec.SecondaryCidrBlock
 }
@@ -198,7 +199,7 @@ func (s *ManagedControlPlaneScope) Name() string {
 	return s.Cluster.Name
 }
 
-// Name returns the AWS cluster name.
+// InfraClusterName returns the AWS cluster name.
 func (s *ManagedControlPlaneScope) InfraClusterName() string {
 	return s.ControlPlane.Name
 }
@@ -253,7 +254,7 @@ func (s *ManagedControlPlaneScope) AdditionalTags() infrav1.Tags {
 	return s.ControlPlane.Spec.AdditionalTags.DeepCopy()
 }
 
-// APIServerPort returns the port to use when communicating with the API server
+// APIServerPort returns the port to use when communicating with the API server.
 func (s *ManagedControlPlaneScope) APIServerPort() int32 {
 	return 443
 }
@@ -271,7 +272,7 @@ func (s *ManagedControlPlaneScope) InfraCluster() cloud.ClusterObject {
 	return s.ControlPlane
 }
 
-// Session returns the AWS SDK session. Used for creating clients
+// Session returns the AWS SDK session. Used for creating clients.
 func (s *ManagedControlPlaneScope) Session() awsclient.ConfigProvider {
 	return s.session
 }
@@ -297,7 +298,7 @@ func (s *ManagedControlPlaneScope) ControllerName() string {
 	return s.controllerName
 }
 
-// TokenMethod returns the token method to use in the kubeconfig
+// TokenMethod returns the token method to use in the kubeconfig.
 func (s *ManagedControlPlaneScope) TokenMethod() ekscontrolplanev1.EKSTokenMethod {
 	if s.ControlPlane.Spec.TokenMethod != nil {
 		return *s.ControlPlane.Spec.TokenMethod
@@ -307,32 +308,32 @@ func (s *ManagedControlPlaneScope) TokenMethod() ekscontrolplanev1.EKSTokenMetho
 }
 
 // KubernetesClusterName is the name of the Kubernetes cluster. For the managed
-// scope this is the different to the CAPI cluster name and is the EKS cluster name
+// scope this is the different to the CAPI cluster name and is the EKS cluster name.
 func (s *ManagedControlPlaneScope) KubernetesClusterName() string {
 	return s.ControlPlane.Spec.EKSClusterName
 }
 
-// EnableIAM indicates that reconciliation should create IAM roles
+// EnableIAM indicates that reconciliation should create IAM roles.
 func (s *ManagedControlPlaneScope) EnableIAM() bool {
 	return s.enableIAM
 }
 
-// AllowAdditionalRoles indicates if additional roles can be added to the created IAM roles
+// AllowAdditionalRoles indicates if additional roles can be added to the created IAM roles.
 func (s *ManagedControlPlaneScope) AllowAdditionalRoles() bool {
 	return s.allowAdditionalRoles
 }
 
-// ImageLookupFormat returns the format string to use when looking up AMIs
+// ImageLookupFormat returns the format string to use when looking up AMIs.
 func (s *ManagedControlPlaneScope) ImageLookupFormat() string {
 	return s.ControlPlane.Spec.ImageLookupFormat
 }
 
-// ImageLookupOrg returns the organization name to use when looking up AMIs
+// ImageLookupOrg returns the organization name to use when looking up AMIs.
 func (s *ManagedControlPlaneScope) ImageLookupOrg() string {
 	return s.ControlPlane.Spec.ImageLookupOrg
 }
 
-// ImageLookupBaseOS returns the base operating system name to use when looking up AMIs
+// ImageLookupBaseOS returns the base operating system name to use when looking up AMIs.
 func (s *ManagedControlPlaneScope) ImageLookupBaseOS() string {
 	return s.ControlPlane.Spec.ImageLookupBaseOS
 }
@@ -345,7 +346,7 @@ func (s *ManagedControlPlaneScope) IAMAuthConfig() *ekscontrolplanev1.IAMAuthent
 	return s.ControlPlane.Spec.IAMAuthenticatorConfig
 }
 
-// Addons returns the list of addons for a EKS cluster
+// Addons returns the list of addons for a EKS cluster.
 func (s *ManagedControlPlaneScope) Addons() []ekscontrolplanev1.Addon {
 	if s.ControlPlane.Spec.Addons == nil {
 		return []ekscontrolplanev1.Addon{}
@@ -353,7 +354,7 @@ func (s *ManagedControlPlaneScope) Addons() []ekscontrolplanev1.Addon {
 	return *s.ControlPlane.Spec.Addons
 }
 
-// DisableVPCCNI returns whether the AWS VPC CNI should be disabled
+// DisableVPCCNI returns whether the AWS VPC CNI should be disabled.
 func (s *ManagedControlPlaneScope) DisableVPCCNI() bool {
 	return s.ControlPlane.Spec.DisableVPCCNI
 }

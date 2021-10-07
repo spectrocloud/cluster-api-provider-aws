@@ -21,29 +21,15 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	"sigs.k8s.io/cluster-api/controllers/noderefutil"
-	capierrors "sigs.k8s.io/cluster-api/errors"
-	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/feature"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
@@ -54,11 +40,27 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/secretsmanager"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ssm"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/userdata"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/controllers/noderefutil"
+	capierrors "sigs.k8s.io/cluster-api/errors"
+	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/predicates"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+// InstanceIDIndex defines the aws machine controller's instance ID index.
 const InstanceIDIndex = ".spec.instanceID"
 
-// AWSMachineReconciler reconciles a AwsMachine object
+// AWSMachineReconciler reconciles a AwsMachine object.
 type AWSMachineReconciler struct {
 	client.Client
 	Log                          logr.Logger
@@ -67,10 +69,11 @@ type AWSMachineReconciler struct {
 	secretsManagerServiceFactory func(cloud.ClusterScoper) services.SecretInterface
 	SSMServiceFactory            func(cloud.ClusterScoper) services.SecretInterface
 	Endpoints                    []scope.ServiceEndpoint
+	WatchFilterValue             string
 }
 
 const (
-	// AWSManagedControlPlaneRefKind is the string value indicating that a cluster is AWS managed
+	// AWSManagedControlPlaneRefKind is the string value indicating that a cluster is AWS managed.
 	AWSManagedControlPlaneRefKind = "AWSManagedControlPlane"
 )
 
@@ -111,11 +114,11 @@ func (r *AWSMachineReconciler) getSecretService(machineScope *scope.MachineScope
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=awsmachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets;,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
 
-func (r *AWSMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	ctx := context.TODO()
-	logger := r.Log.WithValues("namespace", req.Namespace, "awsMachine", req.Name)
+func (r *AWSMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	log := ctrl.LoggerFrom(ctx)
 
 	// Fetch the AWSMachine instance.
 	awsMachine := &infrav1.AWSMachine{}
@@ -133,38 +136,37 @@ func (r *AWSMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 		return ctrl.Result{}, err
 	}
 	if machine == nil {
-		logger.Info("Machine Controller has not yet set OwnerRef")
+		log.Info("Machine Controller has not yet set OwnerRef")
 		return ctrl.Result{}, nil
 	}
 
-	logger = logger.WithValues("machine", machine.Name)
+	log = log.WithValues("machine", machine.Name)
 
 	// Fetch the Cluster.
 	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
-		logger.Info("Machine is missing cluster label or cluster does not exist")
+		log.Info("Machine is missing cluster label or cluster does not exist")
 		return ctrl.Result{}, nil
 	}
 
-	if util.IsPaused(cluster, awsMachine) {
-		logger.Info("AWSMachine or linked Cluster is marked as paused. Won't reconcile")
+	if annotations.IsPaused(cluster, awsMachine) {
+		log.Info("AWSMachine or linked Cluster is marked as paused. Won't reconcile")
 		return ctrl.Result{}, nil
 	}
 
-	logger = logger.WithValues("cluster", cluster.Name)
+	log = log.WithValues("cluster", cluster.Name)
 
-	infraCluster, err := r.getInfraCluster(ctx, logger, cluster, awsMachine)
+	infraCluster, err := r.getInfraCluster(ctx, log, cluster, awsMachine)
 	if err != nil {
 		return ctrl.Result{}, errors.New("error getting infra provider cluster or control plane object")
 	}
 	if infraCluster == nil {
-		logger.Info("AWSCluster or AWSManagedControlPlane is not ready yet")
+		log.Info("AWSCluster or AWSManagedControlPlane is not ready yet")
 		return ctrl.Result{}, nil
 	}
 
 	// Create the machine scope
 	machineScope, err := scope.NewMachineScope(scope.MachineScopeParams{
-		Logger:       logger,
 		Client:       r.Client,
 		Cluster:      cluster,
 		Machine:      machine,
@@ -172,7 +174,7 @@ func (r *AWSMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 		AWSMachine:   awsMachine,
 	})
 	if err != nil {
-		logger.Error(err, "failed to create scope")
+		log.Error(err, "failed to create scope")
 		return ctrl.Result{}, err
 	}
 
@@ -201,21 +203,22 @@ func (r *AWSMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 }
 
-func (r *AWSMachineReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
+func (r *AWSMachineReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
+	log := ctrl.LoggerFrom(ctx)
+	AWSClusterToAWSMachines := r.AWSClusterToAWSMachines(log)
+
 	controller, err := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(options).
 		For(&infrav1.AWSMachine{}).
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("AWSMachine")),
-			},
+			handler.EnqueueRequestsFromMapFunc(util.MachineToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("AWSMachine"))),
 		).
 		Watches(
 			&source.Kind{Type: &infrav1.AWSCluster{}},
-			&handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(r.AWSClusterToAWSMachines)},
+			handler.EnqueueRequestsFromMapFunc(AWSClusterToAWSMachines),
 		).
-		WithEventFilter(PausedPredicates(r.Log)).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(log, r.WatchFilterValue)).
 		WithEventFilter(
 			predicate.Funcs{
 				// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
@@ -244,23 +247,22 @@ func (r *AWSMachineReconciler) SetupWithManager(mgr ctrl.Manager, options contro
 	}
 
 	// Add index to AWSMachine to find by providerID
-	if err := mgr.GetFieldIndexer().IndexField(&infrav1.AWSMachine{},
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &infrav1.AWSMachine{},
 		InstanceIDIndex,
 		r.indexAWSMachineByInstanceID,
 	); err != nil {
 		return errors.Wrap(err, "error setting index fields")
 	}
 
+	requeueAWSMachinesForUnpausedCluster := r.requeueAWSMachinesForUnpausedCluster(log)
 	return controller.Watch(
 		&source.Kind{Type: &clusterv1.Cluster{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(r.requeueAWSMachinesForUnpausedCluster),
-		},
+		handler.EnqueueRequestsFromMapFunc(requeueAWSMachinesForUnpausedCluster),
 		predicate.Funcs{
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				oldCluster := e.ObjectOld.(*clusterv1.Cluster)
 				newCluster := e.ObjectNew.(*clusterv1.Cluster)
-				log := r.Log.WithValues("predicate", "updateEvent", "namespace", newCluster.Namespace, "cluster", newCluster.Name)
+				log := log.WithValues("predicate", "updateEvent", "namespace", newCluster.Namespace, "cluster", newCluster.Name)
 
 				switch {
 				// never return true for a paused Cluster
@@ -283,7 +285,7 @@ func (r *AWSMachineReconciler) SetupWithManager(mgr ctrl.Manager, options contro
 			},
 			CreateFunc: func(e event.CreateEvent) bool {
 				cluster := e.Object.(*clusterv1.Cluster)
-				log := r.Log.WithValues("predicateEvent", "create", "namespace", cluster.Namespace, "cluster", cluster.Name)
+				log := log.WithValues("predicateEvent", "create", "namespace", cluster.Namespace, "cluster", cluster.Name)
 
 				// Only need to trigger a reconcile if the Cluster.Spec.Paused is false and
 				// Cluster.Status.InfrastructureReady is true
@@ -295,12 +297,12 @@ func (r *AWSMachineReconciler) SetupWithManager(mgr ctrl.Manager, options contro
 				return false
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool {
-				log := r.Log.WithValues("predicateEvent", "delete", "namespace", e.Meta.GetNamespace(), "cluster", e.Meta.GetName())
+				log := log.WithValues("predicateEvent", "delete", "namespace", e.Object.GetNamespace(), "cluster", e.Object.GetName())
 				log.V(4).Info("Cluster did not match expected conditions, will not attempt to map associated AWSMachine.")
 				return false
 			},
 			GenericFunc: func(e event.GenericEvent) bool {
-				log := r.Log.WithValues("predicateEvent", "generic", "namespace", e.Meta.GetNamespace(), "cluster", e.Meta.GetName())
+				log := log.WithValues("predicateEvent", "generic", "namespace", e.Object.GetNamespace(), "cluster", e.Object.GetName())
 				log.V(4).Info("Cluster did not match expected conditions, will not attempt to map associated AWSMachine.")
 				return false
 			},
@@ -385,7 +387,7 @@ func (r *AWSMachineReconciler) reconcileDelete(machineScope *scope.MachineScope,
 		}
 		conditions.MarkFalse(machineScope.AWSMachine, infrav1.InstanceReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
 
-		// If the AWSMachine specifies Network Interfaces, detach the cluster's core Security Groups from them as part of deletion.
+		// If the AWSMachine specifies NetworkStatus Interfaces, detach the cluster's core Security Groups from them as part of deletion.
 		if len(machineScope.AWSMachine.Spec.NetworkInterfaces) > 0 {
 			core, err := ec2Service.GetCoreSecurityGroups(machineScope)
 			if err != nil {
@@ -468,14 +470,6 @@ func (r *AWSMachineReconciler) reconcileNormal(_ context.Context, machineScope *
 		return ctrl.Result{}, nil
 	}
 
-	// If the AWSMachine doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(machineScope.AWSMachine, infrav1.MachineFinalizer)
-	// Register the finalizer immediately to avoid orphaning AWS resources on delete
-	if err := machineScope.PatchObject(); err != nil {
-		machineScope.Error(err, "unable to patch object")
-		return ctrl.Result{}, err
-	}
-
 	if !machineScope.Cluster.Status.InfrastructureReady {
 		machineScope.Info("Cluster infrastructure is not ready yet")
 		conditions.MarkFalse(machineScope.AWSMachine, infrav1.InstanceReadyCondition, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
@@ -498,6 +492,15 @@ func (r *AWSMachineReconciler) reconcileNormal(_ context.Context, machineScope *
 		conditions.MarkUnknown(machineScope.AWSMachine, infrav1.InstanceReadyCondition, infrav1.InstanceNotFoundReason, err.Error())
 		return ctrl.Result{}, err
 	}
+
+	// If the AWSMachine doesn't have our finalizer, add it.
+	controllerutil.AddFinalizer(machineScope.AWSMachine, infrav1.MachineFinalizer)
+	// Register the finalizer after first read operation from AWS to avoid orphaning AWS resources on delete
+	if err := machineScope.PatchObject(); err != nil {
+		machineScope.Error(err, "unable to patch object")
+		return ctrl.Result{}, err
+	}
+
 	// Create new instance
 	if instance == nil {
 		// Avoid a flickering condition between InstanceProvisionStarted and InstanceProvisionFailed if there's a persistent failure with createInstance
@@ -580,6 +583,10 @@ func (r *AWSMachineReconciler) reconcileNormal(_ context.Context, machineScope *
 		if err != nil {
 			machineScope.Error(err, "failed to ensure tags")
 			return ctrl.Result{}, err
+		}
+
+		if instance != nil {
+			r.ensureStorageTags(ec2svc, instance, machineScope.AWSMachine)
 		}
 
 		if err := r.reconcileLBAttachment(machineScope, elbScope, instance); err != nil {
@@ -765,40 +772,52 @@ func (r *AWSMachineReconciler) reconcileLBAttachment(machineScope *scope.Machine
 
 // AWSClusterToAWSMachines is a handler.ToRequestsFunc to be used to enqeue requests for reconciliation
 // of AWSMachines.
-func (r *AWSMachineReconciler) AWSClusterToAWSMachines(o handler.MapObject) []ctrl.Request {
-	c := o.Object.(*infrav1.AWSCluster)
-	log := r.Log.WithValues("objectMapper", "awsClusterToAWSMachine", "namespace", c.Namespace, "awsCluster", c.Name)
+func (r *AWSMachineReconciler) AWSClusterToAWSMachines(log logr.Logger) handler.MapFunc {
+	return func(o client.Object) []ctrl.Request {
+		c, ok := o.(*infrav1.AWSCluster)
+		if !ok {
+			panic(fmt.Sprintf("Expected a AWSCluster but got a %T", o))
+		}
 
-	// Don't handle deleted AWSClusters
-	if !c.ObjectMeta.DeletionTimestamp.IsZero() {
-		log.V(4).Info("AWSCluster has a deletion timestamp, skipping mapping.")
-		return nil
+		log := log.WithValues("objectMapper", "awsClusterToAWSMachine", "namespace", c.Namespace, "awsCluster", c.Name)
+
+		// Don't handle deleted AWSClusters
+		if !c.ObjectMeta.DeletionTimestamp.IsZero() {
+			log.V(4).Info("AWSCluster has a deletion timestamp, skipping mapping.")
+			return nil
+		}
+
+		cluster, err := util.GetOwnerCluster(context.TODO(), r.Client, c.ObjectMeta)
+		switch {
+		case apierrors.IsNotFound(err) || cluster == nil:
+			log.V(4).Info("Cluster for AWSCluster not found, skipping mapping.")
+			return nil
+		case err != nil:
+			log.Error(err, "Failed to get owning cluster, skipping mapping.")
+			return nil
+		}
+
+		return r.requestsForCluster(log, cluster.Namespace, cluster.Name)
 	}
-
-	cluster, err := util.GetOwnerCluster(context.TODO(), r.Client, c.ObjectMeta)
-	switch {
-	case apierrors.IsNotFound(err) || cluster == nil:
-		log.V(4).Info("Cluster for AWSCluster not found, skipping mapping.")
-		return nil
-	case err != nil:
-		log.Error(err, "Failed to get owning cluster, skipping mapping.")
-		return nil
-	}
-
-	return r.requestsForCluster(log, cluster.Namespace, cluster.Name)
 }
 
-func (r *AWSMachineReconciler) requeueAWSMachinesForUnpausedCluster(o handler.MapObject) []ctrl.Request {
-	c := o.Object.(*clusterv1.Cluster)
-	log := r.Log.WithValues("objectMapper", "clusterToAWSMachine", "namespace", c.Namespace, "cluster", c.Name)
+func (r *AWSMachineReconciler) requeueAWSMachinesForUnpausedCluster(log logr.Logger) handler.MapFunc {
+	return func(o client.Object) []ctrl.Request {
+		c, ok := o.(*clusterv1.Cluster)
+		if !ok {
+			panic(fmt.Sprintf("Expected a Cluster but got a %T", o))
+		}
 
-	// Don't handle deleted clusters
-	if !c.ObjectMeta.DeletionTimestamp.IsZero() {
-		log.V(4).Info("Cluster has a deletion timestamp, skipping mapping.")
-		return nil
+		log := log.WithValues("objectMapper", "clusterToAWSMachine", "namespace", c.Namespace, "cluster", c.Name)
+
+		// Don't handle deleted clusters
+		if !c.ObjectMeta.DeletionTimestamp.IsZero() {
+			log.V(4).Info("Cluster has a deletion timestamp, skipping mapping.")
+			return nil
+		}
+
+		return r.requestsForCluster(log, c.Namespace, c.Name)
 	}
-
-	return r.requestsForCluster(log, c.Namespace, c.Name)
 }
 
 func (r *AWSMachineReconciler) requestsForCluster(log logr.Logger, namespace, name string) []ctrl.Request {
@@ -841,7 +860,7 @@ func (r *AWSMachineReconciler) getInfraCluster(ctx context.Context, log logr.Log
 
 		if err := r.Get(ctx, controlPlaneName, controlPlane); err != nil {
 			// AWSManagedControlPlane is not ready
-			return nil, nil
+			return nil, nil // nolint:nilerr
 		}
 
 		managedControlPlaneScope, err = scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
@@ -868,7 +887,7 @@ func (r *AWSMachineReconciler) getInfraCluster(ctx context.Context, log logr.Log
 
 	if err := r.Client.Get(ctx, infraClusterName, awsCluster); err != nil {
 		// AWSCluster is not ready
-		return nil, nil
+		return nil, nil // nolint:nilerr
 	}
 
 	// Create the cluster scope
@@ -886,7 +905,7 @@ func (r *AWSMachineReconciler) getInfraCluster(ctx context.Context, log logr.Log
 	return clusterScope, nil
 }
 
-func (r *AWSMachineReconciler) indexAWSMachineByInstanceID(o runtime.Object) []string {
+func (r *AWSMachineReconciler) indexAWSMachineByInstanceID(o client.Object) []string {
 	awsMachine, ok := o.(*infrav1.AWSMachine)
 	if !ok {
 		r.Log.Error(errors.New("incorrect type"), "expected an AWSMachine", "type", fmt.Sprintf("%T", o))
@@ -898,4 +917,32 @@ func (r *AWSMachineReconciler) indexAWSMachineByInstanceID(o runtime.Object) []s
 	}
 
 	return nil
+}
+
+func (r *AWSMachineReconciler) ensureStorageTags(ec2svc services.EC2MachineInterface, instance *infrav1.Instance, machine *infrav1.AWSMachine) {
+	annotations, err := r.machineAnnotationJSON(machine, VolumeTagsLastAppliedAnnotation)
+	if err != nil {
+		r.Log.Error(err, "Failed to fetch the annotations for volume tags")
+	}
+	for _, volumeID := range instance.VolumeIDs {
+		if subAnnotation, ok := annotations[volumeID].(map[string]interface{}); ok {
+			newAnnotation, err := r.ensureVolumeTags(ec2svc, aws.String(volumeID), subAnnotation, machine.Spec.AdditionalTags)
+			if err != nil {
+				r.Log.Error(err, "Failed to fetch the changed volume tags in EC2 instance")
+			}
+			annotations[volumeID] = newAnnotation
+		} else {
+			newAnnotation, err := r.ensureVolumeTags(ec2svc, aws.String(volumeID), make(map[string]interface{}), machine.Spec.AdditionalTags)
+			if err != nil {
+				r.Log.Error(err, "Failed to fetch the changed volume tags in EC2 instance")
+			}
+			annotations[volumeID] = newAnnotation
+		}
+
+		// We also need to update the annotation if anything changed.
+		err = r.updateMachineAnnotationJSON(machine, VolumeTagsLastAppliedAnnotation, annotations)
+		if err != nil {
+			r.Log.Error(err, "Failed to fetch the changed volume tags in EC2 instance")
+		}
+	}
 }

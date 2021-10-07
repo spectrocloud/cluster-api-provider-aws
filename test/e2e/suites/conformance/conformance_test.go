@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
@@ -35,22 +35,25 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 )
 
-var _ = Describe("conformance tests", func() {
+// TODO @randomvariable: Replace with CAPI e2e framework ClusterUpgradeConformanceSpec
+var _ = ginkgo.Describe("[unmanaged] [conformance] tests", func() {
 	var (
 		namespace *corev1.Namespace
 		ctx       context.Context
 		specName  = "conformance"
+		result    *clusterctl.ApplyClusterTemplateAndWaitResult
 	)
 
-	BeforeEach(func() {
+	ginkgo.BeforeEach(func() {
 		Expect(e2eCtx.Environment.BootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. BootstrapClusterProxy can't be nil")
 		Expect(e2eCtx.E2EConfig).ToNot(BeNil(), "Invalid argument. e2eConfig can't be nil when calling %s spec", specName)
 		Expect(e2eCtx.E2EConfig.Variables).To(HaveKey(shared.KubernetesVersion))
 		ctx = context.TODO()
 		// Setup a Namespace where to host objects for this spec and create a watcher for the namespace events.
 		namespace = shared.SetupSpecNamespace(ctx, specName, e2eCtx)
+		result = new(clusterctl.ApplyClusterTemplateAndWaitResult)
 	})
-	Measure(specName, func(b Benchmarker) {
+	ginkgo.Measure(specName, func(b ginkgo.Benchmarker) {
 
 		name := fmt.Sprintf("cluster-%s", util.RandomString(6))
 		shared.SetEnvVar("USE_CI_ARTIFACTS", "true", false)
@@ -68,7 +71,7 @@ var _ = Describe("conformance tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		runtime := b.Time("cluster creation", func() {
-			_ = clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
+			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
 				ConfigCluster: clusterctl.ConfigClusterInput{
 					LogFolder:                filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", e2eCtx.Environment.BootstrapClusterProxy.GetName()),
@@ -85,12 +88,12 @@ var _ = Describe("conformance tests", func() {
 				WaitForClusterIntervals:      e2eCtx.E2EConfig.GetIntervals(specName, "wait-cluster"),
 				WaitForControlPlaneIntervals: e2eCtx.E2EConfig.GetIntervals(specName, "wait-control-plane"),
 				WaitForMachineDeployments:    e2eCtx.E2EConfig.GetIntervals(specName, "wait-worker-nodes"),
-			})
+			}, result)
 		})
 		b.RecordValue("cluster creation", runtime.Seconds())
 		workloadProxy := e2eCtx.Environment.BootstrapClusterProxy.GetWorkloadCluster(ctx, namespace.Name, name)
 		runtime = b.Time("conformance suite", func() {
-			kubetest.Run(
+			kubetest.Run(ctx,
 				kubetest.RunInput{
 					ClusterProxy:   workloadProxy,
 					NumberOfNodes:  int(workerMachineCount),
@@ -101,7 +104,7 @@ var _ = Describe("conformance tests", func() {
 		b.RecordValue("conformance suite run time", runtime.Seconds())
 	}, 1)
 
-	AfterEach(func() {
+	ginkgo.AfterEach(func() {
 		shared.SetEnvVar("USE_CI_ARTIFACTS", "false", false)
 		// Dumps all the resources in the spec namespace, then cleanups the cluster object and the spec namespace itself.
 		shared.DumpSpecResourcesAndCleanup(ctx, "", namespace, e2eCtx)

@@ -17,6 +17,8 @@ limitations under the License.
 package helpers
 
 import (
+	"context"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"path"
@@ -29,17 +31,19 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api-provider-aws/test/helpers/external"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/log"
-	"sigs.k8s.io/cluster-api/util"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,6 +64,7 @@ var (
 
 func init() {
 	klog.InitFlags(nil)
+
 	logger := klogr.New()
 	// use klog as the internal logger for this envtest environment.
 	log.SetLogger(logger)
@@ -76,9 +81,6 @@ func init() {
 	// Get the root of the current file to use in CRD paths.
 	_, filename, _, _ := goruntime.Caller(0) //nolint
 	root = path.Join(path.Dir(filename), "..", "..")
-
-	// Create the test environment.
-
 }
 
 type webhookConfiguration struct {
@@ -86,7 +88,7 @@ type webhookConfiguration struct {
 	relativeFilePath string
 }
 
-// TestEnvironmentConfiguration encapsulates the interim, mutable configuration of the Kubernetes local test environment
+// TestEnvironmentConfiguration encapsulates the interim, mutable configuration of the Kubernetes local test environment.
 type TestEnvironmentConfiguration struct {
 	env                   *envtest.Environment
 	webhookConfigurations []webhookConfiguration
@@ -97,12 +99,41 @@ type TestEnvironment struct {
 	manager.Manager
 	client.Client
 	Config *rest.Config
-
-	doneMgr chan struct{}
-	env     *envtest.Environment
+	env    *envtest.Environment
+	cancel context.CancelFunc
 }
 
-// NewTestEnvironmentConfiguration creates a new test environment configuration for running tests
+// Cleanup deletes all the given objects.
+func (t *TestEnvironment) Cleanup(ctx context.Context, objs ...client.Object) error {
+	errs := []error{}
+	for _, o := range objs {
+		err := t.Client.Delete(ctx, o)
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		errs = append(errs, err)
+	}
+	return kerrors.NewAggregate(errs)
+}
+
+// CreateNamespace creates a new namespace with a generated name.
+func (t *TestEnvironment) CreateNamespace(ctx context.Context, generateName string) (*corev1.Namespace, error) {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: fmt.Sprintf("%s-", generateName),
+			Labels: map[string]string{
+				"testenv/original-name": generateName,
+			},
+		},
+	}
+	if err := t.Client.Create(ctx, ns); err != nil {
+		return nil, err
+	}
+
+	return ns, nil
+}
+
+// NewTestEnvironmentConfiguration creates a new test environment configuration for running tests.
 func NewTestEnvironmentConfiguration(crdDirectoryPaths []string) *TestEnvironmentConfiguration {
 	resolvedCrdDirectoryPaths := make([]string, len(crdDirectoryPaths))
 
@@ -114,16 +145,15 @@ func NewTestEnvironmentConfiguration(crdDirectoryPaths []string) *TestEnvironmen
 		env: &envtest.Environment{
 			ErrorIfCRDPathMissing: true,
 			CRDDirectoryPaths:     resolvedCrdDirectoryPaths,
-			CRDs: []runtime.Object{
-				external.TestClusterCRD.DeepCopy(),
-				external.TestMachineCRD.DeepCopy(),
+			CRDs: []apiextensionsv1.CustomResourceDefinition{
+				*external.TestClusterCRD.DeepCopy(),
+				*external.TestMachineCRD.DeepCopy(),
 			},
 		},
 	}
-
 }
 
-// WithWebhookConfiguration adds the CRD webhook configuration given a named tag and file path for the webhook manifest
+// WithWebhookConfiguration adds the CRD webhook configuration given a named tag and file path for the webhook manifest.
 func (t *TestEnvironmentConfiguration) WithWebhookConfiguration(tag string, relativeFilePath string) *TestEnvironmentConfiguration {
 	t.webhookConfigurations = append(t.webhookConfigurations, webhookConfiguration{tag: tag, relativeFilePath: relativeFilePath})
 	return t
@@ -133,15 +163,21 @@ func (t *TestEnvironmentConfiguration) WithWebhookConfiguration(tag string, rela
 // This function should be called only once for each package you're running tests within,
 // usually the environment is initialized in a suite_test.go file within a `BeforeSuite` ginkgo block.
 func (t *TestEnvironmentConfiguration) Build() (*TestEnvironment, error) {
-	mutatingWebhooks := []runtime.Object{}
-	validatingWebhooks := []runtime.Object{}
+	mutatingWebhooks := make([]admissionv1.MutatingWebhookConfiguration, 0, len(t.webhookConfigurations))
+	validatingWebhooks := make([]admissionv1.ValidatingWebhookConfiguration, 0, len(t.webhookConfigurations))
 	for _, w := range t.webhookConfigurations {
 		m, v, err := buildModifiedWebhook(w.tag, w.relativeFilePath)
 		if err != nil {
 			return nil, err
 		}
-		mutatingWebhooks = append(mutatingWebhooks, m)
-		validatingWebhooks = append(mutatingWebhooks, v)
+		if m.Webhooks != nil {
+			// No mutating webhook defined.
+			mutatingWebhooks = append(mutatingWebhooks, m)
+		}
+		if v.Webhooks != nil {
+			// No validating webhook defined.
+			validatingWebhooks = append(validatingWebhooks, v)
+		}
 	}
 
 	t.env.WebhookInstallOptions = envtest.WebhookInstallOptions{
@@ -158,7 +194,6 @@ func (t *TestEnvironmentConfiguration) Build() (*TestEnvironment, error) {
 	options := manager.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: "0",
-		NewClient:          util.ManagerDelegatingClientFunc,
 		CertDir:            t.env.WebhookInstallOptions.LocalServingCertDir,
 		Port:               t.env.WebhookInstallOptions.LocalServingPort,
 	}
@@ -173,22 +208,20 @@ func (t *TestEnvironmentConfiguration) Build() (*TestEnvironment, error) {
 		Manager: mgr,
 		Client:  mgr.GetClient(),
 		Config:  mgr.GetConfig(),
-		doneMgr: make(chan struct{}),
 		env:     t.env,
 	}, nil
-
 }
 
-func buildModifiedWebhook(tag string, relativeFilePath string) (runtime.Object, runtime.Object, error) {
-	var mutatingWebhook runtime.Object
-	var validatingWebhook runtime.Object
-	data, err := ioutil.ReadFile(filepath.Join(root, relativeFilePath))
+func buildModifiedWebhook(tag string, relativeFilePath string) (admissionv1.MutatingWebhookConfiguration, admissionv1.ValidatingWebhookConfiguration, error) {
+	var mutatingWebhook admissionv1.MutatingWebhookConfiguration
+	var validatingWebhook admissionv1.ValidatingWebhookConfiguration
+	data, err := ioutil.ReadFile(filepath.Clean(filepath.Join(root, relativeFilePath)))
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to read webhook configuration file")
+		return mutatingWebhook, validatingWebhook, errors.Wrap(err, "failed to read webhook configuration file")
 	}
 	objs, err := utilyaml.ToUnstructured(data)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to parse yaml")
+		return mutatingWebhook, validatingWebhook, errors.Wrap(err, "failed to parse yaml")
 	}
 	for i := range objs {
 		o := objs[i]
@@ -196,26 +229,32 @@ func buildModifiedWebhook(tag string, relativeFilePath string) (runtime.Object, 
 			// update the name in metadata
 			if o.GetName() == defaultMutatingWebhookName {
 				o.SetName(strings.Join([]string{defaultMutatingWebhookName, "-", tag}, ""))
-				mutatingWebhook = &o
+				if err := scheme.Scheme.Convert(&o, &mutatingWebhook, nil); err != nil {
+					klog.Fatalf("failed to convert MutatingWebhookConfiguration %s", o.GetName())
+				}
 			}
 		}
 		if o.GetKind() == validatingWebhookKind {
 			// update the name in metadata
 			if o.GetName() == defaultValidatingWebhookName {
 				o.SetName(strings.Join([]string{defaultValidatingWebhookName, "-", tag}, ""))
-				validatingWebhook = &o
+				if err := scheme.Scheme.Convert(&o, &validatingWebhook, nil); err != nil {
+					klog.Fatalf("failed to convert ValidatingWebhookConfiguration %s", o.GetName())
+				}
 			}
 		}
 	}
 	return mutatingWebhook, validatingWebhook, nil
 }
 
-// StartManager starts the test controller against the local API server
-func (t *TestEnvironment) StartManager() error {
-	return t.Manager.Start(t.doneMgr)
+// StartManager starts the test controller against the local API server.
+func (t *TestEnvironment) StartManager(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	t.cancel = cancel
+	return t.Manager.Start(ctx)
 }
 
-// WaitForWebhooks will not return until the webhook port is open
+// WaitForWebhooks will not return until the webhook port is open.
 func (t *TestEnvironment) WaitForWebhooks() {
 	port := t.env.WebhookInstallOptions.LocalServingPort
 	klog.V(2).Infof("Waiting for webhook port %d to be open prior to running tests", port)
@@ -233,8 +272,8 @@ func (t *TestEnvironment) WaitForWebhooks() {
 	}
 }
 
-// Stop stops the test environment
+// Stop stops the test environment.
 func (t *TestEnvironment) Stop() error {
-	t.doneMgr <- struct{}{}
+	t.cancel()
 	return t.env.Stop()
 }

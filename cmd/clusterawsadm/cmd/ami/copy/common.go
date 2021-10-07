@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package copy
 
 import (
@@ -35,6 +36,7 @@ func addSourceRegion(c *cobra.Command) {
 	c.Flags().String("source-region", "", "Set if wanting to copy an AMI from a different region")
 }
 
+// GetSourceRegion returns the source region.
 func GetSourceRegion(c *cobra.Command) (string, error) {
 	explicitRegion := c.Flags().Lookup("source-region").Value.String()
 	if explicitRegion != "" {

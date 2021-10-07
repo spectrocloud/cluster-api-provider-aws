@@ -1,7 +1,7 @@
 # Multi-tenancy
 
 Starting from v0.6.5, single controller multi-tenancy is supported that allows using a different AWS Identity for each workload cluster.
-For details, see the [multi-tenancy proposal](https://github.com/kubernetes-sigs/cluster-api-provider-aws/blob/master/docs/proposal/20200506-single-controller-multitenancy.md).
+For details, see the [multi-tenancy proposal](https://github.com/kubernetes-sigs/cluster-api-provider-aws/blob/main/docs/proposal/20200506-single-controller-multitenancy.md).
 
 
 For multi-tenancy support, a reference field (`identityRef`) is added to `AWSCluster`, which describes the identity to be used when reconciling the cluster.
@@ -57,10 +57,10 @@ spec:
 ```
 `AWSClusterControllerIdentity` is immutable to avoid any unwanted overrides to the allowed namespaces, especially during upgrading clusters.
 
-## AWSClusterIdentityIdentity
-`AWSClusterIdentityIdentity` represents static AWS credentials, which are stored in a `Secret`.
+## AWSClusterStaticIdentity
+`AWSClusterStaticIdentity` represents static AWS credentials, which are stored in a `Secret`.
 
-Example: Below, an `AWSClusterIdentityIdentity` is created that allows access to the `AWSClusters` that are in "test" namespace.
+Example: Below, an `AWSClusterStaticIdentity` is created that allows access to the `AWSClusters` that are in "test" namespace.
 The identity credentials that will be used by "test" AWSCluster are stored in "test-account-creds" secret.
 
 
@@ -74,11 +74,11 @@ metadata:
 spec:
   region: "eu-west-1"
   identityRef:
-    kind: AWSClusterIdentityIdentity
+    kind: AWSClusterStaticIdentity
     name: test-account
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-kind: AWSClusterIdentityIdentity
+kind: AWSClusterStaticIdentity
 metadata:
   name: "test-account"
 spec:
@@ -88,7 +88,7 @@ spec:
   allowedNamespaces:
     selector:
       matchLabels:
-        ns: "testlabel"
+        cluster.x-k8s.io/ns: "testlabel"
 ---
 apiVersion: v1
 kind: Namespace
@@ -103,8 +103,8 @@ metadata:
   name: "test-account-creds"
   namespace: capa-system
 stringData:
- accessKeyID: AKIAIOSFODNN7EXAMPLE
- secretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+ AccessKeyID: AKIAIOSFODNN7EXAMPLE
+ SecretAccessKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
 ## AWSClusterRoleIdentity
@@ -139,7 +139,7 @@ spec:
       "test"
   roleARN: "arn:aws:iam::123456789:role/CAPARole"
   sourceIdentityRef:
-    kind: AWSClusterIdentityIdentity
+    kind: AWSClusterStaticIdentity
     name: test-account-creds
 ```
 
@@ -181,6 +181,8 @@ spec:
 `allowedNamespaces` field is used to grant access to the namespaces to use Identitys.
 Only AWSClusters that are created in one of the Identity's allowed namespaces can use that Identity.
 `allowedNamespaces` are defined by providing either a list of namespaces or label selector to select namespaces.
+
+Note that the `capa-eks-control-plane-system` namespace will need to be included in the allow namespace list and/or have labels added to allow access to identities used by AWSClusters.
 
 ### Examples
 

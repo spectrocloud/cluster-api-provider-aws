@@ -18,24 +18,42 @@ package instancestate
 
 import (
 	"context"
+	"fmt"
+	"testing"
 	"time"
+
+	. "github.com/onsi/gomega"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	"github.com/golang/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/controllers"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/instancestate/mock_sqsiface"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("AWSInstanceStateController", func() {
-	It("should maintain list of cluster queue URLs and reconcile failing machines", func() {
+func TestAWSInstanceStateController(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	sqsSvs = mock_sqsiface.NewMockSQSAPI(mockCtrl)
+	instanceStateReconciler = &AwsInstanceStateReconciler{
+		Client: testEnv.Client,
+		Log:    ctrl.Log.WithName("controllers").WithName("AWSInstanceState"),
+		sqsServiceFactory: func() sqsiface.SQSAPI {
+			return sqsSvs
+		},
+	}
+	defer mockCtrl.Finish()
+
+	t.Run("should maintain list of cluster queue URLs and reconcile failing machines", func(t *testing.T) {
+		g := NewWithT(t)
+
 		failingMachineMeta := metav1.ObjectMeta{
 			Name:      "aws-cluster-1-instance-1",
 			Namespace: "default",
@@ -74,9 +92,9 @@ var _ = Describe("AWSInstanceStateController", func() {
 		sqsSvs.EXPECT().DeleteMessage(&sqs.DeleteMessageInput{QueueUrl: aws.String("aws-cluster-1-url"), ReceiptHandle: aws.String("message-receipt-handle")}).AnyTimes().
 			Return(nil, nil)
 
-		Expect(k8sManager.GetFieldIndexer().IndexField(&infrav1.AWSMachine{},
+		g.Expect(testEnv.Manager.GetFieldIndexer().IndexField(context.Background(), &infrav1.AWSMachine{},
 			controllers.InstanceIDIndex,
-			func(o runtime.Object) []string {
+			func(o client.Object) []string {
 				m := o.(*infrav1.AWSMachine)
 				if m.Spec.InstanceID != nil {
 					return []string{*m.Spec.InstanceID}
@@ -84,32 +102,33 @@ var _ = Describe("AWSInstanceStateController", func() {
 				return nil
 			},
 		)).ToNot(HaveOccurred())
-		err := instanceStateReconciler.SetupWithManager(k8sManager, controller.Options{})
-		Expect(err).ToNot(HaveOccurred())
-		stop := make(chan struct{})
-		defer close(stop)
+
+		err := instanceStateReconciler.SetupWithManager(context.Background(), testEnv.Manager, controller.Options{})
+		g.Expect(err).ToNot(HaveOccurred())
 		go func() {
-			defer GinkgoRecover()
-			err := k8sManager.Start(stop)
-			Expect(err).ToNot(HaveOccurred())
+			fmt.Println("Starting the manager")
+			if err := testEnv.StartManager(ctx); err != nil {
+				panic(fmt.Sprintf("Failed to start the envtest manager: %v", err))
+			}
 		}()
+		testEnv.WaitForWebhooks()
 
-		k8sClient = k8sManager.GetClient()
-		Expect(k8sClient).ToNot(BeNil())
+		k8sClient = testEnv.GetClient()
 
-		persistObject(createAWSCluster("aws-cluster-1"))
-		persistObject(createAWSCluster("aws-cluster-2"))
+		persistObject(g, createAWSCluster("aws-cluster-1"))
+		persistObject(g, createAWSCluster("aws-cluster-2"))
 
 		machine1 := &infrav1.AWSMachine{
 			Spec: infrav1.AWSMachineSpec{
-				InstanceID: pointer.StringPtr("i-failing-instance-1"),
+				InstanceID:   pointer.StringPtr("i-failing-instance-1"),
+				InstanceType: "test",
 			},
 			ObjectMeta: failingMachineMeta,
 		}
-		persistObject(machine1)
+		persistObject(g, machine1)
 
-		By("Ensuring queue URLs are up-to-date")
-		Eventually(func() bool {
+		t.Log("Ensuring queue URLs are up-to-date")
+		g.Eventually(func() bool {
 			exist := true
 			for _, cluster := range []string{"aws-cluster-1", "aws-cluster-2"} {
 				_, ok := instanceStateReconciler.queueURLs.Load(cluster)
@@ -118,16 +137,16 @@ var _ = Describe("AWSInstanceStateController", func() {
 			return exist
 		}, 10*time.Second).Should(Equal(true))
 
-		deleteAWSCluster("aws-cluster-2")
-		By("Ensuring we stop tracking deleted queue")
-		Eventually(func() bool {
+		deleteAWSCluster(g, "aws-cluster-2")
+		t.Log("Ensuring we stop tracking deleted queue")
+		g.Eventually(func() bool {
 			_, ok := instanceStateReconciler.queueURLs.Load("aws-cluster-2")
 			return ok
 		}, 10*time.Second).Should(Equal(false))
 
-		persistObject(createAWSCluster("aws-cluster-3"))
-		By("Ensuring newly created cluster is added to tracked clusters")
-		Eventually(func() bool {
+		persistObject(g, createAWSCluster("aws-cluster-3"))
+		t.Log("Ensuring newly created cluster is added to tracked clusters")
+		g.Eventually(func() bool {
 			exist := true
 			for _, cluster := range []string{"aws-cluster-1", "aws-cluster-3"} {
 				_, ok := instanceStateReconciler.queueURLs.Load(cluster)
@@ -136,20 +155,20 @@ var _ = Describe("AWSInstanceStateController", func() {
 			return exist
 		}, 10*time.Second).Should(Equal(true))
 
-		By("Ensuring machine is labelled with correct instance state")
-		Eventually(func() bool {
+		t.Log("Ensuring machine is labelled with correct instance state")
+		g.Eventually(func() bool {
 			m := &infrav1.AWSMachine{}
 			key := types.NamespacedName{
 				Namespace: failingMachineMeta.Namespace,
 				Name:      failingMachineMeta.Name,
 			}
-			Expect(k8sClient.Get(context.TODO(), key, m)).NotTo(HaveOccurred())
+			g.Expect(k8sClient.Get(context.TODO(), key, m)).NotTo(HaveOccurred())
 			labels := m.GetLabels()
 			val := labels[Ec2InstanceStateLabelKey]
 			return val == "shutting-down"
 		}, 10*time.Second).Should(Equal(true))
 	})
-})
+}
 
 const messageBodyJSON = `{
 	"source": "aws.ec2",

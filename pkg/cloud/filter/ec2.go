@@ -21,7 +21,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 )
 
 const (
@@ -54,7 +54,7 @@ func (ec2Filters) Name(name string) *ec2.Filter {
 }
 
 // ClusterOwned returns a filter using the Cluster API per-cluster tag where
-// the resource is owned
+// the resource is owned.
 func (ec2Filters) ClusterOwned(clusterName string) *ec2.Filter {
 	return &ec2.Filter{
 		Name:   aws.String(fmt.Sprintf("tag:%s", infrav1.ClusterTagKey(clusterName))),

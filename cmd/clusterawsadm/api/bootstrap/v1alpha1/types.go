@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
-	iamv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 )
 
 // BootstrapUser contains a list of elements that is specific
@@ -71,7 +71,7 @@ type ControlPlane struct {
 }
 
 // AWSIAMRoleSpec defines common configuration for AWS IAM roles created by
-// Kubernetes Cluster API Provider AWS
+// Kubernetes Cluster API Provider AWS.
 type AWSIAMRoleSpec struct {
 	// Disable if set to true will not create the AWS IAM role. Defaults to false.
 	Disable bool `json:"disable"` // default: false
@@ -83,17 +83,17 @@ type AWSIAMRoleSpec struct {
 	ExtraStatements []iamv1.StatementEntry `json:"extraStatements,omitempty"`
 
 	// TrustStatements is an IAM PolicyDocument defining what identities are allowed to assume this role.
-	// See "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1alpha1" for more documentation.
+	// See "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/iam/v1beta1" for more documentation.
 	TrustStatements []iamv1.StatementEntry `json:"trustStatements,omitempty"`
 
 	// Tags is a map of tags to be applied to the AWS IAM role.
 	Tags infrav1.Tags `json:"tags,omitempty"`
 }
 
-// EKSConfig represents the EKS related configuration config
+// EKSConfig represents the EKS related configuration config.
 type EKSConfig struct {
-	// Enable controls whether EKS-related permissions are granted
-	Enable bool `json:"enable"`
+	// Disable controls whether EKS-related permissions are granted
+	Disable bool `json:"disable"`
 	// AllowIAMRoleCreation controls whether the EKS controllers have permissions for creating IAM
 	// roles per cluster
 	AllowIAMRoleCreation bool `json:"iamRoleCreation,omitempty"`
@@ -115,7 +115,7 @@ type EKSConfig struct {
 }
 
 // EventBridgeConfig represents configuration for enabling experimental feature to consume
-// EventBridge EC2 events
+// EventBridge EC2 events.
 type EventBridgeConfig struct {
 	// Enable controls whether permissions are granted to consume EC2 events
 	Enable bool `json:"enable,omitempty"`
@@ -147,6 +147,7 @@ type Nodes struct {
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AWSIAMConfiguration controls the creation of AWS Identity and Access Management (IAM) resources for use
 // by Kubernetes clusters and Kubernetes Cluster API Provider AWS.
 type AWSIAMConfiguration struct {
@@ -201,10 +202,12 @@ type AWSIAMConfigurationSpec struct {
 	SecureSecretsBackends []infrav1.SecretBackend `json:"secureSecretBackends,omitempty"`
 }
 
+// GetObjectKind returns the AAWSIAMConfiguration's TypeMeta.
 func (obj *AWSIAMConfiguration) GetObjectKind() schema.ObjectKind {
 	return &obj.TypeMeta
 }
 
+// NewAWSIAMConfiguration will generate a new default AWSIAMConfiguration.
 func NewAWSIAMConfiguration() *AWSIAMConfiguration {
 	conf := &AWSIAMConfiguration{}
 	SetObjectDefaults_AWSIAMConfiguration(conf)
