@@ -220,7 +220,6 @@ type OIDCIdentityProviderConfig struct {
 	// This is also known as audience. The ID for the client application that makes
 	// authentication requests to the OpenID identity provider.
 	// +kubebuilder:validation:Required
-	// +k8s:conversion-gen=false
 	ClientId *string `json:"clientId,omitempty"`
 
 	// The JWT claim that the provider uses to return your groups.
@@ -246,7 +245,6 @@ type OIDCIdentityProviderConfig struct {
 	// and must be publicly accessible over the internet.
 	//
 	// +kubebuilder:validation:Required
-	// +k8s:conversion-gen=false
 	IssuerUrl *string `json:"issuerUrl,omitempty"`
 
 	// The key value pairs that describe required claims in the identity token.
