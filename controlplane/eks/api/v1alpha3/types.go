@@ -271,5 +271,5 @@ type OIDCIdentityProviderConfig struct {
 	// all prefixing.
 	UsernamePrefix *string `json:"usernamePrefix,omitempty"`
 
-	Tags infrav1.Tags `json:"tags,omitempty"`
+	Tags infrav1alpha3.Tags `json:"tags,omitempty"`
 }

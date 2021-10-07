@@ -762,7 +762,7 @@ func autoConvert_v1alpha3_AWSManagedMachinePoolSpec_To_v1beta1_AWSManagedMachine
 	out.Scaling = (*v1beta1.ManagedMachinePoolScaling)(unsafe.Pointer(in.Scaling))
 	out.RemoteAccess = (*v1beta1.ManagedRemoteAccess)(unsafe.Pointer(in.RemoteAccess))
 	out.ProviderIDList = *(*[]string)(unsafe.Pointer(&in.ProviderIDList))
-	out.CapacityType = (*v1alpha4.ManagedMachinePoolCapacityType)(unsafe.Pointer(in.CapacityType))
+	out.CapacityType = (*v1beta1.ManagedMachinePoolCapacityType)(unsafe.Pointer(in.CapacityType))
 	return nil
 }
 

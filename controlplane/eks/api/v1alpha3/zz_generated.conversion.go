@@ -23,7 +23,6 @@ package v1alpha3
 import (
 	unsafe "unsafe"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	apiv1alpha3 "sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3"
@@ -363,15 +362,7 @@ func autoConvert_v1beta1_AWSManagedControlPlaneSpec_To_v1alpha3_AWSManagedContro
 	out.TokenMethod = (*EKSTokenMethod)(unsafe.Pointer(in.TokenMethod))
 	out.AssociateOIDCProvider = in.AssociateOIDCProvider
 	out.Addons = (*[]Addon)(unsafe.Pointer(in.Addons))
-	if in.OIDCIdentityProviderConfig != nil {
-		in, out := &in.OIDCIdentityProviderConfig, &out.OIDCIdentityProviderConfig
-		*out = new(OIDCIdentityProviderConfig)
-		if err := Convert_v1alpha4_OIDCIdentityProviderConfig_To_v1alpha3_OIDCIdentityProviderConfig(*in, *out, s); err != nil {
-			return err
-		}
-	} else {
-		out.OIDCIdentityProviderConfig = nil
-	}
+	// WARNING: in.OIDCIdentityProviderConfig requires manual conversion: does not exist in peer-type
 	out.DisableVPCCNI = in.DisableVPCCNI
 	return nil
 }
@@ -474,9 +465,7 @@ func autoConvert_v1beta1_AWSManagedControlPlaneStatus_To_v1alpha3_AWSManagedCont
 		out.Conditions = nil
 	}
 	out.Addons = *(*[]AddonState)(unsafe.Pointer(&in.Addons))
-	if err := Convert_v1alpha4_IdentityProviderStatus_To_v1alpha3_IdentityProviderStatus(&in.IdentityProviderStatus, &out.IdentityProviderStatus, s); err != nil {
-		return err
-	}
+	// WARNING: in.IdentityProviderStatus requires manual conversion: does not exist in peer-type
 	return nil
 }
 
