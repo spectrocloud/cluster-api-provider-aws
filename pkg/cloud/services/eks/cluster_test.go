@@ -174,7 +174,8 @@ func TestMakeVPCConfig(t *testing.T) {
 				endpointAccess: ekscontrolplanev1.EndpointAccess{},
 			},
 			expect: &eks.VpcConfigRequest{
-				SubnetIds: []*string{&idOne, &idTwo},
+				SubnetIds:         []*string{&idOne, &idTwo},
+				PublicAccessCidrs: []*string{aws.String("0.0.0.0/0")},
 			},
 		},
 		{
@@ -202,8 +203,9 @@ func TestMakeVPCConfig(t *testing.T) {
 				},
 			},
 			expect: &eks.VpcConfigRequest{
-				SubnetIds:        []*string{&idOne, &idTwo},
-				SecurityGroupIds: []*string{&idOne},
+				SubnetIds:         []*string{&idOne, &idTwo},
+				SecurityGroupIds:  []*string{&idOne},
+				PublicAccessCidrs: []*string{aws.String("0.0.0.0/0")},
 			},
 		},
 		{
