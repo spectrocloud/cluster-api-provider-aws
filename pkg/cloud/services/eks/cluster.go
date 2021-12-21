@@ -259,7 +259,14 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess controlplanev1.Endpoi
 
 	if len(cidrs) > 0 {
 		vpcConfig.PublicAccessCidrs = cidrs
+	} else {
+		// If no public CIDRs are specified, we need to add the default CIDR.
+		// The reason is, if publicCIDR was set previously, then try to delete it,
+		// if provide nil pointer, then the eks client will ignore this field and not patch the cluster.
+		// so the publicAccessCidr will remain as it is, then controller will keep trying but with 400 error code
+		vpcConfig.PublicAccessCidrs = []*string{aws.String("0.0.0.0/0")}
 	}
+
 	sg, ok := securityGroups[infrav1.SecurityGroupEKSNodeAdditional]
 	if ok {
 		vpcConfig.SecurityGroupIds = append(vpcConfig.SecurityGroupIds, &sg.ID)
