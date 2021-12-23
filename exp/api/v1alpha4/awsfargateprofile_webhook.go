@@ -79,18 +79,20 @@ func (r *AWSFargateProfile) ValidateUpdate(oldObj runtime.Object) error {
 	// Spec is immutable, but if the new ProfileName is the defaulted one and
 	// the old ProfileName is nil, then ignore checking that field.
 	if old.Spec.ProfileName == "" {
-		// TODO jun/abhi: tmp hack to disable profile name validation
-		// because the above default name is not the default one the controller is trying to set
-		// todo have a proper fix and enable this validation
-		r.Spec.ProfileName = ""
+		name, err := eks.GenerateEKSName(old.Name, old.Namespace, maxProfileNameLength)
+		if err != nil {
+			mmpLog.Error(err, "failed to create EKS nodegroup name")
+		}
+		if r.Spec.ProfileName == name {
+			r.Spec.ProfileName = ""
+		}
+	}
 
-		// name, err := eks.GenerateEKSName(old.Name, old.Namespace, maxProfileNameLength)
-		// if err != nil {
-		// 	mmpLog.Error(err, "failed to create EKS nodegroup name")
-		// }
-		// if r.Spec.ProfileName == name {
-		// 	r.Spec.ProfileName = ""
-		// }
+	// TODO jun/abhi: tmp hack to disable profile name validation
+	// because the above default name is not the default one the controller is trying to set
+	// todo have a proper fix and enable this validation
+	if old.Spec.RoleName == "" {
+		r.Spec.RoleName = ""
 	}
 
 	// ignore checking additionalTags since they are mutable
