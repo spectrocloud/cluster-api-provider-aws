@@ -17,6 +17,7 @@ limitations under the License.
 package eks
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -36,6 +37,11 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/converters"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/wait"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	AutoscalerEnabled = "kubernetes.io/cluster-autoscaler-enabled"
 )
 
 func (s *NodegroupService) describeNodegroup() (*eks.Nodegroup, error) {
@@ -468,6 +474,35 @@ func (s *NodegroupService) reconcileNodegroup() error {
 		ng, err = s.waitForNodegroupActive()
 	default:
 		break
+	}
+
+	if _, ok := s.scope.ManagedMachinePool.GetAnnotations()[AutoscalerEnabled]; ok {
+		s.scope.V(2).Info("Autoscaler enabled: annotation found")
+		// Set MachinePool replicas to the ASG DesiredCapacity
+		req := autoscaling.DescribeAutoScalingGroupsInput{}
+		for _, asg := range ng.Resources.AutoScalingGroups {
+			req.AutoScalingGroupNames = append(req.AutoScalingGroupNames, asg.Name)
+		}
+		groups, err := s.AutoscalingClient.DescribeAutoScalingGroups(&req)
+		if err != nil {
+			return errors.Wrap(err, "failed to describe AutoScalingGroup for nodegroup")
+		}
+
+		var desiredSize int64
+		for _, group := range groups.AutoScalingGroups {
+			desiredSize += *group.DesiredCapacity
+		}
+
+		mp := s.scope.MachinePool.DeepCopy()
+		if *s.scope.MachinePool.Spec.Replicas != int32(desiredSize) {
+			s.scope.V(2).Info("Autoscaling enabled. Setting MachinePool replicas to ASG DesiredCapacity",
+				"current", s.scope.MachinePool.Spec.Replicas,
+				"desired", desiredSize)
+			s.scope.MachinePool.Spec.Replicas = aws.Int32(int32(desiredSize))
+			if err := s.scope.Client.Patch(context.Background(), s.scope.MachinePool, client.MergeFrom(mp)); err != nil {
+				return errors.Wrapf(err, "failed to patch machine pool with replicas: %v", desiredSize)
+			}
+		}
 	}
 
 	if err != nil {
