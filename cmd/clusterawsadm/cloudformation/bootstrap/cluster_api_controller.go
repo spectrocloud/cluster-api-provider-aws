@@ -96,6 +96,7 @@ func (t Template) ControllersPolicy() *infrav1.PolicyDocument {
 				"ec2:DeleteInternetGateway",
 				"ec2:DeleteNatGateway",
 				"ec2:DeleteRouteTable",
+				"ec2:ReplaceRoute",
 				"ec2:DeleteSecurityGroup",
 				"ec2:DeleteSubnet",
 				"ec2:DeleteTags",
