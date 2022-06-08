@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha4
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -110,7 +111,8 @@ func (r *AWSMachine) ValidateUpdate(old runtime.Object) error {
 	}
 
 	if !reflect.DeepEqual(oldAWSMachineSpec, newAWSMachineSpec) {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified"))
+		s := fmt.Sprintf("oldAWSMachineSpec: %s, newAWSMachineSpec: %s do not match", oldAWSMachineSpec, newAWSMachineSpec)
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified. debug data for shubham "+ s))
 	}
 
 	return aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
