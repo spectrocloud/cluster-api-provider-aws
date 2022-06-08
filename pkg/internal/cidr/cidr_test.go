@@ -97,6 +97,10 @@ var (
 	block = "2001:db8:1234:1a00::/56"
 )
 
+var (
+	block = "2001:db8:1234:1a00::/56"
+)
+
 func TestParseIPv4CIDR(t *testing.T) {
 	RegisterTestingT(t)
 
