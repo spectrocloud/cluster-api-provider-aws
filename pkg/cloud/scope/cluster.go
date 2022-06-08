@@ -235,6 +235,9 @@ func (s *ClusterScope) PatchObject() error {
 		if s.AWSCluster.Spec.Bastion.Enabled {
 			applicableConditions = append(applicableConditions, infrav1.BastionHostReadyCondition)
 		}
+		if s.VPC().EnableIPv6 {
+			applicableConditions = append(applicableConditions, infrav1.EgressOnlyInternetGatewayReadyCondition)
+		}
 	}
 
 	conditions.SetSummary(s.AWSCluster,
@@ -251,6 +254,7 @@ func (s *ClusterScope) PatchObject() error {
 			infrav1.VpcReadyCondition,
 			infrav1.SubnetsReadyCondition,
 			infrav1.InternetGatewayReadyCondition,
+			infrav1.EgressOnlyInternetGatewayReadyCondition,
 			infrav1.NatGatewaysReadyCondition,
 			infrav1.RouteTablesReadyCondition,
 			infrav1.ClusterSecurityGroupsReadyCondition,
