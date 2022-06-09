@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha4
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -109,8 +110,17 @@ func (r *AWSMachine) ValidateUpdate(old runtime.Object) error {
 		delete(cloudInit, "secureSecretsBackend")
 	}
 
+	if rootVolume, ok := oldAWSMachineSpec["rootVolume"].(map[string]interface{}); ok {
+		delete(rootVolume,"deviceName")
+	}
+
+	if rootVolume, ok := newAWSMachineSpec["rootVolume"].(map[string]interface{}); ok {
+		delete(rootVolume,"deviceName")
+	}
+
 	if !reflect.DeepEqual(oldAWSMachineSpec, newAWSMachineSpec) {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified"))
+		s := fmt.Sprintf("oldAWSMachineSpec: %s, newAWSMachineSpec: %s do not match", oldAWSMachineSpec, newAWSMachineSpec)
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified."+ s))
 	}
 
 	return aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
