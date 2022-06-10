@@ -72,7 +72,7 @@ endif
 
 # Release variables
 
-STAGING_REGISTRY ?= gcr.io/k8s-staging-cluster-api-aws
+STAGING_REGISTRY ?= gcr.io/spectro-dev-public/cluster-api-aws
 STAGING_BUCKET ?= artifacts.k8s-staging-cluster-api-aws.appspot.com
 BUCKET ?= $(STAGING_BUCKET)
 PROD_REGISTRY := k8s.gcr.io/cluster-api-aws
@@ -86,7 +86,7 @@ RELEASE_POLICIES := $(RELEASE_DIR)/AWSIAMManagedPolicyControllers.json $(RELEASE
 # image name used to build the cmd/clusterawsadm
 TOOLCHAIN_IMAGE := toolchain
 
-TAG ?= dev
+TAG ?= $(shell date +%Y%m%d)
 ARCH ?= amd64
 ALL_ARCH ?= amd64 arm arm64 ppc64le s390x
 
@@ -326,11 +326,12 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG):$(TAG)
+	@echo $(CORE_CONTROLLER_IMG):$(TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
-	docker push $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker push $(CORE_CONTROLLER_IMG):$(TAG)
 
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites:
