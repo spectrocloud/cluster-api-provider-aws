@@ -76,6 +76,7 @@ func (s *Service) ReconcileCNI(ctx context.Context) error {
 			container := &ds.Spec.Template.Spec.Containers[i]
 			if container.Name == "aws-node" {
 				container.Env, needsUpdate = s.applyUserProvidedEnvironmentProperties(container.Env)
+
 			}
 		}
 	}
