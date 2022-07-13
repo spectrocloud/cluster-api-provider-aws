@@ -836,6 +836,34 @@ func TestAWSMachineUpdate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			// BET-4653: RootVolume.DeviceName is reset to "" on Default() for non-ignition machines,
+			// so a Create-then-Update that differs only in DeviceName must NOT trip
+			// "spec cannot be modified" — both sides get normalized to "" before the compare.
+			name: "change in root volume device name is tolerated (BET-4653)",
+			oldMachine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					ProviderID:               nil,
+					AdditionalTags:           nil,
+					AdditionalSecurityGroups: nil,
+					InstanceType:             "test",
+					RootVolume: &infrav1.Volume{
+						Size: 60,
+					},
+				},
+			},
+			newMachine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					ProviderID:   ptr.To[string]("ID"),
+					InstanceType: "test",
+					RootVolume: &infrav1.Volume{
+						DeviceName: "rootdevicename",
+						Size:       60,
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		ctx := context.TODO()

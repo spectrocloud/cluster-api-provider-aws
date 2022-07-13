@@ -166,7 +166,8 @@ func (w *AWSMachine) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.
 	}
 
 	if !cmp.Equal(oldAWSMachineSpec, newAWSMachineSpec) {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified"))
+		s := fmt.Sprintf("oldAWSMachineSpec: %s, newAWSMachineSpec: %s do not match", oldAWSMachineSpec, newAWSMachineSpec)
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified."+s))
 	}
 
 	return nil, aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
@@ -461,6 +462,11 @@ func (w *AWSMachine) Default(_ context.Context, obj runtime.Object) error {
 
 	if !r.Spec.CloudInit.InsecureSkipSecretsManager && r.Spec.CloudInit.SecureSecretsBackend == "" && !w.ignitionEnabled(r) {
 		r.Spec.CloudInit.SecureSecretsBackend = infrav1.SecretBackendSecretsManager
+	}
+
+	// BET-4653: reset RootVolume.DeviceName on non-ignition machines so it cannot be user-specified.
+	if r.Spec.RootVolume != nil && !w.ignitionEnabled(r) {
+		r.Spec.RootVolume.DeviceName = ""
 	}
 
 	if w.ignitionEnabled(r) && r.Spec.Ignition.StorageType == "" {
