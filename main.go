@@ -190,6 +190,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// TODO: Check and add webhookport condition
 	setupReconcilersAndWebhooks(ctx, mgr, awsServiceEndpoints, externalResourceGC)
 	if feature.Gates.Enabled(feature.EKS) {
 		setupEKSReconcilersAndWebhooks(ctx, mgr, awsServiceEndpoints, externalResourceGC)
@@ -199,11 +200,6 @@ func main() {
 
 	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
 		setupLog.Error(err, "unable to create ready check")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
 
@@ -469,7 +465,7 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&webhookPort,
 		"webhook-port",
-		9443,
+		0,
 		"Webhook Server port.",
 	)
 
