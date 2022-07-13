@@ -384,7 +384,7 @@ func TestAWSMachine_Update(t *testing.T) {
 				Spec: AWSMachineSpec{
 					ProviderID: pointer.StringPtr("ID"),
 					RootVolume: &Volume{
-						DeviceName: "rootdevicename",
+						DeviceName: "alpha",
 						Size:       60,
 					},
 				},
