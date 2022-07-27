@@ -33,7 +33,7 @@ import (
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
-var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [smoke] [PR-Blocking]", func() {
+var _ = ginkgo.Context("[unmanaged] [Cluster API Framework] [smoke]", func() {
 	var (
 		namespace         *corev1.Namespace
 		ctx               context.Context
