@@ -31,6 +31,7 @@ import (
 	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	smithy "github.com/aws/smithy-go"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -453,6 +454,16 @@ func (s *IAMService) CreateOIDCProvider(ctx context.Context, cluster *ekstypes.C
 	}
 	provider, err := s.IAMClient.CreateOpenIDConnectProvider(ctx, &input)
 	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "EntityAlreadyExists" {
+			if cluster.Identity.Oidc.Issuer != nil {
+				arn, arnErr := s.getOIDCProviderARN(ctx, *cluster.Identity.Oidc.Issuer)
+				if arnErr != nil {
+					return "", errors.Wrap(arnErr, "error getting provider arn")
+				}
+				return arn, nil
+			}
+		}
 		return "", errors.Wrap(err, "error creating provider")
 	}
 	return *provider.OpenIDConnectProviderArn, nil
@@ -493,6 +504,28 @@ func (s *IAMService) FindAndVerifyOIDCProvider(ctx context.Context, cluster *eks
 			return "", errors.Wrap(err, "found provider with matching issuerURL but with non-matching clientID")
 		}
 		return *r.Arn, nil
+	}
+	return "", nil
+}
+
+// getOIDCProviderARN looks up an existing OIDC provider ARN by matching the
+// issuer substring against registered providers. Used when CreateOIDCProvider
+// returns EntityAlreadyExists so we can return the existing ARN rather than
+// erroring — needed for Private EKS clusters where OIDC provider deletion may
+// leave state that upstream CreateOIDCProvider doesn't tolerate.
+func (s *IAMService) getOIDCProviderARN(ctx context.Context, issuer string) (string, error) {
+	if strings.HasPrefix(issuer, "https://") {
+		issuer = strings.TrimPrefix(issuer, "https://")
+	}
+
+	out, err := s.IAMClient.ListOpenIDConnectProviders(ctx, &iam.ListOpenIDConnectProvidersInput{})
+	if err != nil {
+		return "", err
+	}
+	for _, provider := range out.OpenIDConnectProviderList {
+		if strings.Contains(*provider.Arn, issuer) {
+			return *provider.Arn, nil
+		}
 	}
 	return "", nil
 }
