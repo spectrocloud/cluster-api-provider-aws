@@ -21,15 +21,15 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
-	"net/url"
-
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"net/http"
+	"net/url"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/converters"
@@ -431,6 +431,15 @@ func (s *IAMService) CreateOIDCProvider(cluster *eks.Cluster) (string, error) {
 	}
 	provider, err := s.IAMClient.CreateOpenIDConnectProvider(&input)
 	if err != nil {
+		if err.(awserr.Error).Code() == iam.ErrCodeEntityAlreadyExistsException {
+			if cluster.Identity.Oidc.Issuer != nil {
+				arn, err := s.getOIDCProviderARN(*cluster.Identity.Oidc.Issuer)
+				if err != nil {
+					return "", errors.Wrap(err, "error getting provider arn")
+				}
+				return arn, nil
+			}
+		}
 		return "", errors.Wrap(err, "error creating provider")
 	}
 	return *provider.OpenIDConnectProviderArn, nil
