@@ -17,6 +17,7 @@ limitations under the License.
 package eks
 
 import (
+	"context"
 	"fmt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -537,7 +538,7 @@ func (s *NodegroupService) reconcileNodegroup() error {
 	}
 
 	if _, ok := s.scope.ManagedMachinePool.GetAnnotations()[AutoscalerEnabled]; ok {
-		s.scope.V(2).Info("Autoscaler enabled: annotation found")
+		s.scope.Info("Autoscaler enabled: annotation found")
 		// Set MachinePool replicas to the ASG DesiredCapacity
 		req := autoscaling.DescribeAutoScalingGroupsInput{}
 		for _, asg := range ng.Resources.AutoScalingGroups {
@@ -555,7 +556,7 @@ func (s *NodegroupService) reconcileNodegroup() error {
 
 		mp := s.scope.MachinePool.DeepCopy()
 		if *s.scope.MachinePool.Spec.Replicas != int32(desiredSize) {
-			s.scope.V(2).Info("Autoscaling enabled. Setting MachinePool replicas to ASG DesiredCapacity",
+			s.scope.Info("Autoscaling enabled. Setting MachinePool replicas to ASG DesiredCapacity",
 				"current", s.scope.MachinePool.Spec.Replicas,
 				"desired", desiredSize)
 			s.scope.MachinePool.Spec.Replicas = aws.Int32(int32(desiredSize))
