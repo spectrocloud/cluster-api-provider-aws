@@ -38,7 +38,7 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 	var (
 		namespace        *corev1.Namespace
 		ctx              context.Context
-		specName         = "eks-nodes"
+		specName         = "cluster"
 		clusterName      string
 		cniAddonName     = "vpc-cni"
 		corednsAddonName = "coredns"
@@ -55,9 +55,10 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 		ctx = context.TODO()
 		namespace = shared.SetupSpecNamespace(ctx, specName, e2eCtx)
 		clusterName = fmt.Sprintf("%s-%s", specName, util.RandomString(6))
+		eksClusterName := getEKSClusterName(namespace.Name, clusterName)
 
 		ginkgo.By("default iam role should exist")
-		VerifyRoleExistsAndOwned(ekscontrolplanev1.DefaultEKSControlPlaneRole, clusterName, false, e2eCtx.BootstrapUserAWSSession)
+		VerifyRoleExistsAndOwned(ekscontrolplanev1.DefaultEKSControlPlaneRole, eksClusterName, false, e2eCtx.BootstrapUserAWSSession)
 
 		ginkgo.By("should create an EKS control plane")
 		ManagedClusterSpec(ctx, func() ManagedClusterSpecInput {
@@ -126,8 +127,8 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 		})
 
 		ginkgo.By("should create a managed node pool and scale")
-		ManagedMachinePoolSpec(ctx, func() ManagedMachinePoolSpecInput {
-			return ManagedMachinePoolSpecInput{
+		MachinePoolSpec(ctx, func() MachinePoolSpecInput {
+			return MachinePoolSpecInput{
 				E2EConfig:             e2eCtx.E2EConfig,
 				ConfigClusterFn:       defaultConfigCluster,
 				BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
@@ -136,6 +137,42 @@ var _ = ginkgo.Describe("[managed] [general] EKS cluster tests", func() {
 				ClusterName:           clusterName,
 				IncludeScaling:        true,
 				Cleanup:               true,
+				ManagedMachinePool:    true,
+				Flavor:                EKSManagedMachinePoolOnlyFlavor,
+			}
+		})
+
+		ginkgo.By("should create a machine pool and scale")
+		MachinePoolSpec(ctx, func() MachinePoolSpecInput {
+			return MachinePoolSpecInput{
+				E2EConfig:             e2eCtx.E2EConfig,
+				ConfigClusterFn:       defaultConfigCluster,
+				BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
+				AWSSession:            e2eCtx.BootstrapUserAWSSession,
+				Namespace:             namespace,
+				ClusterName:           clusterName,
+				IncludeScaling:        true,
+				Cleanup:               true,
+				ManagedMachinePool:    false,
+				Flavor:                EKSMachinePoolOnlyFlavor,
+				UsesLaunchTemplate:    false,
+			}
+		})
+
+		ginkgo.By("should create a managed node pool with launch template and scale")
+		MachinePoolSpec(ctx, func() MachinePoolSpecInput {
+			return MachinePoolSpecInput{
+				E2EConfig:             e2eCtx.E2EConfig,
+				ConfigClusterFn:       defaultConfigCluster,
+				BootstrapClusterProxy: e2eCtx.Environment.BootstrapClusterProxy,
+				AWSSession:            e2eCtx.BootstrapUserAWSSession,
+				Namespace:             namespace,
+				ClusterName:           clusterName,
+				IncludeScaling:        true,
+				Cleanup:               true,
+				ManagedMachinePool:    true,
+				Flavor:                EKSManagedMachinePoolWithLaunchTemplateOnlyFlavor,
+				UsesLaunchTemplate:    true,
 			}
 		})
 
