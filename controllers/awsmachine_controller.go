@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -429,7 +429,7 @@ func (r *AWSMachineReconciler) findInstance(scope *scope.MachineScope, ec2svc se
 }
 
 func (r *AWSMachineReconciler) reconcileNormal(_ context.Context, machineScope *scope.MachineScope, clusterScope cloud.ClusterScoper, ec2Scope scope.EC2Scope, elbScope scope.ELBScope, objectStoreScope scope.S3Scope) (ctrl.Result, error) {
-	machineScope.Info("Reconciling AWSMachine")
+	machineScope.V(4).Info("Reconciling AWSMachine")
 
 	// If the AWSMachine is in an error state, return early.
 	if machineScope.HasFailed() {
@@ -760,8 +760,6 @@ func (r *AWSMachineReconciler) deleteIgnitionBootstrapDataFromS3(machineScope *s
 		return nil
 	}
 
-	machineScope.Info("Deleting unneeded entry from AWS S3", "secretPrefix", machineScope.GetSecretPrefix())
-
 	_, userDataFormat, err := machineScope.GetRawBootstrapDataWithFormat()
 	if err != nil {
 		r.Recorder.Eventf(machineScope.AWSMachine, corev1.EventTypeWarning, "FailedGetBootstrapData", err.Error())
@@ -771,6 +769,8 @@ func (r *AWSMachineReconciler) deleteIgnitionBootstrapDataFromS3(machineScope *s
 	if !machineScope.UseIgnition(userDataFormat) {
 		return nil
 	}
+
+	machineScope.Info("Deleting unneeded entry from AWS S3", "secretPrefix", machineScope.GetSecretPrefix())
 
 	if err := objectStoreSvc.Delete(machineScope); err != nil {
 		return errors.Wrap(err, "deleting bootstrap data object")
@@ -924,7 +924,7 @@ func (r *AWSMachineReconciler) getInfraCluster(ctx context.Context, log logr.Log
 
 		if err := r.Get(ctx, controlPlaneName, controlPlane); err != nil {
 			// AWSManagedControlPlane is not ready
-			return nil, nil // nolint:nilerr
+			return nil, nil //nolint:nilerr
 		}
 
 		managedControlPlaneScope, err = scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
@@ -951,7 +951,7 @@ func (r *AWSMachineReconciler) getInfraCluster(ctx context.Context, log logr.Log
 
 	if err := r.Client.Get(ctx, infraClusterName, awsCluster); err != nil {
 		// AWSCluster is not ready
-		return nil, nil // nolint:nilerr
+		return nil, nil //nolint:nilerr
 	}
 
 	// Create the cluster scope

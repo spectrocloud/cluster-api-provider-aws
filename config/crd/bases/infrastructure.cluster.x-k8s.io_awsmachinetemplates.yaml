@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+    controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
   name: awsmachinetemplates.infrastructure.cluster.x-k8s.io
 spec:
@@ -789,12 +789,14 @@ spec:
                           the attached security groups might change too.
                         items:
                           description: AWSResourceReference is a reference to a specific
-                            AWS resource by ID, ARN, or filters. Only one of ID, ARN
-                            or Filters may be specified. Specifying more than one
-                            will result in a validation error.
+                            AWS resource by ID or filters. Only one of ID or Filters
+                            may be specified. Specifying more than one will result
+                            in a validation error.
                           properties:
                             arn:
-                              description: ARN of resource
+                              description: 'ARN of resource. Deprecated: This field
+                                has no function and is going to be removed in the
+                                next release.'
                               type: string
                             filters:
                               description: 'Filters is a set of key/value pairs used
@@ -1059,7 +1061,9 @@ spec:
                           be used.
                         properties:
                           arn:
-                            description: ARN of resource
+                            description: 'ARN of resource. Deprecated: This field
+                              has no function and is going to be removed in the next
+                              release.'
                             type: string
                           filters:
                             description: 'Filters is a set of key/value pairs used
@@ -1111,12 +1115,21 @@ spec:
             required:
             - template
             type: object
+          status:
+            description: AWSMachineTemplateStatus defines a status for an AWSMachineTemplate.
+            properties:
+              capacity:
+                additionalProperties:
+                  anyOf:
+                  - type: integer
+                  - type: string
+                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                  x-kubernetes-int-or-string: true
+                description: 'Capacity defines the resource capacity for this machine.
+                  This value is used for autoscaling from zero operations as defined
+                  in: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md'
+                type: object
+            type: object
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

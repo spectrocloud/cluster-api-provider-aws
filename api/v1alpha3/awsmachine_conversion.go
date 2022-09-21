@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -106,6 +106,8 @@ func (r *AWSMachineTemplate) ConvertTo(dstRaw conversion.Hub) error {
 
 	restoreSpec(&restored.Spec.Template.Spec, &dst.Spec.Template.Spec)
 
+	dst.Status = restored.Status
+
 	return nil
 }
 
@@ -121,6 +123,10 @@ func (r *AWSMachineTemplate) ConvertFrom(srcRaw conversion.Hub) error {
 		return err
 	}
 	return nil
+}
+
+func Convert_v1beta1_AWSMachineTemplate_To_v1alpha3_AWSMachineTemplate(in *infrav1.AWSMachineTemplate, out *AWSMachineTemplate, s apiconversion.Scope) error {
+	return autoConvert_v1beta1_AWSMachineTemplate_To_v1alpha3_AWSMachineTemplate(in, out, s)
 }
 
 // ConvertTo converts the v1alpha3 AWSMachineTemplateList receiver to a v1beta1 AWSMachineTemplateList.

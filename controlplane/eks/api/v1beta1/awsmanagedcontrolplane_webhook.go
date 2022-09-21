@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,17 +35,20 @@ import (
 )
 
 const (
-	minAddonVersion      = "v1.18.0"
-	maxClusterNameLength = 100
+	minAddonVersion         = "v1.18.0"
+	minKubeVersionForIPv6   = "v1.21.0"
+	minVpcCniVersionForIPv6 = "1.10.2"
+	maxClusterNameLength    = 100
 )
 
 // log is for logging in this package.
 var mcpLog = logf.Log.WithName("awsmanagedcontrolplane-resource")
 
 const (
-	cidrSizeMax = 65536
-	cidrSizeMin = 16
-	vpcCniAddon = "vpc-cni"
+	cidrSizeMax    = 65536
+	cidrSizeMin    = 16
+	vpcCniAddon    = "vpc-cni"
+	kubeProxyAddon = "kube-proxy"
 )
 
 // SetupWebhookWithManager will setup the webhooks for the AWSManagedControlPlane.
@@ -69,15 +72,6 @@ func parseEKSVersion(raw string) (*version.Version, error) {
 	return version.MustParseGeneric(fmt.Sprintf("%d.%d", v.Major(), v.Minor())), nil
 }
 
-func normalizeVersion(raw string) (string, error) {
-	// Normalize version (i.e. remove patch, add "v" prefix) if necessary
-	eksV, err := parseEKSVersion(raw)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("v%d.%d", eksV.Major(), eksV.Minor()), nil
-}
-
 // ValidateCreate will do any extra validation when creating a AWSManagedControlPlane.
 func (r *AWSManagedControlPlane) ValidateCreate() error {
 	mcpLog.Info("AWSManagedControlPlane validate create", "name", r.Name)
@@ -88,13 +82,16 @@ func (r *AWSManagedControlPlane) ValidateCreate() error {
 		allErrs = append(allErrs, field.Required(field.NewPath("spec.eksClusterName"), "eksClusterName is required"))
 	}
 
+	// TODO: Add ipv6 validation things in these validations.
 	allErrs = append(allErrs, r.validateEKSVersion(nil)...)
 	allErrs = append(allErrs, r.Spec.Bastion.Validate()...)
 	allErrs = append(allErrs, r.validateIAMAuthConfig()...)
 	allErrs = append(allErrs, r.validateSecondaryCIDR()...)
 	allErrs = append(allErrs, r.validateEKSAddons()...)
 	allErrs = append(allErrs, r.validateDisableVPCCNI()...)
+	allErrs = append(allErrs, r.validateKubeProxy()...)
 	allErrs = append(allErrs, r.Spec.AdditionalTags.Validate()...)
+	allErrs = append(allErrs, r.validateNetwork()...)
 
 	if len(allErrs) == 0 {
 		return nil
@@ -126,6 +123,7 @@ func (r *AWSManagedControlPlane) ValidateUpdate(old runtime.Object) error {
 	allErrs = append(allErrs, r.validateSecondaryCIDR()...)
 	allErrs = append(allErrs, r.validateEKSAddons()...)
 	allErrs = append(allErrs, r.validateDisableVPCCNI()...)
+	allErrs = append(allErrs, r.validateKubeProxy()...)
 	allErrs = append(allErrs, r.Spec.AdditionalTags.Validate()...)
 
 	if r.Spec.Region != oldAWSManagedControlplane.Spec.Region {
@@ -158,6 +156,11 @@ func (r *AWSManagedControlPlane) ValidateUpdate(old runtime.Object) error {
 			field.Invalid(field.NewPath("spec", "identityRef"),
 				r.Spec.IdentityRef, "field cannot be set to nil"),
 		)
+	}
+
+	if oldAWSManagedControlplane.Spec.NetworkSpec.VPC.IsIPv6Enabled() != r.Spec.NetworkSpec.VPC.IsIPv6Enabled() {
+		allErrs = append(allErrs,
+			field.Invalid(field.NewPath("spec", "networkSpec", "vpc", "enableIPv6"), r.Spec.NetworkSpec.VPC.IsIPv6Enabled(), "changing IP family is not allowed after it has been set"))
 	}
 
 	if len(allErrs) == 0 {
@@ -217,13 +220,19 @@ func (r *AWSManagedControlPlane) validateEKSVersion(old *AWSManagedControlPlane)
 		}
 	}
 
+	if r.Spec.NetworkSpec.VPC.IsIPv6Enabled() {
+		minIPv6, _ := version.ParseSemantic(minKubeVersionForIPv6)
+		if v.LessThan(minIPv6) {
+			allErrs = append(allErrs, field.Invalid(path, *r.Spec.Version, fmt.Sprintf("IPv6 requires Kubernetes %s or greater", minKubeVersionForIPv6)))
+		}
+	}
 	return allErrs
 }
 
 func (r *AWSManagedControlPlane) validateEKSAddons() field.ErrorList {
 	var allErrs field.ErrorList
 
-	if r.Spec.Addons == nil || len(*r.Spec.Addons) == 0 {
+	if !r.Spec.NetworkSpec.VPC.IsIPv6Enabled() && (r.Spec.Addons == nil || len(*r.Spec.Addons) == 0) {
 		return allErrs
 	}
 
@@ -240,6 +249,31 @@ func (r *AWSManagedControlPlane) validateEKSAddons() field.ErrorList {
 	if v.LessThan(minVersion) {
 		message := fmt.Sprintf("addons requires Kubernetes %s or greater", minAddonVersion)
 		allErrs = append(allErrs, field.Invalid(addonsPath, *r.Spec.Version, message))
+	}
+
+	// validations for IPv6:
+	// - addons have to be defined in case IPv6 is enabled
+	// - minimum version requirement for VPC-CNI using IPv6 ipFamily is 1.10.2
+	if r.Spec.NetworkSpec.VPC.IsIPv6Enabled() {
+		if r.Spec.Addons == nil || len(*r.Spec.Addons) == 0 {
+			allErrs = append(allErrs, field.Invalid(addonsPath, "", "addons are required to be set explicitly if IPv6 is enabled"))
+			return allErrs
+		}
+
+		for _, addon := range *r.Spec.Addons {
+			if addon.Name == vpcCniAddon {
+				v, err := version.ParseGeneric(addon.Version)
+				if err != nil {
+					allErrs = append(allErrs, field.Invalid(addonsPath, addon.Version, err.Error()))
+					break
+				}
+				minCniVersion, _ := version.ParseSemantic(minVpcCniVersionForIPv6)
+				if v.LessThan(minCniVersion) {
+					allErrs = append(allErrs, field.Invalid(addonsPath, addon.Version, fmt.Sprintf("vpc-cni version must be above or equal to %s for IPv6", minVpcCniVersionForIPv6)))
+					break
+				}
+			}
+		}
 	}
 
 	return allErrs
@@ -306,15 +340,33 @@ func (r *AWSManagedControlPlane) validateSecondaryCIDR() field.ErrorList {
 	return allErrs
 }
 
+func (r *AWSManagedControlPlane) validateKubeProxy() field.ErrorList {
+	var allErrs field.ErrorList
+
+	if r.Spec.KubeProxy.Disable {
+		disableField := field.NewPath("spec", "kubeProxy", "disable")
+
+		if r.Spec.Addons != nil {
+			for _, addon := range *r.Spec.Addons {
+				if addon.Name == kubeProxyAddon {
+					allErrs = append(allErrs, field.Invalid(disableField, r.Spec.KubeProxy.Disable, "cannot disable kube-proxy if the kube-proxy addon is specified"))
+					break
+				}
+			}
+		}
+	}
+
+	if len(allErrs) == 0 {
+		return nil
+	}
+	return allErrs
+}
+
 func (r *AWSManagedControlPlane) validateDisableVPCCNI() field.ErrorList {
 	var allErrs field.ErrorList
 
 	if r.Spec.DisableVPCCNI {
 		disableField := field.NewPath("spec", "disableVPCCNI")
-
-		if r.Spec.SecondaryCidrBlock != nil {
-			allErrs = append(allErrs, field.Invalid(disableField, r.Spec.DisableVPCCNI, "cannot disable vpc cni if a secondary cidr is specified"))
-		}
 
 		if r.Spec.Addons != nil {
 			for _, addon := range *r.Spec.Addons {
@@ -329,6 +381,17 @@ func (r *AWSManagedControlPlane) validateDisableVPCCNI() field.ErrorList {
 	if len(allErrs) == 0 {
 		return nil
 	}
+	return allErrs
+}
+
+func (r *AWSManagedControlPlane) validateNetwork() field.ErrorList {
+	var allErrs field.ErrorList
+
+	if r.Spec.NetworkSpec.VPC.IsIPv6Enabled() && r.Spec.NetworkSpec.VPC.IPv6.CidrBlock != "" && r.Spec.NetworkSpec.VPC.IPv6.PoolID == "" {
+		poolField := field.NewPath("spec", "networkSpec", "vpc", "ipv6", "poolId")
+		allErrs = append(allErrs, field.Invalid(poolField, r.Spec.NetworkSpec.VPC.IPv6.PoolID, "poolId cannot be empty if cidrBlock is set"))
+	}
+
 	return allErrs
 }
 
@@ -353,16 +416,6 @@ func (r *AWSManagedControlPlane) Default() {
 			Kind: infrav1.ControllerIdentityKind,
 			Name: infrav1.AWSClusterControllerIdentityName,
 		}
-	}
-
-	// Normalize version (i.e. remove patch, add "v" prefix) if necessary
-	if r.Spec.Version != nil {
-		normalizedV, err := normalizeVersion(*r.Spec.Version)
-		if err != nil {
-			mcpLog.Error(err, "couldn't parse version")
-			return
-		}
-		r.Spec.Version = &normalizedV
 	}
 
 	infrav1.SetDefaults_Bastion(&r.Spec.Bastion)

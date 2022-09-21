@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+    controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
   name: awsmachines.infrastructure.cluster.x-k8s.io
 spec:
@@ -987,12 +987,12 @@ spec:
                   change too.
                 items:
                   description: AWSResourceReference is a reference to a specific AWS
-                    resource by ID, ARN, or filters. Only one of ID, ARN or Filters
-                    may be specified. Specifying more than one will result in a validation
-                    error.
+                    resource by ID or filters. Only one of ID or Filters may be specified.
+                    Specifying more than one will result in a validation error.
                   properties:
                     arn:
-                      description: ARN of resource
+                      description: 'ARN of resource. Deprecated: This field has no
+                        function and is going to be removed in the next release.'
                       type: string
                     filters:
                       description: 'Filters is a set of key/value pairs used to identify
@@ -1245,7 +1245,8 @@ spec:
                   If not specified, the cluster subnet will be used.
                 properties:
                   arn:
-                    description: ARN of resource
+                    description: 'ARN of resource. Deprecated: This field has no function
+                      and is going to be removed in the next release.'
                     type: string
                   filters:
                     description: 'Filters is a set of key/value pairs used to identify
@@ -1405,9 +1406,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+    controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
   name: eksconfigs.bootstrap.cluster.x-k8s.io
 spec:
@@ -302,6 +302,10 @@ spec:
                 - accountNumber
                 - version
                 type: object
+              serviceIPV6Cidr:
+                description: ServiceIPV6Cidr is the ipv6 cidr range of the cluster.
+                  If this is specified then the ip family will be set to ipv6.
+                type: string
               useMaxPods:
                 description: UseMaxPods  sets --max-pods for the kubelet when true.
                 type: boolean
@@ -380,9 +384,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

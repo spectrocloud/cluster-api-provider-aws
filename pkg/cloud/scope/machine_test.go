@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -51,9 +51,8 @@ func newMachine(clusterName, machineName string) *clusterv1.Machine {
 			Labels: map[string]string{
 				clusterv1.ClusterLabelName: clusterName,
 			},
-			ClusterName: clusterName,
-			Name:        machineName,
-			Namespace:   "default",
+			Name:      machineName,
+			Namespace: "default",
 		},
 		Spec: clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
@@ -170,7 +169,7 @@ func TestGetRawBootstrapDataIsNotBase64Encoded(t *testing.T) {
 	}
 }
 
-func Test_GetRawBootstrapDataWithFormat(t *testing.T) {
+func TestGetRawBootstrapDataWithFormat(t *testing.T) {
 	t.Run("returns_empty_format_when_format_is_not_set_in_bootstrap_data", func(t *testing.T) {
 		scope, err := setupMachineScope()
 		if err != nil {
@@ -259,7 +258,7 @@ func TestUseSecretsManagerTrue(t *testing.T) {
 	}
 }
 
-func Test_UseIgnition(t *testing.T) {
+func TestUseIgnition(t *testing.T) {
 	t.Run("returns_true_when_given_bootstrap_data_format_is_ignition", func(t *testing.T) {
 		scope, err := setupMachineScope()
 		if err != nil {
@@ -284,7 +283,7 @@ func Test_UseIgnition(t *testing.T) {
 	})
 }
 
-func Test_CompressUserData(t *testing.T) {
+func TestCompressUserData(t *testing.T) {
 	// Ignition does not support compressed data in S3.
 	t.Run("returns_false_when_bootstrap_data_is_in_ignition_format", func(t *testing.T) {
 		scope, err := setupMachineScope()

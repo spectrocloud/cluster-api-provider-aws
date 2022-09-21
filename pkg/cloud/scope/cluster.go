@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -234,6 +234,9 @@ func (s *ClusterScope) PatchObject() error {
 		if s.AWSCluster.Spec.Bastion.Enabled {
 			applicableConditions = append(applicableConditions, infrav1.BastionHostReadyCondition)
 		}
+		if s.VPC().IsIPv6Enabled() {
+			applicableConditions = append(applicableConditions, infrav1.EgressOnlyInternetGatewayReadyCondition)
+		}
 	}
 
 	conditions.SetSummary(s.AWSCluster,
@@ -250,6 +253,7 @@ func (s *ClusterScope) PatchObject() error {
 			infrav1.VpcReadyCondition,
 			infrav1.SubnetsReadyCondition,
 			infrav1.InternetGatewayReadyCondition,
+			infrav1.EgressOnlyInternetGatewayReadyCondition,
 			infrav1.NatGatewaysReadyCondition,
 			infrav1.RouteTablesReadyCondition,
 			infrav1.ClusterSecurityGroupsReadyCondition,

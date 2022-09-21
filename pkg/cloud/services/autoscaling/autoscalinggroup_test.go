@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,12 +36,12 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/autoscaling/mock_autoscalingiface"
-	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/ec2/mock_ec2iface"
+	"sigs.k8s.io/cluster-api-provider-aws/test/mocks"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 )
 
-func TestService_GetASGByName(t *testing.T) {
+func TestServiceGetASGByName(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	tests := []struct {
@@ -128,7 +128,7 @@ func TestService_GetASGByName(t *testing.T) {
 	}
 }
 
-func TestService_SDKToAutoScalingGroup(t *testing.T) {
+func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   *autoscaling.Group
@@ -294,7 +294,7 @@ func TestService_SDKToAutoScalingGroup(t *testing.T) {
 	}
 }
 
-func TestService_ASGIfExists(t *testing.T) {
+func TestServiceASGIfExists(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -385,7 +385,7 @@ func TestService_ASGIfExists(t *testing.T) {
 	}
 }
 
-func TestService_CreateASG(t *testing.T) {
+func TestServiceCreateASG(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	tests := []struct {
@@ -536,7 +536,7 @@ func TestService_CreateASG(t *testing.T) {
 	}
 }
 
-func TestService_UpdateASG(t *testing.T) {
+func TestServiceUpdateASG(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -545,7 +545,7 @@ func TestService_UpdateASG(t *testing.T) {
 		machinePoolName       string
 		setupMachinePoolScope func(*scope.MachinePoolScope)
 		wantErr               bool
-		expect                func(e *mock_ec2iface.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder)
+		expect                func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder)
 	}{
 		{
 			name:            "should return without error if update ASG is successful",
@@ -554,7 +554,7 @@ func TestService_UpdateASG(t *testing.T) {
 			setupMachinePoolScope: func(mps *scope.MachinePoolScope) {
 				mps.AWSMachinePool.Spec.Subnets = nil
 			},
-			expect: func(e *mock_ec2iface.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
+			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
 				m.UpdateAutoScalingGroup(gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(&autoscaling.UpdateAutoScalingGroupOutput{}, nil)
 			},
 		},
@@ -565,7 +565,7 @@ func TestService_UpdateASG(t *testing.T) {
 			setupMachinePoolScope: func(mps *scope.MachinePoolScope) {
 				mps.AWSMachinePool.Spec.MixedInstancesPolicy = nil
 			},
-			expect: func(e *mock_ec2iface.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
+			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
 				m.UpdateAutoScalingGroup(gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
 			},
 		},
@@ -577,7 +577,7 @@ func TestService_UpdateASG(t *testing.T) {
 
 			clusterScope, err := getClusterScope(fakeClient)
 			g.Expect(err).ToNot(HaveOccurred())
-			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
+			ec2Mock := mocks.NewMockEC2API(mockCtrl)
 			asgMock := mock_autoscalingiface.NewMockAutoScalingAPI(mockCtrl)
 			tt.expect(ec2Mock.EXPECT(), asgMock.EXPECT())
 			s := NewService(clusterScope)
@@ -593,7 +593,7 @@ func TestService_UpdateASG(t *testing.T) {
 	}
 }
 
-func TestService_UpdateASGWithSubnetFilters(t *testing.T) {
+func TestServiceUpdateASGWithSubnetFilters(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -602,7 +602,7 @@ func TestService_UpdateASGWithSubnetFilters(t *testing.T) {
 		machinePoolName      string
 		awsResourceReference []infrav1.AWSResourceReference
 		wantErr              bool
-		expect               func(e *mock_ec2iface.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder)
+		expect               func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder)
 	}{
 		{
 			name:            "should return without error if update ASG is successful",
@@ -613,7 +613,7 @@ func TestService_UpdateASGWithSubnetFilters(t *testing.T) {
 					Filters: []infrav1.Filter{{Name: "availability-zone", Values: []string{"us-east-1a"}}},
 				},
 			},
-			expect: func(e *mock_ec2iface.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
+			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
 				e.DescribeSubnets(gomock.AssignableToTypeOf(&ec2.DescribeSubnetsInput{})).Return(&ec2.DescribeSubnetsOutput{
 					Subnets: []*ec2.Subnet{{SubnetId: aws.String("subnet-02")}},
 				}, nil)
@@ -629,7 +629,7 @@ func TestService_UpdateASGWithSubnetFilters(t *testing.T) {
 					ID: aws.String("subnet-01"),
 				},
 			},
-			expect: func(e *mock_ec2iface.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
+			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
 				m.UpdateAutoScalingGroup(gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
 			},
 		},
@@ -642,7 +642,7 @@ func TestService_UpdateASGWithSubnetFilters(t *testing.T) {
 			clusterScope, err := getClusterScope(fakeClient)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			ec2Mock := mock_ec2iface.NewMockEC2API(mockCtrl)
+			ec2Mock := mocks.NewMockEC2API(mockCtrl)
 			asgMock := mock_autoscalingiface.NewMockAutoScalingAPI(mockCtrl)
 			if tt.expect != nil {
 				tt.expect(ec2Mock.EXPECT(), asgMock.EXPECT())
@@ -662,7 +662,7 @@ func TestService_UpdateASGWithSubnetFilters(t *testing.T) {
 	}
 }
 
-func TestService_UpdateResourceTags(t *testing.T) {
+func TestServiceUpdateResourceTags(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -778,7 +778,7 @@ func TestService_UpdateResourceTags(t *testing.T) {
 	}
 }
 
-func TestService_DeleteASG(t *testing.T) {
+func TestServiceDeleteASG(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -829,7 +829,7 @@ func TestService_DeleteASG(t *testing.T) {
 	}
 }
 
-func TestService_DeleteASGAndWait(t *testing.T) {
+func TestServiceDeleteASGAndWait(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -899,7 +899,7 @@ func TestService_DeleteASGAndWait(t *testing.T) {
 	}
 }
 
-func TestService_CanStartASGInstanceRefresh(t *testing.T) {
+func TestServiceCanStartASGInstanceRefresh(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -977,7 +977,7 @@ func TestService_CanStartASGInstanceRefresh(t *testing.T) {
 	}
 }
 
-func TestService_StartASGInstanceRefresh(t *testing.T) {
+func TestServiceStartASGInstanceRefresh(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -1095,8 +1095,7 @@ func getMachinePoolScope(client client.Client, clusterScope *scope.ClusterScope)
 		Spec: expinfrav1.AWSMachinePoolSpec{
 			Subnets: []infrav1.AWSResourceReference{
 				{
-					ID:  aws.String("subnet1"),
-					ARN: aws.String("subnetARN"),
+					ID: aws.String("subnet1"),
 				},
 			},
 			RefreshPreferences: &expinfrav1.RefreshPreferences{

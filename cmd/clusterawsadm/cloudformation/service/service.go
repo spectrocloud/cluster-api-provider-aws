@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -63,7 +63,8 @@ func (s *Service) ReconcileBootstrapStack(stackName string, t go_cfn.Template, t
 			Value: pointer.StringPtr(v),
 		})
 	}
-	if err := s.createStack(stackName, processedYaml, stackTags); err != nil { // nolint:nestif
+	//nolint:nestif
+	if err := s.createStack(stackName, processedYaml, stackTags); err != nil {
 		if code, _ := awserrors.Code(errors.Cause(err)); code == "AlreadyExistsException" {
 			klog.Infof("AWS Cloudformation stack %q already exists, updating", stackName)
 			updateErr := s.updateStack(stackName, processedYaml, stackTags)

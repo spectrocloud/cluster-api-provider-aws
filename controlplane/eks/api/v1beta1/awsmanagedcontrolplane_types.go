@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
@@ -26,6 +27,9 @@ import (
 const (
 	// ManagedControlPlaneFinalizer allows the controller to clean up resources on delete.
 	ManagedControlPlaneFinalizer = "awsmanagedcontrolplane.controlplane.cluster.x-k8s.io"
+
+	// AWSManagedControlPlaneKind is the Kind of AWSManagedControlPlane.
+	AWSManagedControlPlaneKind = "AWSManagedControlPlane"
 )
 
 // AWSManagedControlPlaneSpec defines the desired state of an Amazon EKS Cluster.
@@ -59,7 +63,7 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// is supplied then the latest version of Kubernetes that EKS supports
 	// will be used.
 	// +kubebuilder:validation:MinLength:=2
-	// +kubebuilder:validation:Pattern:=^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.?$
+	// +kubebuilder:validation:Pattern:=^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.?(\.0|[1-9][0-9]*)?$
 	// +optional
 	Version *string `json:"version,omitempty"`
 
@@ -163,9 +167,34 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// Amazon VPC CNI is automatically installed into the cluster. For clusters where you want
 	// to use an alternate CNI this option provides a way to specify that the Amazon VPC CNI
 	// should be deleted. You cannot set this to true if you are using the
-	// Amazon VPC CNI addon or if you have specified a secondary CIDR block.
+	// Amazon VPC CNI addon.
 	// +kubebuilder:default=false
 	DisableVPCCNI bool `json:"disableVPCCNI,omitempty"`
+
+	// VpcCni is used to set configuration options for the VPC CNI plugin
+	// +optional
+	VpcCni VpcCni `json:"vpcCni,omitempty"`
+
+	// KubeProxy defines managed attributes of the kube-proxy daemonset
+	KubeProxy KubeProxy `json:"kubeProxy,omitempty"`
+}
+
+// KubeProxy specifies how the kube-proxy daemonset is managed.
+type KubeProxy struct {
+	// Disable set to true indicates that kube-proxy should be disabled. With EKS clusters
+	// kube-proxy is automatically installed into the cluster. For clusters where you want
+	// to use kube-proxy functionality that is provided with an alternate CNI, this option
+	// provides a way to specify that the kube-proxy daemonset should be deleted. You cannot
+	// set this to true if you are using the Amazon kube-proxy addon.
+	// +kubebuilder:default=false
+	Disable bool `json:"disable,omitempty"`
+}
+
+// VpcCni specifies configuration related to the VPC CNI.
+type VpcCni struct {
+	// Env defines a list of environment variables to apply to the `aws-node` DaemonSet
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
 }
 
 // EndpointAccess specifies how control plane endpoints are accessible.

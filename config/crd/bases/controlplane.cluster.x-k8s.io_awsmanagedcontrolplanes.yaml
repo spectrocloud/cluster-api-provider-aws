@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+    controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
   name: awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io
 spec:
@@ -158,8 +158,7 @@ spec:
                   installed into the cluster. For clusters where you want to use an
                   alternate CNI this option provides a way to specify that the Amazon
                   VPC CNI should be deleted. You cannot set this to true if you are
-                  using the Amazon VPC CNI addon or if you have specified a secondary
-                  CIDR block.
+                  using the Amazon VPC CNI addon.
                 type: boolean
               eksClusterName:
                 description: EKSClusterName allows you to specify the name of the
@@ -809,6 +808,8 @@ spec:
                       description: ControlPlane determines if this failure domain
                         is suitable for use by control plane machines.
                       type: boolean
+                  required:
+                  - controlPlane
                   type: object
                 description: FailureDomains specifies a list fo available availability
                   zones that can be used
@@ -1169,8 +1170,7 @@ spec:
                   installed into the cluster. For clusters where you want to use an
                   alternate CNI this option provides a way to specify that the Amazon
                   VPC CNI should be deleted. You cannot set this to true if you are
-                  using the Amazon VPC CNI addon or if you have specified a secondary
-                  CIDR block.
+                  using the Amazon VPC CNI addon.
                 type: boolean
               eksClusterName:
                 description: EKSClusterName allows you to specify the name of the
@@ -1900,6 +1900,8 @@ spec:
                       description: ControlPlane determines if this failure domain
                         is suitable for use by control plane machines.
                       type: boolean
+                  required:
+                  - controlPlane
                   type: object
                 description: FailureDomains specifies a list fo available availability
                   zones that can be used
@@ -2273,8 +2275,7 @@ spec:
                   installed into the cluster. For clusters where you want to use an
                   alternate CNI this option provides a way to specify that the Amazon
                   VPC CNI should be deleted. You cannot set this to true if you are
-                  using the Amazon VPC CNI addon or if you have specified a secondary
-                  CIDR block.
+                  using the Amazon VPC CNI addon.
                 type: boolean
               eksClusterName:
                 description: EKSClusterName allows you to specify the name of the
@@ -2415,6 +2416,21 @@ spec:
                   this will be used for all cluster machines unless a machine specifies
                   a different ImageLookupOrg.
                 type: string
+              kubeProxy:
+                description: KubeProxy defines managed attributes of the kube-proxy
+                  daemonset
+                properties:
+                  disable:
+                    default: false
+                    description: Disable set to true indicates that kube-proxy should
+                      be disabled. With EKS clusters kube-proxy is automatically installed
+                      into the cluster. For clusters where you want to use kube-proxy
+                      functionality that is provided with an alternate CNI, this option
+                      provides a way to specify that the kube-proxy daemonset should
+                      be deleted. You cannot set this to true if you are using the
+                      Amazon kube-proxy addon.
+                    type: boolean
+                type: object
               logging:
                 description: Logging specifies which EKS Cluster logs should be enabled.
                   Entries for each of the enabled logs will be sent to CloudWatch
@@ -2510,6 +2526,19 @@ spec:
                           description: ID defines a unique identifier to reference
                             this resource.
                           type: string
+                        ipv6CidrBlock:
+                          description: IPv6CidrBlock is the IPv6 CIDR block to be
+                            used when the provider creates a managed VPC. A subnet
+                            can have an IPv4 and an IPv6 address. IPv6 is only supported
+                            in managed clusters, this field cannot be set on AWSCluster
+                            object.
+                          type: string
+                        isIpv6:
+                          description: IsIPv6 defines the subnet as an IPv6 subnet.
+                            A subnet is IPv6 when it is associated with a VPC that
+                            has IPv6 enabled. IPv6 is only supported in managed clusters,
+                            this field cannot be set on AWSCluster object.
+                          type: boolean
                         isPublic:
                           description: IsPublic defines the subnet as a public subnet.
                             A subnet is public when it is associated with a route
@@ -2571,6 +2600,25 @@ spec:
                         description: InternetGatewayID is the id of the internet gateway
                           associated with the VPC.
                         type: string
+                      ipv6:
+                        description: IPv6 contains ipv6 specific settings for the
+                          network. Supported only in managed clusters. This field
+                          cannot be set on AWSCluster object.
+                        properties:
+                          cidrBlock:
+                            description: CidrBlock is the CIDR block provided by Amazon
+                              when VPC has enabled IPv6.
+                            type: string
+                          egressOnlyInternetGatewayId:
+                            description: EgressOnlyInternetGatewayID is the id of
+                              the egress only internet gateway associated with an
+                              IPv6 enabled VPC.
+                            type: string
+                          poolId:
+                            description: PoolID is the IP pool which must be defined
+                              in case of BYO IP is defined.
+                            type: string
+                        type: object
                       tags:
                         additionalProperties:
                           type: string
@@ -2684,8 +2732,124 @@ spec:
                   version number is supplied then the latest version of Kubernetes
                   that EKS supports will be used.
                 minLength: 2
-                pattern: ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.?$
+                pattern: ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.?(\.0|[1-9][0-9]*)?$
                 type: string
+              vpcCni:
+                description: VpcCni is used to set configuration options for the VPC
+                  CNI plugin
+                properties:
+                  env:
+                    description: Env defines a list of environment variables to apply
+                      to the `aws-node` DaemonSet
+                    items:
+                      description: EnvVar represents an environment variable present
+                        in a Container.
+                      properties:
+                        name:
+                          description: Name of the environment variable. Must be a
+                            C_IDENTIFIER.
+                          type: string
+                        value:
+                          description: 'Variable references $(VAR_NAME) are expanded
+                            using the previously defined environment variables in
+                            the container and any service environment variables. If
+                            a variable cannot be resolved, the reference in the input
+                            string will be unchanged. Double $$ are reduced to a single
+                            $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                            "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                            Escaped references will never be expanded, regardless
+                            of whether the variable exists or not. Defaults to "".'
+                          type: string
+                        valueFrom:
+                          description: Source for the environment variable's value.
+                            Cannot be used if value is not empty.
+                          properties:
+                            configMapKeyRef:
+                              description: Selects a key of a ConfigMap.
+                              properties:
+                                key:
+                                  description: The key to select.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    TODO: Add other useful fields. apiVersion, kind,
+                                    uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the ConfigMap or its
+                                    key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            fieldRef:
+                              description: 'Selects a field of the pod: supports metadata.name,
+                                metadata.namespace, `metadata.labels[''<KEY>'']`,
+                                `metadata.annotations[''<KEY>'']`, spec.nodeName,
+                                spec.serviceAccountName, status.hostIP, status.podIP,
+                                status.podIPs.'
+                              properties:
+                                apiVersion:
+                                  description: Version of the schema the FieldPath
+                                    is written in terms of, defaults to "v1".
+                                  type: string
+                                fieldPath:
+                                  description: Path of the field to select in the
+                                    specified API version.
+                                  type: string
+                              required:
+                              - fieldPath
+                              type: object
+                            resourceFieldRef:
+                              description: 'Selects a resource of the container: only
+                                resources limits and requests (limits.cpu, limits.memory,
+                                limits.ephemeral-storage, requests.cpu, requests.memory
+                                and requests.ephemeral-storage) are currently supported.'
+                              properties:
+                                containerName:
+                                  description: 'Container name: required for volumes,
+                                    optional for env vars'
+                                  type: string
+                                divisor:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  description: Specifies the output format of the
+                                    exposed resources, defaults to "1"
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                resource:
+                                  description: 'Required: resource to select'
+                                  type: string
+                              required:
+                              - resource
+                              type: object
+                            secretKeyRef:
+                              description: Selects a key of a secret in the pod's
+                                namespace
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must
+                                    be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    TODO: Add other useful fields. apiVersion, kind,
+                                    uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key
+                                    must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    type: array
+                type: object
             type: object
           status:
             description: AWSManagedControlPlaneStatus defines the observed state of
@@ -3176,6 +3340,12 @@ spec:
                               fromPort:
                                 format: int64
                                 type: integer
+                              ipv6CidrBlocks:
+                                description: List of IPv6 CIDR blocks to allow access
+                                  from. Cannot be specified with SourceSecurityGroupID.
+                                items:
+                                  type: string
+                                type: array
                               protocol:
                                 description: SecurityGroupProtocol defines the protocol
                                   type for a security group rule.
@@ -3238,9 +3408,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

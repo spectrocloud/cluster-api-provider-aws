@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,11 +25,6 @@ import (
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/errors"
-)
-
-const (
-	// ManagedMachinePoolFinalizer allows the controller to clean up resources on delete.
-	ManagedMachinePoolFinalizer = "awsmanagedmachinepools.infrastructure.cluster.x-k8s.io"
 )
 
 // ManagedMachineAMIType specifies which AWS AMI to use for a managed MachinePool.
@@ -104,7 +99,7 @@ type AWSManagedMachinePoolSpec struct {
 	AMIVersion *string `json:"amiVersion,omitempty"`
 
 	// AMIType defines the AMI type
-	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64
+	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64;CUSTOM
 	// +kubebuilder:default:=AL2_x86_64
 	// +optional
 	AMIType *ManagedMachineAMIType `json:"amiType,omitempty"`
@@ -149,6 +144,12 @@ type AWSManagedMachinePoolSpec struct {
 	// to the nodegroup.
 	// +optional
 	UpdateConfig *UpdateConfig `json:"updateConfig,omitempty"`
+
+	// AWSLaunchTemplate specifies the launch template to use to create the managed node group.
+	// If AWSLaunchTemplate is specified, certain node group configuraions outside of launch template
+	// are prohibited (https://docs.aws.amazon.com/eks/latest/userguide/launch-templates.html).
+	// +optional
+	AWSLaunchTemplate *AWSLaunchTemplate `json:"awsLaunchTemplate,omitempty"`
 }
 
 // ManagedMachinePoolScaling specifies scaling options.
@@ -180,6 +181,14 @@ type AWSManagedMachinePoolStatus struct {
 	// Replicas is the most recently observed number of replicas.
 	// +optional
 	Replicas int32 `json:"replicas"`
+
+	// The ID of the launch template
+	// +optional
+	LaunchTemplateID *string `json:"launchTemplateID,omitempty"`
+
+	// The version of the launch template
+	// +optional
+	LaunchTemplateVersion *string `json:"launchTemplateVersion,omitempty"`
 
 	// FailureReason will be set in the event that there is a terminal problem
 	// reconciling the MachinePool and will contain a succinct value suitable

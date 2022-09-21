@@ -8,7 +8,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/blang/semver"
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -57,7 +59,7 @@ var _ = ginkgo.Describe("[unmanaged] [conformance] tests", func() {
 	})
 	ginkgo.Measure(specName, func(b ginkgo.Benchmarker) {
 
-		name := fmt.Sprintf("cluster-%s", util.RandomString(6))
+		name := fmt.Sprintf("%s-%s", specName, util.RandomString(6))
 		shared.SetEnvVar("USE_CI_ARTIFACTS", "true", false)
 		kubernetesVersion := e2eCtx.E2EConfig.GetVariable(shared.KubernetesVersion)
 		flavor := clusterctl.DefaultFlavor
@@ -71,6 +73,16 @@ var _ = ginkgo.Describe("[unmanaged] [conformance] tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		controlPlaneMachineCount, err := strconv.ParseInt(e2eCtx.E2EConfig.GetVariable("CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT"), 10, 64)
 		Expect(err).NotTo(HaveOccurred())
+
+		// Starting with Kubernetes v1.25, the kubetest config file needs to be compatible with Ginkgo V2.
+		v125 := semver.MustParse("1.25.0-alpha.0.0")
+		v, err := semver.ParseTolerant(kubernetesVersion)
+		Expect(err).NotTo(HaveOccurred())
+		kubetestConfigFilePath := e2eCtx.Settings.KubetestConfigFilePath
+		if v.GTE(v125) {
+			// Use the Ginkgo V2 config file.
+			kubetestConfigFilePath = getGinkgoV2ConfigFilePath(e2eCtx.Settings.KubetestConfigFilePath)
+		}
 
 		runtime := b.Time("cluster creation", func() {
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
@@ -99,7 +111,7 @@ var _ = ginkgo.Describe("[unmanaged] [conformance] tests", func() {
 				kubetest.RunInput{
 					ClusterProxy:   workloadProxy,
 					NumberOfNodes:  int(workerMachineCount),
-					ConfigFilePath: e2eCtx.Settings.KubetestConfigFilePath,
+					ConfigFilePath: kubetestConfigFilePath,
 				},
 			)
 		})
@@ -113,3 +125,7 @@ var _ = ginkgo.Describe("[unmanaged] [conformance] tests", func() {
 	})
 
 })
+
+func getGinkgoV2ConfigFilePath(kubetestConfigFilePath string) string {
+	return strings.Replace(kubetestConfigFilePath, ".yaml", "-ginkgo-v2.yaml", 1)
+}

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -80,7 +80,7 @@ func TestAWSMachinePoolReconciler(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: expinfrav1.AWSMachinePoolSpec{
-				MinSize: int32(1),
+				MinSize: int32(0),
 				MaxSize: int32(1),
 			},
 		}
@@ -188,6 +188,8 @@ func TestAWSMachinePoolReconciler(t *testing.T) {
 				defer teardown(t, g)
 				getASG(t, g)
 
+				ec2Svc.EXPECT().ReconcileLaunchTemplate(gomock.Any(), gomock.Any(), gomock.Any())
+
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs)
 
 				g.Expect(ms.AWSMachinePool.Finalizers).To(ContainElement(expinfrav1.MachinePoolFinalizer))
@@ -242,23 +244,7 @@ func TestAWSMachinePoolReconciler(t *testing.T) {
 				setProviderID(t, g)
 
 				expectedErr := errors.New("no connection available ")
-				var launchtemplate *expinfrav1.AWSLaunchTemplate
-				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(launchtemplate, "", expectedErr)
-				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
-				g.Expect(errors.Cause(err)).To(MatchError(expectedErr))
-			})
-			t.Run("should try to create a new machinepool if none exists", func(t *testing.T) {
-				g := NewWithT(t)
-				setup(t, g)
-				defer teardown(t, g)
-				setProviderID(t, g)
-
-				expectedErr := errors.New("Invalid instance")
-				asgSvc.EXPECT().ASGIfExists(gomock.Any()).Return(nil, nil).AnyTimes()
-				ec2Svc.EXPECT().GetLaunchTemplate(gomock.Any()).Return(nil, "", nil)
-				ec2Svc.EXPECT().DiscoverLaunchTemplateAMI(gomock.Any()).Return(nil, nil)
-				ec2Svc.EXPECT().CreateLaunchTemplate(gomock.Any(), gomock.Any(), gomock.Any()).Return("", expectedErr).AnyTimes()
-
+				ec2Svc.EXPECT().ReconcileLaunchTemplate(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedErr)
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
 				g.Expect(errors.Cause(err)).To(MatchError(expectedErr))
 			})

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+    controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
   name: awsmachinepools.infrastructure.cluster.x-k8s.io
 spec:
@@ -1018,12 +1018,13 @@ spec:
                       groups defined at the cluster level or in the actuator.
                     items:
                       description: AWSResourceReference is a reference to a specific
-                        AWS resource by ID, ARN, or filters. Only one of ID, ARN or
-                        Filters may be specified. Specifying more than one will result
-                        in a validation error.
+                        AWS resource by ID or filters. Only one of ID or Filters may
+                        be specified. Specifying more than one will result in a validation
+                        error.
                       properties:
                         arn:
-                          description: ARN of resource
+                          description: 'ARN of resource. Deprecated: This field has
+                            no function and is going to be removed in the next release.'
                           type: string
                         filters:
                           description: 'Filters is a set of key/value pairs used to
@@ -1143,6 +1144,15 @@ spec:
                     required:
                     - size
                     type: object
+                  spotMarketOptions:
+                    description: SpotMarketOptions are options for configuring AWSMachinePool
+                      instances to be run using AWS Spot instances.
+                    properties:
+                      maxPrice:
+                        description: MaxPrice defines the maximum price the user is
+                          willing to pay for Spot VM instances
+                        type: string
+                    type: object
                   sshKeyName:
                     description: SSHKeyName is the name of the ssh key to attach to
                       the instance. Valid values are empty string (do not use SSH
@@ -1177,7 +1187,7 @@ spec:
                 default: 1
                 description: MinSize defines the minimum size of the group.
                 format: int32
-                minimum: 1
+                minimum: 0
                 type: integer
               mixedInstancesPolicy:
                 description: MixedInstancesPolicy describes how multiple instance
@@ -1263,12 +1273,12 @@ spec:
                 description: Subnets is an array of subnet configurations
                 items:
                   description: AWSResourceReference is a reference to a specific AWS
-                    resource by ID, ARN, or filters. Only one of ID, ARN or Filters
-                    may be specified. Specifying more than one will result in a validation
-                    error.
+                    resource by ID or filters. Only one of ID or Filters may be specified.
+                    Specifying more than one will result in a validation error.
                   properties:
                     arn:
-                      description: ARN of resource
+                      description: 'ARN of resource. Deprecated: This field has no
+                        function and is going to be removed in the next release.'
                       type: string
                     filters:
                       description: 'Filters is a set of key/value pairs used to identify
@@ -1403,6 +1413,9 @@ spec:
               launchTemplateID:
                 description: The ID of the launch template
                 type: string
+              launchTemplateVersion:
+                description: The version of the launch template
+                type: string
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean
@@ -1416,9 +1429,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

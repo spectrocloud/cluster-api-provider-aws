@@ -1,15 +1,15 @@
 module sigs.k8s.io/cluster-api-provider-aws
 
-go 1.17
+go 1.18
 
 replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.2.0
 
 require (
 	github.com/alessio/shellescape v1.4.1
 	github.com/apparentlymart/go-cidr v1.1.0
-	github.com/aws/amazon-vpc-cni-k8s v1.10.2
-	github.com/aws/aws-lambda-go v1.28.0
-	github.com/aws/aws-sdk-go v1.43.28
+	github.com/aws/amazon-vpc-cni-k8s v1.11.3
+	github.com/aws/aws-lambda-go v1.34.1
+	github.com/aws/aws-sdk-go v1.43.29
 	github.com/awslabs/goformation/v4 v4.19.5
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/flatcar-linux/ignition v0.36.1
@@ -20,9 +20,9 @@ require (
 	github.com/google/goexpect v0.0.0-20210430020637-ab937bf7fd6f
 	github.com/google/gofuzz v1.2.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.19.0
+	github.com/onsi/gomega v1.20.2
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.12.1
+	github.com/prometheus/client_golang v1.13.0
 	github.com/sergi/go-diff v1.2.0
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
@@ -35,7 +35,7 @@ require (
 	k8s.io/cli-runtime v0.24.0
 	k8s.io/client-go v0.24.2
 	k8s.io/component-base v0.24.2
-	k8s.io/klog/v2 v2.70.1
+	k8s.io/klog/v2 v2.80.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	sigs.k8s.io/aws-iam-authenticator v0.5.9
 	sigs.k8s.io/cluster-api v1.2.0
@@ -121,8 +121,8 @@ require (
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.32.1 // indirect
-	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/prometheus/common v0.37.0 // indirect
+	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/russross/blackfriday v1.5.2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -137,9 +137,9 @@ require (
 	github.com/subosito/gotenv v1.3.0 // indirect
 	github.com/valyala/fastjson v1.6.3 // indirect
 	github.com/vincent-petithory/dataurl v1.0.0 // indirect
-	golang.org/x/net v0.0.0-20220617184016-355a448f1bc9 // indirect
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect

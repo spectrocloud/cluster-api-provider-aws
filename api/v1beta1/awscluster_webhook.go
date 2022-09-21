@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -56,6 +56,7 @@ func (r *AWSCluster) ValidateCreate() error {
 	allErrs = append(allErrs, r.validateSSHKeyName()...)
 	allErrs = append(allErrs, r.Spec.AdditionalTags.Validate()...)
 	allErrs = append(allErrs, r.Spec.S3Bucket.Validate()...)
+	allErrs = append(allErrs, r.validateNetwork()...)
 
 	return aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
 }
@@ -177,4 +178,17 @@ func (r *AWSCluster) Default() {
 
 func (r *AWSCluster) validateSSHKeyName() field.ErrorList {
 	return validateSSHKeyName(r.Spec.SSHKeyName)
+}
+
+func (r *AWSCluster) validateNetwork() field.ErrorList {
+	var allErrs field.ErrorList
+	if r.Spec.NetworkSpec.VPC.IsIPv6Enabled() {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("ipv6"), r.Spec.NetworkSpec.VPC.IPv6, "IPv6 cannot be used with unmanaged clusters at this time."))
+	}
+	for _, subnet := range r.Spec.NetworkSpec.Subnets {
+		if subnet.IsIPv6 || subnet.IPv6CidrBlock != "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("subnets"), r.Spec.NetworkSpec.Subnets, "IPv6 cannot be used with unmanaged clusters at this time."))
+		}
+	}
+	return allErrs
 }

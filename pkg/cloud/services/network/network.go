@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,6 +50,12 @@ func (s *Service) ReconcileNetwork() (err error) {
 	// Internet Gateways.
 	if err := s.reconcileInternetGateways(); err != nil {
 		conditions.MarkFalse(s.scope.InfraCluster(), infrav1.InternetGatewayReadyCondition, infrav1.InternetGatewayFailedReason, infrautilconditions.ErrorConditionAfterInit(s.scope.ClusterObj()), err.Error())
+		return err
+	}
+
+	// Egress Only Internet Gateways.
+	if err := s.reconcileEgressOnlyInternetGateways(); err != nil {
+		conditions.MarkFalse(s.scope.InfraCluster(), infrav1.EgressOnlyInternetGatewayReadyCondition, infrav1.EgressOnlyInternetGatewayFailedReason, infrautilconditions.ErrorConditionAfterInit(s.scope.ClusterObj()), err.Error())
 		return err
 	}
 
@@ -131,6 +137,18 @@ func (s *Service) DeleteNetwork() (err error) {
 		return err
 	}
 	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.InternetGatewayReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
+
+	// Egress Only Internet Gateways.
+	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.EgressOnlyInternetGatewayReadyCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
+	if err := s.scope.PatchObject(); err != nil {
+		return err
+	}
+
+	if err := s.deleteEgressOnlyInternetGateways(); err != nil {
+		conditions.MarkFalse(s.scope.InfraCluster(), infrav1.EgressOnlyInternetGatewayReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, err.Error())
+		return err
+	}
+	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.EgressOnlyInternetGatewayReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
 
 	// Subnets.
 	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.SubnetsReadyCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")

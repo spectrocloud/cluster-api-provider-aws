@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,7 @@ package s3_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"reflect"
 	"strings"
@@ -48,7 +48,7 @@ const (
 	testClusterNamespace = "test-namespace"
 )
 
-func Test_Reconcile_bucket(t *testing.T) {
+func TestReconcile_bucket(t *testing.T) {
 	t.Parallel()
 
 	t.Run("does_nothing_when_bucket_management_is_disabled", func(t *testing.T) {
@@ -270,7 +270,7 @@ func Test_Reconcile_bucket(t *testing.T) {
 	})
 }
 
-func Test_Delete_bucket(t *testing.T) {
+func TestDelete_bucket(t *testing.T) {
 	t.Parallel()
 
 	const bucketName = "foo"
@@ -355,7 +355,7 @@ func Test_Delete_bucket(t *testing.T) {
 	})
 }
 
-func Test_Create_object(t *testing.T) {
+func TestCreate_object(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -405,7 +405,7 @@ func Test_Create_object(t *testing.T) {
 			t.Run("puts_given_bootstrap_data_untouched", func(t *testing.T) {
 				t.Parallel()
 
-				data, err := ioutil.ReadAll(putObjectInput.Body)
+				data, err := io.ReadAll(putObjectInput.Body)
 				if err != nil {
 					t.Fatalf("Reading put object body: %v", err)
 				}
@@ -565,7 +565,7 @@ func Test_Create_object(t *testing.T) {
 	})
 }
 
-func Test_Delete_object(t *testing.T) {
+func TestDelete_object(t *testing.T) {
 	t.Parallel()
 
 	const nodeName = "aws-test1"

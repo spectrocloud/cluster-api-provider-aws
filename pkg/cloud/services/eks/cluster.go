@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -59,10 +59,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 			return errors.Wrap(err, "failed to create cluster")
 		}
 	} else {
-		tagKey := infrav1.ClusterAWSCloudProviderTagKey(s.scope.Name())
+		tagKey := infrav1.ClusterAWSCloudProviderTagKey(eksClusterName)
 		ownedTag := cluster.Tags[tagKey]
 		if ownedTag == nil {
-			return fmt.Errorf("checking owner of %s is %s: %w", s.scope.KubernetesClusterName(), s.scope.Name(), err)
+			return fmt.Errorf("checking owner of %s is %s: %w", s.scope.KubernetesClusterName(), eksClusterName, err)
 		}
 
 		s.scope.V(2).Info("Found owned EKS cluster in AWS", "cluster-name", eksClusterName)
@@ -353,16 +353,24 @@ func (s *Service) createCluster(eksClusterName string) (*eks.Cluster, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't create vpc config for cluster")
 	}
-	netConfig, err := makeKubernetesNetworkConfig(s.scope.ServiceCidrs())
-	if err != nil {
-		return nil, errors.Wrap(err, "couldn't create Kubernetes network config for cluster")
+
+	var netConfig *eks.KubernetesNetworkConfigRequest
+	if s.scope.VPC().IsIPv6Enabled() {
+		netConfig = &eks.KubernetesNetworkConfigRequest{
+			IpFamily: aws.String(eks.IpFamilyIpv6),
+		}
+	} else {
+		netConfig, err = makeKubernetesNetworkConfig(s.scope.ServiceCidrs())
+		if err != nil {
+			return nil, errors.Wrap(err, "couldn't create Kubernetes network config for cluster")
+		}
 	}
 
 	// Make sure to use the MachineScope here to get the merger of AWSCluster and AWSMachine tags
 	additionalTags := s.scope.AdditionalTags()
 
 	// Set the cloud provider tag
-	additionalTags[infrav1.ClusterAWSCloudProviderTagKey(s.scope.Name())] = string(infrav1.ResourceLifecycleOwned)
+	additionalTags[infrav1.ClusterAWSCloudProviderTagKey(s.scope.KubernetesClusterName())] = string(infrav1.ResourceLifecycleOwned)
 	tags := make(map[string]*string)
 	for k, v := range additionalTags {
 		tagValue := v

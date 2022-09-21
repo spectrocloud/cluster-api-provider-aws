@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -133,7 +133,7 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 
 	var err error
 	// Pick image from the machine configuration, or use a default one.
-	if scope.AWSMachine.Spec.AMI.ID != nil { // nolint:nestif
+	if scope.AWSMachine.Spec.AMI.ID != nil { //nolint:nestif
 		input.ImageID = *scope.AWSMachine.Spec.AMI.ID
 	} else {
 		if scope.Machine.Spec.Version == nil {
@@ -409,7 +409,7 @@ func (s *Service) GetCoreSecurityGroups(scope *scope.MachineScope) ([]string, er
 
 // GetCoreNodeSecurityGroups looks up the security group IDs managed by this actuator
 // They are considered "core" to its proper functioning.
-func (s *Service) GetCoreNodeSecurityGroups(scope *scope.MachinePoolScope) ([]string, error) {
+func (s *Service) GetCoreNodeSecurityGroups(scope scope.LaunchTemplateScope) ([]string, error) {
 	// These are common across both controlplane and node machines
 	sgRoles := []infrav1.SecurityGroupRole{
 		infrav1.SecurityGroupNode,
@@ -989,27 +989,4 @@ func getInstanceMarketOptionsRequest(spotMarketOptions *infrav1.SpotMarketOption
 	instanceMarketOptionsRequest.SetSpotOptions(spotOptions)
 
 	return instanceMarketOptionsRequest
-}
-
-// GetFilteredSecurityGroupID get security group ID using filters.
-func (s *Service) GetFilteredSecurityGroupID(securityGroup infrav1.AWSResourceReference) (string, error) {
-	if securityGroup.Filters == nil {
-		return "", nil
-	}
-
-	filters := []*ec2.Filter{}
-	for _, f := range securityGroup.Filters {
-		filters = append(filters, &ec2.Filter{Name: aws.String(f.Name), Values: aws.StringSlice(f.Values)})
-	}
-
-	sgs, err := s.EC2Client.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{Filters: filters})
-	if err != nil {
-		return "", err
-	}
-
-	if len(sgs.SecurityGroups) == 0 {
-		return "", fmt.Errorf("failed to find security group matching filters: %q, reason: %w", filters, err)
-	}
-
-	return *sgs.SecurityGroups[0].GroupId, nil
 }

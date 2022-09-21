@@ -24,6 +24,12 @@ spec:
   region: "${AWS_REGION}"
   sshKeyName: "${AWS_SSH_KEY_NAME}"
   version: "${KUBERNETES_VERSION}"
+  vpcCni:
+    env:
+      - name: FOO
+        value: BAR
+      - name: ENABLE_PREFIX_DELEGATION
+        value: "true"
   addons:
     - name: "vpc-cni"
       version: "${VPC_ADDON_VERSION}"
@@ -34,4 +40,5 @@ spec:
   identityRef:
     kind: AWSClusterStaticIdentity
     name: e2e-account
+  # secondaryCidrBlock added to test it's creation and deletion functionality within the cluster.
   secondaryCidrBlock: 100.64.0.0/16

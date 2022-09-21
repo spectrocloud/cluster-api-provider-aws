@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -119,6 +119,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 						Name: "test",
 					},
 					Spec: clusterv1.MachineSpec{
+						ClusterName: "capi-test",
 						Bootstrap: clusterv1.Bootstrap{
 							DataSecretName: pointer.StringPtr("bootstrap-data"),
 						},
@@ -149,6 +150,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				},
 				Machine: &clusterv1.Machine{
 					Spec: clusterv1.MachineSpec{
+						ClusterName: "capi-test",
 						Bootstrap: clusterv1.Bootstrap{
 							DataSecretName: pointer.StringPtr("bootstrap-data"),
 						},
@@ -450,6 +452,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 						},
 					}
 					ec2Svc.EXPECT().UpdateInstanceSecurityGroups(instance.ID, []string{"sg-2345"})
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return([]string{"sg-2345"}, nil)
 
 					_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 					expectConditions(g, ms.AWSMachine, []conditionAssertion{{conditionType: infrav1.SecurityGroupsReadyCondition, status: corev1.ConditionTrue}})
@@ -463,6 +466,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 					instanceCreate(t, g)
 					getCoreSecurityGroups(t, g)
 
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 					ec2Svc.EXPECT().UpdateInstanceSecurityGroups(gomock.Any(), gomock.Any()).Times(0)
 					if _, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs); err != nil {
 						_ = fmt.Errorf("reconcileNormal reutrned an error during test")
@@ -480,6 +484,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 					ms.AWSMachine.Spec.AdditionalTags = infrav1.Tags{"kind": "alicorn"}
 					cs.AWSCluster.Spec.AdditionalTags = infrav1.Tags{"colour": "lavender"}
 
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 					ec2Svc.EXPECT().UpdateResourceTags(
 						gomock.Any(),
 						map[string]string{
@@ -510,6 +515,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 
 					ms.AWSMachine.Spec.AdditionalTags = infrav1.Tags{"rootDeviceID": "id1", "rootDeviceSize": "30"}
 
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 					ec2Svc.EXPECT().UpdateResourceTags(
 						gomock.Any(),
 						map[string]string{
@@ -536,6 +542,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 					secretSvc.EXPECT().UserData(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 					ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
 					secretSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return("test", int32(1), nil).Times(1)
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 				}
 
 				t.Run("should set instance to stopping and unready", func(t *testing.T) {
@@ -646,6 +653,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				secretSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return("test", int32(1), nil).Times(1)
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 				g.Expect(err).To(BeNil())
@@ -671,6 +679,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				secretSvc.EXPECT().Create(gomock.Any(), gomock.Any()).Return("test", int32(1), nil).Times(1)
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 				g.Expect(err).To(BeNil())
@@ -688,6 +697,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				ms.AWSMachine.Spec.CloudInit.InsecureSkipSecretsManager = true
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 				reconciler.elbServiceFactory = func(elbScope scope.ELBScope) services.ELBInterface {
 					return elbSvc
 				}
@@ -918,8 +928,6 @@ func TestAWSMachineReconciler(t *testing.T) {
 					ms.AWSMachine.Annotations = map[string]string{SecurityGroupsLastAppliedAnnotation: "{\"tag\":\"tag1\"}"}
 					ms.AWSMachine.Spec.AdditionalSecurityGroups = []infrav1.AWSResourceReference{
 						{
-							ID:  aws.String("sg-1"),
-							ARN: aws.String("arn-1"),
 							Filters: []infrav1.Filter{
 								{
 									Name:   "example-name",
@@ -930,7 +938,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 					}
 
 					ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil)
-					ec2Svc.EXPECT().GetFilteredSecurityGroupID(gomock.Any()).Return("sg-1", errors.New("failed to get filtered SGs"))
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return([]string{"sg-1"}, errors.New("failed to get filtered SGs"))
 
 					_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 					g.Expect(err).To(BeNil())
@@ -950,20 +958,18 @@ func TestAWSMachineReconciler(t *testing.T) {
 					ms.AWSMachine.Annotations = map[string]string{SecurityGroupsLastAppliedAnnotation: "{\"tag\":\"tag1\"}"}
 					ms.AWSMachine.Spec.AdditionalSecurityGroups = []infrav1.AWSResourceReference{
 						{
-							ID:  aws.String("sg-1"),
-							ARN: aws.String("arn-1"),
 							Filters: []infrav1.Filter{
 								{
-									Name:   "example-name",
-									Values: []string{"example-value"},
+									Name:   "id",
+									Values: []string{"sg-1"},
 								},
 							},
 						},
 					}
 
-					ec2Svc.EXPECT().GetFilteredSecurityGroupID(gomock.Any()).Return("sg-1", nil)
 					ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil)
 					ec2Svc.EXPECT().UpdateInstanceSecurityGroups(gomock.Any(), gomock.Any()).Return(errors.New("failed to update security groups"))
+					ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return([]string{"sg-1"}, nil)
 
 					_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 					g.Expect(err).ToNot(BeNil())
@@ -996,6 +1002,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				secretSvc.EXPECT().UserData(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 
 				ms.AWSMachine.ObjectMeta.Labels = map[string]string{
 					clusterv1.MachineControlPlaneLabelName: "",
@@ -1038,6 +1045,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).
 					Return(map[string][]string{"eid": {}}, nil).Times(1)
 				secretSvc.EXPECT().Delete(gomock.Any()).Return(nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 			})
@@ -1123,6 +1131,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).
 					Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 				secretSvc.EXPECT().Delete(gomock.Any()).Return(nil).MaxTimes(0)
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 			})
@@ -1205,6 +1214,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				secretSvc.EXPECT().UserData(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 
@@ -1251,6 +1261,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				ec2Svc.EXPECT().CreateInstance(gomock.Any(), gomock.Any(), gomock.Any()).Return(instance, nil).AnyTimes()
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 
 				ms.AWSMachine.ObjectMeta.Labels = map[string]string{
 					clusterv1.MachineControlPlaneLabelName: "",
@@ -1298,6 +1309,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				objectStoreSvc.EXPECT().Delete(gomock.Any()).Return(nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 			})
@@ -1379,6 +1391,7 @@ func TestAWSMachineReconciler(t *testing.T) {
 				instance.State = infrav1.InstanceStateRunning
 				ec2Svc.EXPECT().GetInstanceSecurityGroups(gomock.Any()).Return(map[string][]string{"eid": {}}, nil).Times(1)
 				ec2Svc.EXPECT().GetCoreSecurityGroups(gomock.Any()).Return([]string{}, nil).Times(1)
+				ec2Svc.EXPECT().GetAdditionalSecurityGroupsIDs(gomock.Any()).Return(nil, nil)
 				objectStoreSvc.EXPECT().Delete(gomock.Any()).Return(nil).MaxTimes(0)
 				_, _ = reconciler.reconcileNormal(context.Background(), ms, cs, cs, cs, cs)
 			})
@@ -1802,6 +1815,7 @@ func TestAWSMachineReconciler_AWSClusterToAWSMachines(t *testing.T) {
 					},
 				},
 				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 					InfrastructureRef: corev1.ObjectReference{
 						Kind:       "AWSMachine",
 						Name:       "aws-machine-6",
@@ -1841,6 +1855,7 @@ func TestAWSMachineReconciler_AWSClusterToAWSMachines(t *testing.T) {
 					Name: "aws-test-1",
 				},
 				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 					InfrastructureRef: corev1.ObjectReference{
 						Kind:       "AWSMachine",
 						Name:       "aws-machine-1",
@@ -1872,6 +1887,7 @@ func TestAWSMachineReconciler_AWSClusterToAWSMachines(t *testing.T) {
 					Name: "aws-test-2",
 				},
 				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 					InfrastructureRef: corev1.ObjectReference{
 						Kind:       "AWSMachine",
 						Name:       "aws-machine-2",
@@ -1900,6 +1916,7 @@ func TestAWSMachineReconciler_AWSClusterToAWSMachines(t *testing.T) {
 					Name: "aws-test-3",
 				},
 				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 					InfrastructureRef: corev1.ObjectReference{
 						Kind:       "AWSMachine",
 						Name:       "aws-machine-3",
@@ -1936,6 +1953,7 @@ func TestAWSMachineReconciler_AWSClusterToAWSMachines(t *testing.T) {
 					Kind: "Machine",
 				},
 				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 					InfrastructureRef: corev1.ObjectReference{
 						Kind:       "Machine",
 						Name:       "aws-machine-4",
@@ -1968,6 +1986,7 @@ func TestAWSMachineReconciler_AWSClusterToAWSMachines(t *testing.T) {
 					},
 				},
 				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 					InfrastructureRef: corev1.ObjectReference{
 						Kind:       "AWSMachine",
 						APIVersion: infrav1.GroupVersion.String(),
@@ -2141,7 +2160,14 @@ func TestAWSMachineReconciler_Reconcile(t *testing.T) {
 					},
 				}, Spec: infrav1.AWSMachineSpec{InstanceType: "test"},
 			},
-			ownerMachine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{Name: "capi-test-machine"}},
+			ownerMachine: &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "capi-test-machine",
+				},
+				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
+				},
+			},
 			ownerCluster: &clusterv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "capi-test-1"}},
 			expectError:  false,
 		},
@@ -2159,12 +2185,17 @@ func TestAWSMachineReconciler_Reconcile(t *testing.T) {
 					},
 				}, Spec: infrav1.AWSMachineSpec{InstanceType: "test"},
 			},
-			ownerMachine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					clusterv1.ClusterLabelName: "capi-test-1",
+			ownerMachine: &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						clusterv1.ClusterLabelName: "capi-test-1",
+					},
+					Name: "capi-test-machine", Namespace: "default",
 				},
-				Name: "capi-test-machine", Namespace: "default",
-			}},
+				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
+				},
+			},
 			ownerCluster: &clusterv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "capi-test-1"}},
 			expectError:  false,
 		},
@@ -2182,12 +2213,16 @@ func TestAWSMachineReconciler_Reconcile(t *testing.T) {
 					},
 				}, Spec: infrav1.AWSMachineSpec{InstanceType: "test"},
 			},
-			ownerMachine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					clusterv1.ClusterLabelName: "capi-test-1",
+			ownerMachine: &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						clusterv1.ClusterLabelName: "capi-test-1",
+					},
+					Name: "capi-test-machine", Namespace: "default",
+				}, Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
 				},
-				Name: "capi-test-machine", Namespace: "default",
-			}},
+			},
 			ownerCluster: &clusterv1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "capi-test-1"},
 				Spec: clusterv1.ClusterSpec{
@@ -2210,12 +2245,17 @@ func TestAWSMachineReconciler_Reconcile(t *testing.T) {
 					},
 				}, Spec: infrav1.AWSMachineSpec{InstanceType: "test"},
 			},
-			ownerMachine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					clusterv1.ClusterLabelName: "capi-test-1",
+			ownerMachine: &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						clusterv1.ClusterLabelName: "capi-test-1",
+					},
+					Name: "capi-test-machine", Namespace: "default",
 				},
-				Name: "capi-test-machine", Namespace: "default",
-			}},
+				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
+				},
+			},
 			ownerCluster: &clusterv1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "capi-test-1"},
 				Spec: clusterv1.ClusterSpec{
@@ -2238,12 +2278,17 @@ func TestAWSMachineReconciler_Reconcile(t *testing.T) {
 					},
 				}, Spec: infrav1.AWSMachineSpec{InstanceType: "test"},
 			},
-			ownerMachine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					clusterv1.ClusterLabelName: "capi-test-1",
+			ownerMachine: &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						clusterv1.ClusterLabelName: "capi-test-1",
+					},
+					Name: "capi-test-machine", Namespace: "default",
 				},
-				Name: "capi-test-machine", Namespace: "default",
-			}},
+				Spec: clusterv1.MachineSpec{
+					ClusterName: "capi-test",
+				},
+			},
 			ownerCluster: &clusterv1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "capi-test-1"},
 				Spec: clusterv1.ClusterSpec{

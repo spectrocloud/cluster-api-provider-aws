@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,6 +45,8 @@ func (r *AWSMachinePool) ConvertTo(dstRaw conversion.Hub) error {
 		}
 		infrav1alpha3.RestoreRootVolume(restored.Spec.AWSLaunchTemplate.RootVolume, dst.Spec.AWSLaunchTemplate.RootVolume)
 	}
+	dst.Spec.AWSLaunchTemplate.SpotMarketOptions = restored.Spec.AWSLaunchTemplate.SpotMarketOptions
+	dst.Status.LaunchTemplateVersion = restored.Status.LaunchTemplateVersion
 	return nil
 }
 
@@ -92,6 +94,9 @@ func (r *AWSManagedMachinePool) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.CapacityType = restored.Spec.CapacityType
 	dst.Spec.RoleAdditionalPolicies = restored.Spec.RoleAdditionalPolicies
 	dst.Spec.UpdateConfig = restored.Spec.UpdateConfig
+	dst.Spec.AWSLaunchTemplate = restored.Spec.AWSLaunchTemplate
+	dst.Status.LaunchTemplateID = restored.Status.LaunchTemplateID
+	dst.Status.LaunchTemplateVersion = restored.Status.LaunchTemplateVersion
 
 	return nil
 }
@@ -168,6 +173,16 @@ func Convert_v1beta1_AWSManagedMachinePoolSpec_To_v1alpha3_AWSManagedMachinePool
 	return autoConvert_v1beta1_AWSManagedMachinePoolSpec_To_v1alpha3_AWSManagedMachinePoolSpec(in, out, s)
 }
 
+// Convert_v1beta1_AWSManagedMachinePoolStatus_To_v1alpha3_AWSManagedMachinePoolStatus is a conversion function.
+func Convert_v1beta1_AWSManagedMachinePoolStatus_To_v1alpha3_AWSManagedMachinePoolStatus(in *infrav1exp.AWSManagedMachinePoolStatus, out *AWSManagedMachinePoolStatus, s apiconversion.Scope) error {
+	return autoConvert_v1beta1_AWSManagedMachinePoolStatus_To_v1alpha3_AWSManagedMachinePoolStatus(in, out, s)
+}
+
+// Convert_v1beta1_AWSMachinePoolStatus_To_v1alpha3_AWSMachinePoolStatus is a conversion function.
+func Convert_v1beta1_AWSMachinePoolStatus_To_v1alpha3_AWSMachinePoolStatus(in *infrav1exp.AWSMachinePoolStatus, out *AWSMachinePoolStatus, s apiconversion.Scope) error {
+	return autoConvert_v1beta1_AWSMachinePoolStatus_To_v1alpha3_AWSMachinePoolStatus(in, out, s)
+}
+
 // Convert_v1beta1_Instance_To_v1alpha3_Instance is a conversion function.
 func Convert_v1beta1_Instance_To_v1alpha3_Instance(in *infrav1.Instance, out *infrav1alpha3.Instance, s apiconversion.Scope) error {
 	return infrav1alpha3.Convert_v1beta1_Instance_To_v1alpha3_Instance(in, out, s)
@@ -178,21 +193,12 @@ func Convert_v1alpha3_Instance_To_v1beta1_Instance(in *infrav1alpha3.Instance, o
 	return infrav1alpha3.Convert_v1alpha3_Instance_To_v1beta1_Instance(in, out, s)
 }
 
-// ConvertTo converts
-func Convert_v1alpha3_AWSResourceReference_To_v1beta1_AMIReference(in *infrav1alpha3.AWSResourceReference, out *infrav1.AMIReference, s apiconversion.Scope) error {
-	return infrav1alpha3.Convert_v1alpha3_AWSResourceReference_To_v1beta1_AMIReference(in, out, s)
-}
-
-func Convert_v1beta1_AMIReference_To_v1alpha3_AWSResourceReference(in *infrav1.AMIReference, out *infrav1alpha3.AWSResourceReference, s apiconversion.Scope) error {
-	return infrav1alpha3.Convert_v1beta1_AMIReference_To_v1alpha3_AWSResourceReference(in, out, s)
-}
-
-// Convert_v1beta1_Volume_To_v1alpha3_Volume is a conversion function.
-func Convert_v1beta1_Volume_To_v1alpha3_Volume(in *infrav1.Volume, out *infrav1alpha3.Volume, s apiconversion.Scope) error {
-	return infrav1alpha3.Convert_v1beta1_Volume_To_v1alpha3_Volume(in, out, s)
-}
-
 // Convert_v1alpha3_Volume_To_v1beta1_Volume is a conversion function.
 func Convert_v1alpha3_Volume_To_v1beta1_Volume(in *infrav1alpha3.Volume, out *infrav1.Volume, s apiconversion.Scope) error {
 	return infrav1alpha3.Convert_v1alpha3_Volume_To_v1beta1_Volume(in, out, s)
+}
+
+// Convert_v1beta1_AWSLaunchTemplate_To_v1alpha3_AWSLaunchTemplate converts the v1beta1 AWSLaunchTemplate receiver to a v1alpha4 AWSLaunchTemplate.
+func Convert_v1beta1_AWSLaunchTemplate_To_v1alpha3_AWSLaunchTemplate(in *infrav1exp.AWSLaunchTemplate, out *AWSLaunchTemplate, s apiconversion.Scope) error {
+	return autoConvert_v1beta1_AWSLaunchTemplate_To_v1alpha3_AWSLaunchTemplate(in, out, s)
 }

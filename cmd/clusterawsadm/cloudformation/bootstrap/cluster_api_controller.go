@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -81,12 +81,19 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 			Effect:   iamv1.EffectAllow,
 			Resource: iamv1.Resources{iamv1.Any},
 			Action: iamv1.Actions{
+				"ec2:AttachNetworkInterface",
+				"ec2:DetachNetworkInterface",
 				"ec2:AllocateAddress",
+				"ec2:AssignIpv6Addresses",
+				"ec2:AssignPrivateIpAddresses",
+				"ec2:UnassignPrivateIpAddresses",
 				"ec2:AssociateRouteTable",
 				"ec2:AttachInternetGateway",
 				"ec2:AuthorizeSecurityGroupIngress",
 				"ec2:CreateInternetGateway",
+				"ec2:CreateEgressOnlyInternetGateway",
 				"ec2:CreateNatGateway",
+				"ec2:CreateNetworkInterface",
 				"ec2:CreateRoute",
 				"ec2:CreateRouteTable",
 				"ec2:CreateSecurityGroup",
@@ -95,6 +102,7 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"ec2:CreateVpc",
 				"ec2:ModifyVpcAttribute",
 				"ec2:DeleteInternetGateway",
+				"ec2:DeleteEgressOnlyInternetGateway",
 				"ec2:DeleteNatGateway",
 				"ec2:DeleteRouteTable",
 				"ec2:ReplaceRoute",
@@ -107,6 +115,8 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"ec2:DescribeAvailabilityZones",
 				"ec2:DescribeInstances",
 				"ec2:DescribeInternetGateways",
+				"ec2:DescribeEgressOnlyInternetGateways",
+				"ec2:DescribeInstanceTypes",
 				"ec2:DescribeImages",
 				"ec2:DescribeNatGateways",
 				"ec2:DescribeNetworkInterfaces",
@@ -117,6 +127,7 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"ec2:DescribeVpcs",
 				"ec2:DescribeVpcAttribute",
 				"ec2:DescribeVolumes",
+				"ec2:DescribeTags",
 				"ec2:DetachInternetGateway",
 				"ec2:DisassociateRouteTable",
 				"ec2:DisassociateAddress",
@@ -132,6 +143,7 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"elasticloadbalancing:CreateLoadBalancer",
 				"elasticloadbalancing:ConfigureHealthCheck",
 				"elasticloadbalancing:DeleteLoadBalancer",
+				"elasticloadbalancing:DeleteTargetGroup",
 				"elasticloadbalancing:DescribeLoadBalancers",
 				"elasticloadbalancing:DescribeLoadBalancerAttributes",
 				"elasticloadbalancing:ApplySecurityGroupsToLoadBalancer",

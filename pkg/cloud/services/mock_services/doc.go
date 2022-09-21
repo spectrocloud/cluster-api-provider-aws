@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,4 +30,4 @@ limitations under the License.
 //go:generate ../../../../hack/tools/bin/mockgen -destination security_group_interface_mock.go -package mock_services sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services SecurityGroupInterface
 //go:generate /usr/bin/env bash -c "cat ../../../../hack/boilerplate/boilerplate.generatego.txt security_group_interface_mock.go > _security_group_interface_mock.go && mv _security_group_interface_mock.go security_group_interface_mock.go"
 
-package mock_services // nolint:stylecheck
+package mock_services //nolint:stylecheck
