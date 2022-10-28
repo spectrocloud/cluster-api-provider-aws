@@ -12,7 +12,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/spf13/pflag v1.0.5
 	k8s.io/apimachinery v0.25.0
-	k8s.io/code-generator v0.25.0
+	k8s.io/code-generator v0.25.3
 	k8s.io/gengo v0.0.0-20211129171323-c02415ce4185
 	k8s.io/klog/v2 v2.80.0
 	sigs.k8s.io/cluster-api/hack/tools v0.0.0-20211111175208-4cc2fce2111a
@@ -161,7 +161,7 @@ require (
 	github.com/nishanths/predeclared v0.2.2 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onsi/gomega v1.20.0 // indirect
+	github.com/onsi/gomega v1.20.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
 	github.com/phayes/checkstyle v0.0.0-20170904204023-bfd46e6a821d // indirect
