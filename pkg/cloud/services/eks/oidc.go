@@ -87,8 +87,10 @@ func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.C
 		return errors.Wrap(err, "failed to tag OIDC provider")
 	}
 
-	if err := s.reconcileTrustPolicy(ctx); err != nil {
-		return errors.Wrap(err, "failed to reconcile trust policy in workload cluster")
+	if s.scope.ControlPlane.Status.OIDCProvider.TrustPolicy == "" {
+		if err := s.reconcileTrustPolicy(ctx); err != nil {
+			return errors.Wrap(err, "failed to reconcile trust policy in workload cluster")
+		}
 	}
 
 	return nil
