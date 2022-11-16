@@ -281,11 +281,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddConversionFunc((*v1beta1.AWSLaunchTemplate)(nil), (*AWSLaunchTemplate)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_AWSLaunchTemplate_To_v1alpha3_AWSLaunchTemplate(a.(*v1beta1.AWSLaunchTemplate), b.(*AWSLaunchTemplate), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddConversionFunc((*v1beta1.AWSMachinePoolStatus)(nil), (*AWSMachinePoolStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_AWSMachinePoolStatus_To_v1alpha3_AWSMachinePoolStatus(a.(*v1beta1.AWSMachinePoolStatus), b.(*AWSMachinePoolStatus), scope)
 	}); err != nil {

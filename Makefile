@@ -92,7 +92,7 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 # image name used to build the cmd/clusterawsadm
 TOOLCHAIN_IMAGE := toolchain
 
-TAG ?= dev
+TAG ?= deepak
 ARCH ?= $(shell go env GOARCH)
 ALL_ARCH ?= amd64 arm arm64 ppc64le s390x
 
