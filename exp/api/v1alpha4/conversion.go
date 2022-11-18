@@ -37,7 +37,7 @@ func (src *AWSMachinePool) ConvertTo(dstRaw conversion.Hub) error {
 	if ok, err := utilconversion.UnmarshalData(src, restored); err != nil || !ok {
 		return err
 	}
-	
+
 	dst.Spec.AWSLaunchTemplate.SpotMarketOptions = restored.Spec.AWSLaunchTemplate.SpotMarketOptions
 	dst.Status.LaunchTemplateVersion = restored.Status.LaunchTemplateVersion
 
@@ -180,4 +180,8 @@ func Convert_v1beta1_Instance_To_v1alpha4_Instance(in *infrav1.Instance, out *in
 // Convert_v1alpha4_Instance_To_v1beta1_Instance is a conversion function.
 func Convert_v1alpha4_Instance_To_v1beta1_Instance(in *infrav1alpha4.Instance, out *infrav1.Instance, s apiconversion.Scope) error {
 	return infrav1alpha4.Convert_v1alpha4_Instance_To_v1beta1_Instance(in, out, s)
+}
+
+func Convert_v1beta1_AWSLaunchTemplate_To_v1alpha4_AWSLaunchTemplate(in *infrav1exp.AWSLaunchTemplate, out *AWSLaunchTemplate, s apiconversion.Scope) error {
+	return nil
 }

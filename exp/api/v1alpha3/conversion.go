@@ -197,3 +197,7 @@ func Convert_v1alpha3_Instance_To_v1beta1_Instance(in *infrav1alpha3.Instance, o
 func Convert_v1alpha3_Volume_To_v1beta1_Volume(in *infrav1alpha3.Volume, out *infrav1.Volume, s apiconversion.Scope) error {
 	return infrav1alpha3.Convert_v1alpha3_Volume_To_v1beta1_Volume(in, out, s)
 }
+
+func Convert_v1beta1_AWSLaunchTemplate_To_v1alpha3_AWSLaunchTemplate(in *infrav1exp.AWSLaunchTemplate, out *AWSLaunchTemplate, s apiconversion.Scope) error {
+	return nil
+}
