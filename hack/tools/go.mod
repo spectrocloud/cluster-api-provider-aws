@@ -11,7 +11,7 @@ require (
 	github.com/joelanford/go-apidiff v0.5.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/spf13/pflag v1.0.5
-	k8s.io/apimachinery v0.25.0
+	k8s.io/apimachinery v0.25.4
 	k8s.io/code-generator v0.25.0
 	k8s.io/gengo v0.0.0-20211129171323-c02415ce4185
 	k8s.io/klog/v2 v2.80.1
