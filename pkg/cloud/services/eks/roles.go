@@ -39,16 +39,16 @@ const (
 // NodegroupRolePolicies gives the policies required for a nodegroup role.
 func NodegroupRolePolicies() []string {
 	return []string{
-		"arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-		"arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-		"arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+		"arn:*:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+		"arn:*:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
+		"arn:*:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
 	}
 }
 
 // FargateRolePolicies gives the policies required for a fargate role.
 func FargateRolePolicies() []string {
 	return []string{
-		"arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+		"arn:*:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
 	}
 }
 
@@ -94,7 +94,7 @@ func (s *Service) reconcileControlPlaneIAMRole() error {
 	//TODO: check tags and trust relationship to see if they need updating
 
 	policies := []*string{
-		aws.String("arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"),
+		aws.String("arn:*:iam::aws:policy/AmazonEKSClusterPolicy"),
 	}
 	if s.scope.ControlPlane.Spec.RoleAdditionalPolicies != nil {
 		if !s.scope.AllowAdditionalRoles() && len(*s.scope.ControlPlane.Spec.RoleAdditionalPolicies) > 0 {
