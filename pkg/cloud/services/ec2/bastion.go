@@ -190,10 +190,10 @@ func (s *Service) getDefaultBastion(instanceType, ami string, instance *infrav1.
 	region := s.scope.Region()
 	if ami == "" {
 		var err error
-			ami, err = s.defaultBastionAMILookup(region)
-			if err != nil {
-				return nil, err
-			}
+		ami, err = s.defaultBastionAMILookup(region)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	i := &infrav1.Instance{
