@@ -1268,6 +1268,8 @@ sigs.k8s.io/aws-iam-authenticator v0.5.10 h1:YGPh/SpRxNkWXfGkURKGsgWvz70x41SB4Qa
 sigs.k8s.io/aws-iam-authenticator v0.5.10/go.mod h1:3oJI6vy91KxVSb9g+v9gtJsFnFDJoq+ySJhGDBKpKFk=
 sigs.k8s.io/cluster-api v1.2.7 h1:LjdToomKcAaOh71b2TSKbOucZgkw6NQhwiVaGuidI6E=
 sigs.k8s.io/cluster-api v1.2.7/go.mod h1:qLMSP/QUb0zwBXoXo2MmzV+YLyNQBkK7OwYEUDOQyQA=
+sigs.k8s.io/cluster-api-provider-aws v1.5.2 h1:0UkRCL9Yq/YAFBbl6Jlm0XE8nqxB+DAMkEBMUrpRGKE=
+sigs.k8s.io/cluster-api-provider-aws v1.5.2/go.mod h1:67wutYFBvXPdpBOs0JJpmLUMbf+1ay5IZ5m+Hdey3cA=
 sigs.k8s.io/cluster-api/test v1.2.7 h1:bHn9e2cOeX4tQcCPUQgw2oA8iFC6eZgRUs4+UUwCyZY=
 sigs.k8s.io/cluster-api/test v1.2.7/go.mod h1:j7i8GyZTzGA6aLZXIAF94Cnixuy5ziXrn3z8z/vZ91E=
 sigs.k8s.io/controller-runtime v0.12.3 h1:FCM8xeY/FI8hoAfh/V4XbbYMY20gElh9yh+A98usMio=
