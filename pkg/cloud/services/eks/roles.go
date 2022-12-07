@@ -39,18 +39,34 @@ const (
 // NodegroupRolePolicies gives the policies required for a nodegroup role.
 func NodegroupRolePolicies() []string {
 	return []string{
-		"arn:*:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-		"arn:*:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-		"arn:*:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+		"arn:aws-us-gov:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+		"arn:aws-us-gov:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
+		"arn:aws-us-gov:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
 	}
 }
 
 // FargateRolePolicies gives the policies required for a fargate role.
 func FargateRolePolicies() []string {
 	return []string{
-		"arn:*:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+		"arn:aws-us-gov:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
 	}
 }
+
+//// NodegroupRolePolicies gives the policies required for a nodegroup role.
+//func NodegroupRolePoliciesAwsUsGov() []string {
+//	return []string{
+//		"arn:*:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+//		"arn:*:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
+//		"arn:*:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+//	}
+//}
+//
+//// FargateRolePolicies gives the policies required for a fargate role.
+//func FargateRolePolicies() []string {
+//	return []string{
+//		"arn:*:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+//	}
+//}
 
 func (s *Service) reconcileControlPlaneIAMRole() error {
 	s.scope.V(2).Info("Reconciling EKS Control Plane IAM Role")
