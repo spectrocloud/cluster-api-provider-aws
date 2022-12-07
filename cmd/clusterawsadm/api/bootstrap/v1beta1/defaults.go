@@ -32,7 +32,7 @@ const (
 	// DefaultPartitionName is the default security partition for AWS ARNs.
 	DefaultPartitionName = "aws"
 	// DefaultPartitionNameUSGov is the default security partition for AWS ARNs.
-	DefaultPartitionNameUSGov = "aws-us-gov"
+	DefaultPartitionNameUSGov = "us-gov"
 	// DefaultKMSAliasPattern is the default KMS alias.
 	DefaultKMSAliasPattern = "cluster-api-provider-aws-*"
 	// DefaultS3BucketPrefix is the default S3 bucket prefix.

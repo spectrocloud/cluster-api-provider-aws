@@ -36,7 +36,7 @@ import (
 
 const (
 	defaultSSHKeyName = "default"
-	defaultUsGovPartitionName = "aws-us-gov"
+	defaultUsGovPartitionName = "us-gov"
 )
 
 var (
