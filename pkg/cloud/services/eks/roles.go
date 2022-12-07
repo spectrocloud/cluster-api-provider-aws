@@ -18,6 +18,8 @@ package eks
 
 import (
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -39,6 +41,22 @@ const (
 // NodegroupRolePolicies gives the policies required for a nodegroup role.
 func NodegroupRolePolicies() []string {
 	return []string{
+		"arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+		"arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
+		"arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+	}
+}
+
+// FargateRolePolicies gives the policies required for a fargate role.
+func FargateRolePolicies() []string {
+	return []string{
+		"arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+	}
+}
+
+// NodegroupRolePolicies gives the policies required for a nodegroup role.
+func NodegroupRolePoliciesAWSUSGov() []string {
+	return []string{
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKSWorkerNodePolicy",
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
 		"arn:aws-us-gov:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
@@ -46,27 +64,11 @@ func NodegroupRolePolicies() []string {
 }
 
 // FargateRolePolicies gives the policies required for a fargate role.
-func FargateRolePolicies() []string {
+func FargateRolePoliciesAWSUSGov() []string {
 	return []string{
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
 	}
 }
-
-//// NodegroupRolePolicies gives the policies required for a nodegroup role.
-//func NodegroupRolePoliciesAwsUsGov() []string {
-//	return []string{
-//		"arn:*:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-//		"arn:*:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-//		"arn:*:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-//	}
-//}
-//
-//// FargateRolePolicies gives the policies required for a fargate role.
-//func FargateRolePolicies() []string {
-//	return []string{
-//		"arn:*:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
-//	}
-//}
 
 func (s *Service) reconcileControlPlaneIAMRole() error {
 	s.scope.V(2).Info("Reconciling EKS Control Plane IAM Role")
@@ -219,7 +221,12 @@ func (s *NodegroupService) reconcileNodegroupIAMRole() error {
 		return errors.Wrapf(err, "error ensuring tags and policy document are set on node role")
 	}
 
-	policies := NodegroupRolePolicies()
+	var policies []string
+	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
+		policies = NodegroupRolePoliciesAWSUSGov()
+	} else {
+		policies = NodegroupRolePolicies()
+	}
 	if len(s.scope.ManagedMachinePool.Spec.RoleAdditionalPolicies) > 0 {
 		if !s.scope.AllowAdditionalRoles() {
 			return ErrCannotUseAdditionalRoles
@@ -335,7 +342,12 @@ func (s *FargateService) reconcileFargateIAMRole() (requeue bool, err error) {
 		return updatedRole, errors.Wrapf(err, "error ensuring tags and policy document are set on fargate role")
 	}
 
-	policies := FargateRolePolicies()
+	var policies []string
+	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
+		policies = FargateRolePoliciesAWSUSGov()
+	} else {
+		policies = FargateRolePolicies()
+	}
 	updatedPolicies, err := s.EnsurePoliciesAttached(role, aws.StringSlice(policies))
 	if err != nil {
 		return updatedRole, errors.Wrapf(err, "error ensuring policies are attached: %v", policies)
