@@ -31,8 +31,8 @@ const (
 	DefaultStackName = "cluster-api-provider-aws-sigs-k8s-io"
 	// DefaultPartitionName is the default security partition for AWS ARNs.
 	DefaultPartitionName = "aws"
-	// DefaultPartitionNameUSGov is the default security partition for AWS ARNs.
-	DefaultPartitionNameUSGov = "us-gov"
+	// PartitionNameUSGov is the default security partition for AWS ARNs.
+	PartitionNameUSGov = "aws-us-gov"
 	// DefaultKMSAliasPattern is the default KMS alias.
 	DefaultKMSAliasPattern = "cluster-api-provider-aws-*"
 	// DefaultS3BucketPrefix is the default S3 bucket prefix.
