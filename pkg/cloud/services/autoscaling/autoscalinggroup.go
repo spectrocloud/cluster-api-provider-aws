@@ -497,6 +497,12 @@ func (s *Service) SubnetIDs(scope *scope.MachinePoolScope) ([]string, error) {
 	subnetIDs := make([]string, 0)
 	var inputFilters = make([]*ec2.Filter, 0)
 
+	// TODO: replace this with proper default behavior, e.g. get subnets
+	// from the controlplane pool or from the cluster scope.
+	if len(inputFilters) == 0 && len(scope.AWSMachinePool.Spec.Subnets) == 0 {
+		return nil, errors.New("no subnet filters or subnet IDs provided")
+	}
+
 	for _, subnet := range scope.AWSMachinePool.Spec.Subnets {
 		switch {
 		case subnet.ID != nil:
