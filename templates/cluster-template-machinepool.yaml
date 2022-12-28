@@ -21,17 +21,29 @@ spec:
   region: "${AWS_REGION}"
   sshKeyName: "${AWS_SSH_KEY_NAME}"
   network:
-   vpc:
-     cidrBlock: "${AWS_VPC_CIDR_BLOCK}"
-   subnets:
+   # it is possible to completely vpc configuration and let
+   # CAPA automatically configure it.
+   # e.g.:
+   # vpc:
+   #   cidrBlock: 10.50.0.0/16
+   # if you specify a VPC here, you must add subnets and devide
+   # the cidr blocks properly (e.g. you must ensure the blocks
+   # are not overlapping).
+   # subnets:
    # Add here your desired availabilityZones
    # e.g.
-   # - availabilityZone: us-east-2a
+   # - availabilityZone: "${AWS_REGION}"a
    #   cidrBlock: 10.50.0.0/20
    #   isPublic: true
    #   tags are optional
    #   tags:
-   #     aws-capi: us-east-2a
+   #     aws-capi: "${AWS_REGION}"b
+   # - availabilityZone: "${AWS_REGION}"b
+   #   cidrBlock: 10.50.16.0/20
+   #   isPublic: true
+   #   tags are optional
+   #   tags:
+   #     aws-capi: "${AWS_REGION}"b
 ---
 kind: KubeadmControlPlane
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
