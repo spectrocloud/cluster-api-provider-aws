@@ -9,7 +9,7 @@ require (
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/aws/amazon-vpc-cni-k8s v1.12.0
 	github.com/aws/aws-lambda-go v1.36.0
-	github.com/aws/aws-sdk-go v1.44.107
+	github.com/aws/aws-sdk-go v1.44.173
 	github.com/awslabs/goformation/v4 v4.19.5
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/flatcar/ignition v0.36.2
