@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/converters"
@@ -443,6 +444,24 @@ func (s *IAMService) CreateOIDCProvider(cluster *eks.Cluster) (string, error) {
 		return "", errors.Wrap(err, "error creating provider")
 	}
 	return *provider.OpenIDConnectProviderArn, nil
+}
+
+func (s *IAMService) getOIDCProviderARN(issuer string) (string, error) {
+	if strings.HasPrefix(issuer, "https://") {
+		issuer = strings.TrimPrefix(issuer, "https://")
+	}
+
+	listInput := &iam.ListOpenIDConnectProvidersInput{}
+	out, err := s.IAMClient.ListOpenIDConnectProviders(listInput)
+	if err != nil {
+		return "", err
+	}
+	for _, provider := range out.OpenIDConnectProviderList {
+		if strings.Contains(*provider.Arn, issuer) {
+			return *provider.Arn, nil
+		}
+	}
+	return "", err
 }
 
 // FindAndVerifyOIDCProvider will try to find an OIDC provider. It will return an error if the found provider does not

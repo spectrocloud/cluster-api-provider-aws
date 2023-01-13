@@ -18,7 +18,7 @@ package eks
 
 import (
 	"fmt"
-	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/api/bootstrap/v1beta1"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -105,7 +105,7 @@ func (s *Service) reconcileControlPlaneIAMRole() error {
 	}
 
 	if s.IsUnmanaged(role, s.scope.Name()) {
-		s.scope.Debug("Skipping, EKS control plane role policy assignment as role is unamanged")
+		s.scope.Debug("Skipping, EKS control plane role policy assignment as role is unmanaged")
 		return nil
 	}
 
