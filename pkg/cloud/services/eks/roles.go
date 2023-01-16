@@ -341,11 +341,9 @@ func (s *FargateService) reconcileFargateIAMRole() (requeue bool, err error) {
 		return updatedRole, errors.Wrapf(err, "error ensuring tags and policy document are set on fargate role")
 	}
 
-	var policies []string
-	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
-		policies = FargateRolePoliciesAWSUSGov()
-	} else {
-		policies = FargateRolePolicies()
+	policies := FargateRolePolicies()
+	if strings.Contains(s.scope.Partition(), v1beta1.PartitionNameUSGov) {
+		policies = FargateRolePoliciesUSGov()
 	}
 	updatedPolicies, err := s.EnsurePoliciesAttached(role, aws.StringSlice(policies))
 	if err != nil {
