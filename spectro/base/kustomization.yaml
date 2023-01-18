@@ -4,11 +4,7 @@ namespace: capa-system
 commonLabels:
   cluster.x-k8s.io/provider: "infrastructure-aws"
 
-resources:
-  - ../../config/default/credentials.yaml
-
 bases:
-#  - ../../config/rbac
   - ../../config/manager
 
 patchesStrategicMerge:
@@ -35,3 +31,10 @@ patchesJson6902:
       namespace: system
       version: v1
     path: patch_healthcheck.yaml
+  - target:
+      group: apps
+      kind: Deployment
+      name: controller-manager
+      namespace: system
+      version: v1
+    path: patch_credentials.yaml
