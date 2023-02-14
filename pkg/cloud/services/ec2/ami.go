@@ -19,6 +19,8 @@ package ec2
 import (
 	"bytes"
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/util/system"
 	"sort"
 	"strings"
 	"text/template"
@@ -219,19 +221,17 @@ func (s *Service) defaultBastionAMILookup(region string) (string, error) {
 		},
 	}
 
-	if strings.Contains(region, defaultUsGovPartitionName) {
-		filter := &ec2.Filter{
-				Name:   aws.String("owner-id"),
-				Values: []*string{aws.String(ubuntuOwnerIDUsGov)},
-			}
-		describeImageInput.Filters = append(describeImageInput.Filters, filter)
-	} else {
-		filter := &ec2.Filter{
-			Name:   aws.String("owner-id"),
-			Values: []*string{aws.String(ubuntuOwnerID)},
-		}
-		describeImageInput.Filters = append(describeImageInput.Filters, filter)
+	ownerID := ubuntuOwnerID
+	partition := system.GetPartitionFromRegion(s.scope.Region())
+	if strings.Contains(partition, v1beta1.PartitionNameUSGov) {
+		ownerID = ubuntuOwnerIDUsGov
 	}
+
+	filter := &ec2.Filter{
+		Name:   aws.String("owner-id"),
+		Values: []*string{aws.String(ownerID)},
+	}
+	describeImageInput.Filters = append(describeImageInput.Filters, filter)
 
 	out, err := s.EC2Client.DescribeImages(describeImageInput)
 	if err != nil {

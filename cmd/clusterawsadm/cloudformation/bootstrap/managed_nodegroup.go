@@ -17,17 +17,18 @@ limitations under the License.
 package bootstrap
 
 import (
-	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
+	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/eks"
+	"strings"
 )
 
 func (t Template) eksMachinePoolPolicies() []string {
 
 	var policies []string
-	if t.Spec.Partition == v1beta1.DefaultPartitionNameUSGov {
-		policies = eks.NodegroupRolePoliciesAWSUSGov()
-	} else {
-		policies = eks.NodegroupRolePolicies()
+
+	policies = eks.NodegroupRolePolicies()
+	if strings.Contains(t.Spec.Partition, bootstrapv1.PartitionNameUSGov) {
+		policies = eks.NodegroupRolePoliciesUSGov()
 	}
 	if t.Spec.EKS.ManagedMachinePool.ExtraPolicyAttachments != nil {
 		policies = append(policies, t.Spec.EKS.ManagedMachinePool.ExtraPolicyAttachments...)

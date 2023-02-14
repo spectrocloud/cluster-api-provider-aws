@@ -19,6 +19,7 @@ package scope
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/util/system"
 
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
@@ -148,6 +149,11 @@ func (s *ManagedMachinePoolScope) EnableIAM() bool {
 // AllowAdditionalRoles indicates if additional roles can be added to the created IAM roles.
 func (s *ManagedMachinePoolScope) AllowAdditionalRoles() bool {
 	return s.allowAdditionalRoles
+}
+
+// Partition returns the machine pool subnet IDs.
+func (s *ManagedMachinePoolScope) Partition() string {
+	return system.GetPartitionFromRegion(s.ControlPlane.Spec.Region)
 }
 
 // IdentityRef returns the cluster identityRef.

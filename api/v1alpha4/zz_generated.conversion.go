@@ -872,6 +872,7 @@ func autoConvert_v1beta1_AWSClusterSpec_To_v1alpha4_AWSClusterSpec(in *v1beta1.A
 		return err
 	}
 	out.Region = in.Region
+	// WARNING: in.Partition requires manual conversion: does not exist in peer-type
 	out.SSHKeyName = (*string)(unsafe.Pointer(in.SSHKeyName))
 	if err := apiv1alpha4.Convert_v1beta1_APIEndpoint_To_v1alpha4_APIEndpoint(&in.ControlPlaneEndpoint, &out.ControlPlaneEndpoint, s); err != nil {
 		return err

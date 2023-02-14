@@ -18,6 +18,7 @@ package scope
 
 import (
 	"context"
+	"sigs.k8s.io/cluster-api-provider-aws/util/system"
 
 	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	"github.com/go-logr/logr"
@@ -155,6 +156,14 @@ func (s *FargateProfileScope) ControlPlaneSubnets() *infrav1.Subnets {
 // SubnetIDs returns the machine pool subnet IDs.
 func (s *FargateProfileScope) SubnetIDs() []string {
 	return s.FargateProfile.Spec.SubnetIDs
+}
+
+// Partition returns the machine pool subnet IDs.
+func (s *FargateProfileScope) Partition() string {
+	if s.ControlPlane.Spec.Partition == "" {
+		s.ControlPlane.Spec.Partition = system.GetPartitionFromRegion(s.ControlPlane.Spec.Region)
+	}
+	return s.ControlPlane.Spec.Partition
 }
 
 // IAMReadyFalse marks the ready condition false using warning if error isn't

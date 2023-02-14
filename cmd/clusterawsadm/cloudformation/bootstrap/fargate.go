@@ -19,14 +19,14 @@ package bootstrap
 import (
 	bootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/eks"
+	"strings"
 )
 
 func (t Template) fargateProfilePolicies(roleSpec *bootstrapv1.AWSIAMRoleSpec) []string {
 	var policies []string
-	if t.Spec.Partition == bootstrapv1.DefaultPartitionNameUSGov {
-		policies = eks.FargateRolePoliciesAWSUSGov()
-	} else {
-		policies = eks.FargateRolePolicies()
+	policies = eks.FargateRolePolicies()
+	if strings.Contains(t.Spec.Partition, bootstrapv1.PartitionNameUSGov) {
+		policies = eks.FargateRolePoliciesUSGov()
 	}
 	if roleSpec.ExtraPolicyAttachments != nil {
 		policies = append(policies, roleSpec.ExtraPolicyAttachments...)

@@ -54,8 +54,8 @@ func FargateRolePolicies() []string {
 	}
 }
 
-// NodegroupRolePolicies gives the policies required for a nodegroup role.
-func NodegroupRolePoliciesAWSUSGov() []string {
+// NodegroupRolePoliciesUSGov gives the policies required for a nodegroup role.
+func NodegroupRolePoliciesUSGov() []string {
 	return []string{
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKSWorkerNodePolicy",
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
@@ -63,8 +63,8 @@ func NodegroupRolePoliciesAWSUSGov() []string {
 	}
 }
 
-// FargateRolePolicies gives the policies required for a fargate role.
-func FargateRolePoliciesAWSUSGov() []string {
+// FargateRolePoliciesUSGov gives the policies required for a fargate role.
+func FargateRolePoliciesUSGov() []string {
 	return []string{
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
 	}
@@ -110,15 +110,8 @@ func (s *Service) reconcileControlPlaneIAMRole() error {
 	}
 
 	//TODO: check tags and trust relationship to see if they need updating
-	var policies []*string
-	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
-		policies = []*string{
-			aws.String("arn:aws-us-gov:iam::aws:policy/AmazonEKSClusterPolicy"),
-		}
-	} else {
-		policies = []*string{
-			aws.String("arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"),
-		}
+	policies := []*string{
+		aws.String(fmt.Sprintf("arn:%s:iam::aws:policy/AmazonEKSClusterPolicy", s.scope.Partition())),
 	}
 
 	if s.scope.ControlPlane.Spec.RoleAdditionalPolicies != nil {
@@ -228,11 +221,9 @@ func (s *NodegroupService) reconcileNodegroupIAMRole() error {
 		return errors.Wrapf(err, "error ensuring tags and policy document are set on node role")
 	}
 
-	var policies []string
-	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
-		policies = NodegroupRolePoliciesAWSUSGov()
-	} else {
-		policies = NodegroupRolePolicies()
+	policies := NodegroupRolePolicies()
+	if strings.Contains(s.scope.Partition(), v1beta1.PartitionNameUSGov) {
+		policies = NodegroupRolePoliciesUSGov()
 	}
 	if len(s.scope.ManagedMachinePool.Spec.RoleAdditionalPolicies) > 0 {
 		if !s.scope.AllowAdditionalRoles() {
@@ -349,11 +340,9 @@ func (s *FargateService) reconcileFargateIAMRole() (requeue bool, err error) {
 		return updatedRole, errors.Wrapf(err, "error ensuring tags and policy document are set on fargate role")
 	}
 
-	var policies []string
-	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
-		policies = FargateRolePoliciesAWSUSGov()
-	} else {
-		policies = FargateRolePolicies()
+	policies := FargateRolePolicies()
+	if strings.Contains(s.scope.Partition(), v1beta1.PartitionNameUSGov) {
+		policies = FargateRolePoliciesUSGov()
 	}
 	updatedPolicies, err := s.EnsurePoliciesAttached(role, aws.StringSlice(policies))
 	if err != nil {

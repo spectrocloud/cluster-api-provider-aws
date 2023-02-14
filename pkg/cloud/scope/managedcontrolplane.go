@@ -19,6 +19,7 @@ package scope
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/util/system"
 	"time"
 
 	amazoncni "github.com/aws/amazon-vpc-cni-k8s/pkg/apis/crd/v1alpha1"
@@ -387,4 +388,12 @@ func (s *ManagedControlPlaneScope) ServiceCidrs() *clusterv1.NetworkRanges {
 	}
 
 	return nil
+}
+
+// Partition returns the cluster partition.
+func (s *ManagedControlPlaneScope) Partition() string {
+	if s.ControlPlane.Spec.Partition == "" {
+		s.ControlPlane.Spec.Partition = system.GetPartitionFromRegion(s.Region())
+	}
+	return s.ControlPlane.Spec.Partition
 }

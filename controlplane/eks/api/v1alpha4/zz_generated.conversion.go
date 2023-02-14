@@ -376,6 +376,7 @@ func autoConvert_v1beta1_AWSManagedControlPlaneSpec_To_v1alpha4_AWSManagedContro
 	}
 	out.SecondaryCidrBlock = (*string)(unsafe.Pointer(in.SecondaryCidrBlock))
 	out.Region = in.Region
+	// WARNING: in.Partition requires manual conversion: does not exist in peer-type
 	out.SSHKeyName = (*string)(unsafe.Pointer(in.SSHKeyName))
 	out.Version = (*string)(unsafe.Pointer(in.Version))
 	out.RoleName = (*string)(unsafe.Pointer(in.RoleName))
