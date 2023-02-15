@@ -2675,6 +2675,10 @@ spec:
                         type: object
                     type: object
                 type: object
+              partition:
+                description: Partition is the AWS security partition being used. Defaults
+                  to "aws"
+                type: string
               region:
                 description: The AWS Region the cluster lives in.
                 type: string
@@ -4212,6 +4216,10 @@ spec:
                                 type: object
                             type: object
                         type: object
+                      partition:
+                        description: Partition is the AWS security partition being
+                          used. Defaults to "aws"
+                        type: string
                       region:
                         description: The AWS Region the cluster lives in.
                         type: string
@@ -5841,12 +5849,13 @@ spec:
                       groups defined at the cluster level or in the actuator.
                     items:
                       description: AWSResourceReference is a reference to a specific
-                        AWS resource by ID, ARN, or filters. Only one of ID, ARN or
-                        Filters may be specified. Specifying more than one will result
-                        in a validation error.
+                        AWS resource by ID or filters. Only one of ID or Filters may
+                        be specified. Specifying more than one will result in a validation
+                        error.
                       properties:
                         arn:
-                          description: ARN of resource
+                          description: 'ARN of resource. Deprecated: This field has
+                            no function and is going to be removed in the next release.'
                           type: string
                         filters:
                           description: 'Filters is a set of key/value pairs used to
@@ -6000,7 +6009,7 @@ spec:
                 default: 1
                 description: MinSize defines the minimum size of the group.
                 format: int32
-                minimum: 1
+                minimum: 0
                 type: integer
               mixedInstancesPolicy:
                 description: MixedInstancesPolicy describes how multiple instance
@@ -6086,12 +6095,12 @@ spec:
                 description: Subnets is an array of subnet configurations
                 items:
                   description: AWSResourceReference is a reference to a specific AWS
-                    resource by ID, ARN, or filters. Only one of ID, ARN or Filters
-                    may be specified. Specifying more than one will result in a validation
-                    error.
+                    resource by ID or filters. Only one of ID or Filters may be specified.
+                    Specifying more than one will result in a validation error.
                   properties:
                     arn:
-                      description: ARN of resource
+                      description: 'ARN of resource. Deprecated: This field has no
+                        function and is going to be removed in the next release.'
                       type: string
                     filters:
                       description: 'Filters is a set of key/value pairs used to identify
@@ -7252,12 +7261,12 @@ spec:
                   change too.
                 items:
                   description: AWSResourceReference is a reference to a specific AWS
-                    resource by ID, ARN, or filters. Only one of ID, ARN or Filters
-                    may be specified. Specifying more than one will result in a validation
-                    error.
+                    resource by ID or filters. Only one of ID or Filters may be specified.
+                    Specifying more than one will result in a validation error.
                   properties:
                     arn:
-                      description: ARN of resource
+                      description: 'ARN of resource. Deprecated: This field has no
+                        function and is going to be removed in the next release.'
                       type: string
                     filters:
                       description: 'Filters is a set of key/value pairs used to identify
@@ -7510,7 +7519,8 @@ spec:
                   If not specified, the cluster subnet will be used.
                 properties:
                   arn:
-                    description: ARN of resource
+                    description: 'ARN of resource. Deprecated: This field has no function
+                      and is going to be removed in the next release.'
                     type: string
                   filters:
                     description: 'Filters is a set of key/value pairs used to identify
@@ -8485,12 +8495,14 @@ spec:
                           the attached security groups might change too.
                         items:
                           description: AWSResourceReference is a reference to a specific
-                            AWS resource by ID, ARN, or filters. Only one of ID, ARN
-                            or Filters may be specified. Specifying more than one
-                            will result in a validation error.
+                            AWS resource by ID or filters. Only one of ID or Filters
+                            may be specified. Specifying more than one will result
+                            in a validation error.
                           properties:
                             arn:
-                              description: ARN of resource
+                              description: 'ARN of resource. Deprecated: This field
+                                has no function and is going to be removed in the
+                                next release.'
                               type: string
                             filters:
                               description: 'Filters is a set of key/value pairs used
@@ -8755,7 +8767,9 @@ spec:
                           be used.
                         properties:
                           arn:
-                            description: ARN of resource
+                            description: 'ARN of resource. Deprecated: This field
+                              has no function and is going to be removed in the next
+                              release.'
                             type: string
                           filters:
                             description: 'Filters is a set of key/value pairs used
@@ -8994,8 +9008,7 @@ spec:
                   installed into the cluster. For clusters where you want to use an
                   alternate CNI this option provides a way to specify that the Amazon
                   VPC CNI should be deleted. You cannot set this to true if you are
-                  using the Amazon VPC CNI addon or if you have specified a secondary
-                  CIDR block.
+                  using the Amazon VPC CNI addon.
                 type: boolean
               eksClusterName:
                 description: EKSClusterName allows you to specify the name of the
@@ -10005,8 +10018,7 @@ spec:
                   installed into the cluster. For clusters where you want to use an
                   alternate CNI this option provides a way to specify that the Amazon
                   VPC CNI should be deleted. You cannot set this to true if you are
-                  using the Amazon VPC CNI addon or if you have specified a secondary
-                  CIDR block.
+                  using the Amazon VPC CNI addon.
                 type: boolean
               eksClusterName:
                 description: EKSClusterName allows you to specify the name of the
@@ -11109,8 +11121,7 @@ spec:
                   installed into the cluster. For clusters where you want to use an
                   alternate CNI this option provides a way to specify that the Amazon
                   VPC CNI should be deleted. You cannot set this to true if you are
-                  using the Amazon VPC CNI addon or if you have specified a secondary
-                  CIDR block.
+                  using the Amazon VPC CNI addon.
                 type: boolean
               eksClusterName:
                 description: EKSClusterName allows you to specify the name of the
@@ -11251,6 +11262,21 @@ spec:
                   this will be used for all cluster machines unless a machine specifies
                   a different ImageLookupOrg.
                 type: string
+              kubeProxy:
+                description: KubeProxy defines managed attributes of the kube-proxy
+                  daemonset
+                properties:
+                  disable:
+                    default: false
+                    description: Disable set to true indicates that kube-proxy should
+                      be disabled. With EKS clusters kube-proxy is automatically installed
+                      into the cluster. For clusters where you want to use kube-proxy
+                      functionality that is provided with an alternate CNI, this option
+                      provides a way to specify that the kube-proxy daemonset should
+                      be deleted. You cannot set this to true if you are using the
+                      Amazon kube-proxy addon.
+                    type: boolean
+                type: object
               logging:
                 description: Logging specifies which EKS Cluster logs should be enabled.
                   Entries for each of the enabled logs will be sent to CloudWatch
@@ -11479,6 +11505,10 @@ spec:
                       prefixing.
                     type: string
                 type: object
+              partition:
+                description: Partition is the AWS security partition being used. Defaults
+                  to "aws"
+                type: string
               region:
                 description: The AWS Region the cluster lives in.
                 type: string
@@ -13807,7 +13837,7 @@ spec:
       containers:
       - args:
         - --leader-elect
-        - --feature-gates=EKS=${CAPA_EKS:=true},EKSEnableIAM=${CAPA_EKS_IAM:=false},EKSAllowAddRoles=${CAPA_EKS_ADD_ROLES:=false},EKSFargate=${EXP_EKS_FARGATE:=false},MachinePool=${EXP_MACHINE_POOL:=false},EventBridgeInstanceState=${EVENT_BRIDGE_INSTANCE_STATE:=false},AutoControllerIdentityCreator=${AUTO_CONTROLLER_IDENTITY_CREATOR:=true},BootstrapFormatIgnition=${EXP_BOOTSTRAP_FORMAT_IGNITION:=false}
+        - --feature-gates=EKS=${CAPA_EKS:=true},EKSEnableIAM=${CAPA_EKS_IAM:=false},EKSAllowAddRoles=${CAPA_EKS_ADD_ROLES:=false},EKSFargate=${EXP_EKS_FARGATE:=false},MachinePool=${EXP_MACHINE_POOL:=false},EventBridgeInstanceState=${EVENT_BRIDGE_INSTANCE_STATE:=false},AutoControllerIdentityCreator=${AUTO_CONTROLLER_IDENTITY_CREATOR:=true},BootstrapFormatIgnition=${EXP_BOOTSTRAP_FORMAT_IGNITION:=false},ExternalResourceGC=${EXP_EXTERNAL_RESOURCE_GC:=false}
         - --v=${CAPA_LOGLEVEL:=0}
         - --metrics-bind-addr=127.0.0.1:8080
         image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
