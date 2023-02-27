@@ -475,10 +475,7 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 			},
 		}
 	}
-	cidrBlocks := []string{services.AnyIPv4CidrBlock}
-	if s.scope.VPC().EnableIPv6 {
-		cidrBlocks = append(cidrBlocks, services.AnyIPv6CidrBlock)
-	}
+
 	switch role {
 	case infrav1.SecurityGroupBastion:
 		return infrav1.IngressRules{
@@ -530,7 +527,7 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 				Protocol:    infrav1.SecurityGroupProtocolTCP,
 				FromPort:    30000,
 				ToPort:      32767,
-				CidrBlocks:  cidrBlocks,
+				CidrBlocks:  []string{services.AnyIPv4CidrBlock},
 			},
 			{
 				Description: "Kubelet API",
@@ -562,7 +559,7 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 				Protocol:    infrav1.SecurityGroupProtocolTCP,
 				FromPort:    int64(s.scope.APIServerPort()),
 				ToPort:      int64(s.scope.APIServerPort()),
-				CidrBlocks:  cidrBlocks,
+				CidrBlocks:  []string{services.AnyIPv4CidrBlock},
 			},
 		}, nil
 	case infrav1.SecurityGroupLB:
