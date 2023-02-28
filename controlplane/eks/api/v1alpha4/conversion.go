@@ -149,3 +149,15 @@ func Convert_v1alpha4_Instance_To_v1beta1_Instance(in *infrav1alpha4.Instance, o
 func Convert_v1beta1_AWSManagedControlPlaneSpec_To_v1alpha4_AWSManagedControlPlaneSpec(in *v1beta1.AWSManagedControlPlaneSpec, out *AWSManagedControlPlaneSpec, scope apiconversion.Scope) error {
 	return autoConvert_v1beta1_AWSManagedControlPlaneSpec_To_v1alpha4_AWSManagedControlPlaneSpec(in, out, scope)
 }
+
+func Convert_v1alpha4_OIDCProviderStatus_To_v1beta1_OIDCProviderStatus(in *OIDCProviderStatus, out *infrav1beta1.OIDCProviderStatus, _ apiconversion.Scope) error {
+	out.ARN = in.ARN
+	out.TrustPolicy = in.TrustPolicy
+	return nil
+}
+
+func Convert_v1beta1_OIDCProviderStatus_To_v1alpha4_OIDCProviderStatus(in *infrav1beta1.OIDCProviderStatus, out *OIDCProviderStatus, _ apiconversion.Scope) error {
+	out.ARN = in.ARN
+	out.TrustPolicy = in.TrustPolicy
+	return nil
+}

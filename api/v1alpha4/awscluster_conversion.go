@@ -126,3 +126,6 @@ func Convert_v1beta1_AWSLoadBalancerSpec_To_v1alpha4_AWSLoadBalancerSpec(in *inf
 func Convert_v1beta1_SubnetSpec_To_v1alpha4_SubnetSpec(in *infrav1.SubnetSpec, out *SubnetSpec, s apiconversion.Scope) error {
 	return autoConvert_v1beta1_SubnetSpec_To_v1alpha4_SubnetSpec(in, out, s)
 }
+func Convert_v1beta1_AWSClusterStatus_To_v1alpha4_AWSClusterStatus(in *infrav1.AWSClusterStatus, out *AWSClusterStatus, s apiconversion.Scope) error {
+	return autoConvert_v1beta1_AWSClusterStatus_To_v1alpha4_AWSClusterStatus(in, out, s)
+}
