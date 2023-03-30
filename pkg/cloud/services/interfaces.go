@@ -17,6 +17,8 @@ limitations under the License.
 package services
 
 import (
+	"context"
+
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/scope"
@@ -27,8 +29,6 @@ const (
 	TemporaryResourceID = "temporary-resource-id"
 	// AnyIPv4CidrBlock is the CIDR block to match all IPv4 addresses.
 	AnyIPv4CidrBlock = "0.0.0.0/0"
-	// AnyIPv6CidrBlock is the CIDR block to match all IPv6 addresses.
-	AnyIPv6CidrBlock = "::/0"
 )
 
 // ASGInterface encapsulates the methods exposed to the machinepool
@@ -98,6 +98,11 @@ type NetworkInterface interface {
 	ReconcileNetwork() error
 }
 
+type IAMInterface interface {
+	ReconcileOIDCProvider(ctx context.Context) error
+	DeleteOIDCProvider(ctx context.Context) error
+}
+
 // SecurityGroupInterface encapsulates the methods exposed to the cluster
 // controller.
 type SecurityGroupInterface interface {
@@ -109,6 +114,7 @@ type SecurityGroupInterface interface {
 type ObjectStoreInterface interface {
 	DeleteBucket() error
 	ReconcileBucket() error
-	Delete(m *scope.MachineScope) error
-	Create(m *scope.MachineScope, data []byte) (objectURL string, err error)
+	Delete(key string) error
+	Create(key string, data []byte) (objectURL string, err error)
+	CreatePublic(key string, data []byte) (objectURL string, err error)
 }
