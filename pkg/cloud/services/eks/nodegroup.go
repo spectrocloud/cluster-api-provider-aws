@@ -222,7 +222,7 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 		RemoteAccess:  remoteAccess,
 		UpdateConfig:  s.updateConfig(),
 	}
-	if managedPool.AMIType != nil && (managedPool.AWSLaunchTemplate == nil || managedPool.AWSLaunchTemplate.AMI.ID == nil) {
+	if managedPool.AMIType != nil && (managedPool.AWSLaunchTemplate == nil /*|| managedPool.AWSLaunchTemplate.AMI.ID == nil*/) {
 		input.AmiType = aws.String(string(*managedPool.AMIType))
 	}
 	if managedPool.DiskSize != nil {
