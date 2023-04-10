@@ -261,6 +261,11 @@ func (r *AWSManagedMachinePoolReconciler) reconcileDelete(
 			return ctrl.Result{}, err
 		}
 
+		if launchTemplateID == nil {
+			id, _ := ec2Svc.GetLaunchTemplateID(machinePoolScope.LaunchTemplateName())
+			launchTemplateID = &id
+		}
+
 		if launchTemplate == nil {
 			machinePoolScope.V(2).Info("Unable to locate launch template")
 			r.Recorder.Eventf(machinePoolScope.ManagedMachinePool, corev1.EventTypeNormal, "NoLaunchTemplateFound", "Unable to find matching launch template")
