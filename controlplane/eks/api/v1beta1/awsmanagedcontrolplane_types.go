@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
@@ -171,6 +172,10 @@ type AWSManagedControlPlaneSpec struct { //nolint: maligned
 	// +kubebuilder:default=false
 	DisableVPCCNI bool `json:"disableVPCCNI,omitempty"`
 
+	// VpcCni is used to set configuration options for the VPC CNI plugin
+	// +optional
+	VpcCni VpcCni `json:"VpcCni,omitempty"`
+
 	// KubeProxy defines managed attributes of the kube-proxy daemonset
 	KubeProxy KubeProxy `json:"kubeProxy,omitempty"`
 }
@@ -184,6 +189,13 @@ type KubeProxy struct {
 	// set this to true if you are using the Amazon kube-proxy addon.
 	// +kubebuilder:default=false
 	Disable bool `json:"disable,omitempty"`
+}
+
+// VpcCni specifies configuration related to the VPC CNI.
+type VpcCni struct {
+	// Env defines a list of environment variables to apply to the `aws-node` DaemonSet
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
 }
 
 // EndpointAccess specifies how control plane endpoints are accessible.
@@ -207,14 +219,6 @@ type EncryptionConfig struct {
 	Resources []*string `json:"resources,omitempty"`
 }
 
-// OIDCProviderStatus holds the status of the AWS OIDC identity provider.
-type OIDCProviderStatus struct {
-	// ARN holds the ARN of the provider
-	ARN string `json:"arn,omitempty"`
-	// TrustPolicy contains the boilerplate IAM trust policy to use for IRSA
-	TrustPolicy string `json:"trustPolicy,omitempty"`
-}
-
 type IdentityProviderStatus struct {
 	// ARN holds the ARN of associated identity provider
 	ARN string `json:"arn,omitempty"`
@@ -236,7 +240,7 @@ type AWSManagedControlPlaneStatus struct {
 	Bastion *infrav1.Instance `json:"bastion,omitempty"`
 	// OIDCProvider holds the status of the identity provider for this cluster
 	// +optional
-	OIDCProvider OIDCProviderStatus `json:"oidcProvider,omitempty"`
+	OIDCProvider infrav1.OIDCProviderStatus `json:"oidcProvider,omitempty"`
 	// ExternalManagedControlPlane indicates to cluster-api that the control plane
 	// is managed by an external service such as AKS, EKS, GKE, etc.
 	// +kubebuilder:default=true

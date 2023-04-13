@@ -103,7 +103,7 @@ func (r *AWSManagedControlPlaneReconciler) SetupWithManager(ctx context.Context,
 
 	if err = c.Watch(
 		&source.Kind{Type: &clusterv1.Cluster{}},
-		handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(awsManagedControlPlane.GroupVersionKind())),
+		handler.EnqueueRequestsFromMapFunc(util.ClusterToInfrastructureMapFunc(ctx, awsManagedControlPlane.GroupVersionKind(), mgr.GetClient(), &ekscontrolplanev1.AWSManagedControlPlane{})),
 		predicates.ClusterUnpausedAndInfrastructureReady(log),
 	); err != nil {
 		return fmt.Errorf("failed adding a watch for ready clusters: %w", err)
@@ -185,6 +185,9 @@ func (r *AWSManagedControlPlaneReconciler) Reconcile(ctx context.Context, req ct
 			)
 			if managedScope.Bastion().Enabled {
 				applicableConditions = append(applicableConditions, infrav1.BastionHostReadyCondition)
+			}
+			if managedScope.VPC().EnableIPv6 {
+				applicableConditions = append(applicableConditions, infrav1.EgressOnlyInternetGatewayReadyCondition)
 			}
 		}
 
