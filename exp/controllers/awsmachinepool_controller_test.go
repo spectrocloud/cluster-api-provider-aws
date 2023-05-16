@@ -244,6 +244,8 @@ func TestAWSMachinePoolReconciler(t *testing.T) {
 				setProviderID(t, g)
 
 				expectedErr := errors.New("no connection available ")
+
+				ec2Svc.EXPECT().ReconcileLaunchTemplate(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedErr)
 				_, err := reconciler.reconcileNormal(context.Background(), ms, cs, cs)
 				g.Expect(errors.Cause(err)).To(MatchError(expectedErr))
 			})

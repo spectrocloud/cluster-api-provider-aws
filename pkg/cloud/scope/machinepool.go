@@ -239,7 +239,6 @@ func (m *MachinePoolScope) GetLaunchTemplateIDStatus() string {
 	return m.AWSMachinePool.Status.LaunchTemplateID
 }
 
-// SetLaunchTemplateIDStatus sets the AWSMachinePool LaunchTemplateID status.
 func (m *MachinePoolScope) SetLaunchTemplateIDStatus(id string) {
 	m.AWSMachinePool.Status.LaunchTemplateID = id
 }

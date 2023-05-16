@@ -21,6 +21,9 @@ package managed
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/onsi/ginkgo"
@@ -43,6 +46,8 @@ type ManagedMachinePoolSpecInput struct {
 	ClusterName           string
 	IncludeScaling        bool
 	Cleanup               bool
+	ManagedMachinePool    bool
+	Flavor                string
 	UsesLaunchTemplate    bool
 	EKSKubernetesVersion  string
 }
@@ -56,6 +61,7 @@ func ManagedMachinePoolSpec(ctx context.Context, inputGetter func() ManagedMachi
 	Expect(input.AWSSession).ToNot(BeNil(), "Invalid argument. input.AWSSession can't be nil")
 	Expect(input.Namespace).NotTo(BeNil(), "Invalid argument. input.Namespace can't be nil")
 	Expect(input.ClusterName).ShouldNot(HaveLen(0), "Invalid argument. input.ClusterName can't be empty")
+	Expect(input.Flavor).ShouldNot(HaveLen(0), "Invalid argument. input.Flavor can't be empty")
 
 	shared.Byf("getting cluster with name %s", input.ClusterName)
 	cluster := framework.GetClusterByName(ctx, framework.GetClusterByNameInput{

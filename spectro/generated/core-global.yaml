@@ -4,6 +4,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -319,6 +320,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -808,6 +810,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -2403,6 +2406,13 @@ spec:
                   resources managed by the AWS provider, in addition to the ones added
                   by default.
                 type: object
+              associateOIDCProvider:
+                default: false
+                description: AssociateOIDCProvider can be enabled to automatically
+                  create an identity provider and install the pod identity webhook
+                  from AWS for use with IRSA. This will only work if the S3Bucket
+                  is configured properly.
+                type: boolean
               bastion:
                 description: Bastion contains options to configure the bastion host.
                 properties:
@@ -2681,9 +2691,10 @@ spec:
                 type: string
               s3Bucket:
                 description: S3Bucket contains options to configure a supporting S3
-                  bucket for this cluster - currently used for nodes requiring Ignition
-                  (https://coreos.github.io/ignition/) for bootstrapping (requires
-                  BootstrapFormatIgnition feature flag to be enabled).
+                  bucket for this cluster - Used  for nodes requiring Ignition (https://coreos.github.io/ignition/)
+                  for bootstrapping (requires BootstrapFormatIgnition feature flag
+                  to be enabled) and for storing OIDC endpoint certificates for use
+                  with IRSA
                 properties:
                   controlPlaneIAMInstanceProfile:
                     description: ControlPlaneIAMInstanceProfile is a name of the IAMInstanceProfile,
@@ -3153,6 +3164,18 @@ spec:
                       security group to its unique name, if any.
                     type: object
                 type: object
+              oidcProvider:
+                description: OIDCProvider holds the status of the identity provider
+                  for this cluster
+                properties:
+                  arn:
+                    description: ARN holds the ARN of the provider
+                    type: string
+                  trustPolicy:
+                    description: TrustPolicy contains the boilerplate IAM trust policy
+                      to use for IRSA
+                    type: string
+                type: object
               ready:
                 default: false
                 type: boolean
@@ -3176,6 +3199,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -3289,11 +3313,11 @@ spec:
                   Optional'
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
@@ -3512,6 +3536,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -3926,6 +3951,13 @@ spec:
                           add to AWS resources managed by the AWS provider, in addition
                           to the ones added by default.
                         type: object
+                      associateOIDCProvider:
+                        default: false
+                        description: AssociateOIDCProvider can be enabled to automatically
+                          create an identity provider and install the pod identity
+                          webhook from AWS for use with IRSA. This will only work
+                          if the S3Bucket is configured properly.
+                        type: boolean
                       bastion:
                         description: Bastion contains options to configure the bastion
                           host.
@@ -4220,9 +4252,10 @@ spec:
                         type: string
                       s3Bucket:
                         description: S3Bucket contains options to configure a supporting
-                          S3 bucket for this cluster - currently used for nodes requiring
-                          Ignition (https://coreos.github.io/ignition/) for bootstrapping
-                          (requires BootstrapFormatIgnition feature flag to be enabled).
+                          S3 bucket for this cluster - Used  for nodes requiring Ignition
+                          (https://coreos.github.io/ignition/) for bootstrapping (requires
+                          BootstrapFormatIgnition feature flag to be enabled) and
+                          for storing OIDC endpoint certificates for use with IRSA
                         properties:
                           controlPlaneIAMInstanceProfile:
                             description: ControlPlaneIAMInstanceProfile is a name
@@ -6230,6 +6263,9 @@ spec:
               launchTemplateID:
                 description: The ID of the launch template
                 type: string
+              launchTemplateVersion:
+                description: The version of the launch template
+                type: string
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean
@@ -6256,6 +6292,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -7687,6 +7724,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -8830,6 +8868,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -11017,6 +11056,122 @@ spec:
             description: AWSManagedControlPlaneSpec defines the desired state of an
               Amazon EKS Cluster.
             properties:
+              VpcCni:
+                description: VpcCni is used to set configuration options for the VPC
+                  CNI plugin
+                properties:
+                  env:
+                    description: Env defines a list of environment variables to apply
+                      to the `aws-node` DaemonSet
+                    items:
+                      description: EnvVar represents an environment variable present
+                        in a Container.
+                      properties:
+                        name:
+                          description: Name of the environment variable. Must be a
+                            C_IDENTIFIER.
+                          type: string
+                        value:
+                          description: 'Variable references $(VAR_NAME) are expanded
+                            using the previously defined environment variables in
+                            the container and any service environment variables. If
+                            a variable cannot be resolved, the reference in the input
+                            string will be unchanged. Double $$ are reduced to a single
+                            $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                            "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                            Escaped references will never be expanded, regardless
+                            of whether the variable exists or not. Defaults to "".'
+                          type: string
+                        valueFrom:
+                          description: Source for the environment variable's value.
+                            Cannot be used if value is not empty.
+                          properties:
+                            configMapKeyRef:
+                              description: Selects a key of a ConfigMap.
+                              properties:
+                                key:
+                                  description: The key to select.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    TODO: Add other useful fields. apiVersion, kind,
+                                    uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the ConfigMap or its
+                                    key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            fieldRef:
+                              description: 'Selects a field of the pod: supports metadata.name,
+                                metadata.namespace, `metadata.labels[''<KEY>'']`,
+                                `metadata.annotations[''<KEY>'']`, spec.nodeName,
+                                spec.serviceAccountName, status.hostIP, status.podIP,
+                                status.podIPs.'
+                              properties:
+                                apiVersion:
+                                  description: Version of the schema the FieldPath
+                                    is written in terms of, defaults to "v1".
+                                  type: string
+                                fieldPath:
+                                  description: Path of the field to select in the
+                                    specified API version.
+                                  type: string
+                              required:
+                              - fieldPath
+                              type: object
+                            resourceFieldRef:
+                              description: 'Selects a resource of the container: only
+                                resources limits and requests (limits.cpu, limits.memory,
+                                limits.ephemeral-storage, requests.cpu, requests.memory
+                                and requests.ephemeral-storage) are currently supported.'
+                              properties:
+                                containerName:
+                                  description: 'Container name: required for volumes,
+                                    optional for env vars'
+                                  type: string
+                                divisor:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  description: Specifies the output format of the
+                                    exposed resources, defaults to "1"
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                resource:
+                                  description: 'Required: resource to select'
+                                  type: string
+                              required:
+                              - resource
+                              type: object
+                            secretKeyRef:
+                              description: Selects a key of a secret in the pod's
+                                namespace
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must
+                                    be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    TODO: Add other useful fields. apiVersion, kind,
+                                    uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key
+                                    must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    type: array
+                type: object
               additionalTags:
                 additionalProperties:
                   type: string
@@ -12649,6 +12804,7 @@ spec:
                 - AL2_x86_64
                 - AL2_x86_64_GPU
                 - AL2_ARM_64
+                - CUSTOM
                 type: string
               amiVersion:
                 description: AMIVersion defines the desired AMI release version. If
@@ -12679,6 +12835,10 @@ spec:
                         be specified. Specifying more than one will result in a validation
                         error.
                       properties:
+                        arn:
+                          description: 'ARN of resource. Deprecated: This field has
+                            no function and is going to be removed in the next release.'
+                          type: string
                         filters:
                           description: 'Filters is a set of key/value pairs used to
                             identify a resource They are applied according to the
@@ -12796,15 +12956,6 @@ spec:
                         type: string
                     required:
                     - size
-                    type: object
-                  spotMarketOptions:
-                    description: SpotMarketOptions are options for configuring AWSMachinePool
-                      instances to be run using AWS Spot instances.
-                    properties:
-                      maxPrice:
-                        description: MaxPrice defines the maximum price the user is
-                          willing to pay for Spot VM instances
-                        type: string
                     type: object
                   sshKeyName:
                     description: SSHKeyName is the name of the ssh key to attach to
@@ -13029,6 +13180,12 @@ spec:
                   events to the MachinePool object and/or logged in the controller's
                   output."
                 type: string
+              launchTemplateID:
+                description: The ID of the launch template
+                type: string
+              launchTemplateVersion:
+                description: The version of the launch template
+                type: string
               ready:
                 default: false
                 description: Ready denotes that the AWSManagedMachinePool nodegroup
@@ -13059,6 +13216,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -13464,6 +13622,7 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -13663,137 +13822,12 @@ status:
   conditions: []
   storedVersions: []
 ---
-apiVersion: v1
-data:
-  credentials: ${AWS_B64ENCODED_CREDENTIALS}
-kind: Secret
-metadata:
-  labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
-  name: capa-manager-bootstrap-credentials
-  namespace: capi-webhook-system
-type: Opaque
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
-  name: capa-webhook-service
-  namespace: capi-webhook-system
-spec:
-  ports:
-  - port: 443
-    targetPort: webhook-server
-  selector:
-    cluster.x-k8s.io/provider: infrastructure-aws
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
-    control-plane: capa-controller-manager
-  name: capa-controller-manager
-  namespace: capi-webhook-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      cluster.x-k8s.io/provider: infrastructure-aws
-      control-plane: capa-controller-manager
-  template:
-    metadata:
-      labels:
-        cluster.x-k8s.io/provider: infrastructure-aws
-        control-plane: capa-controller-manager
-    spec:
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - preference:
-              matchExpressions:
-              - key: ${K8S_CP_LABEL:=node-role.kubernetes.io/control-plane}
-                operator: Exists
-            weight: 10
-          - preference:
-              matchExpressions:
-              - key: node-role.kubernetes.io/master
-                operator: Exists
-            weight: 10
-      containers:
-      - args:
-        - --leader-elect
-        - --feature-gates=EKS=${CAPA_EKS:=true},EKSEnableIAM=${CAPA_EKS_IAM:=false},EKSAllowAddRoles=${CAPA_EKS_ADD_ROLES:=false},EKSFargate=${EXP_EKS_FARGATE:=false},MachinePool=${EXP_MACHINE_POOL:=false},EventBridgeInstanceState=${EVENT_BRIDGE_INSTANCE_STATE:=false},AutoControllerIdentityCreator=${AUTO_CONTROLLER_IDENTITY_CREATOR:=true},BootstrapFormatIgnition=${EXP_BOOTSTRAP_FORMAT_IGNITION:=false}
-        - --v=${CAPA_LOGLEVEL:=0}
-        - --metrics-bind-addr=127.0.0.1:8080
-        image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
-        imagePullPolicy: Always
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: healthz
-        name: manager
-        ports:
-        - containerPort: 9443
-          name: webhook-server
-          protocol: TCP
-        - containerPort: 9440
-          name: healthz
-          protocol: TCP
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: healthz
-        volumeMounts:
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
-          readOnly: true
-      securityContext:
-        fsGroup: 1000
-      terminationGracePeriodSeconds: 10
-      tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
-      volumes:
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: capa-webhook-service-cert
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
-  name: capa-serving-cert
-  namespace: capi-webhook-system
-spec:
-  dnsNames:
-  - capa-webhook-service.capi-webhook-system.svc
-  - capa-webhook-service.capi-webhook-system.svc.cluster.local
-  issuerRef:
-    kind: Issuer
-    name: capa-selfsigned-issuer
-  secretName: capa-webhook-service-cert
----
-apiVersion: cert-manager.io/v1
-kind: Issuer
-metadata:
-  labels:
-    cluster.x-k8s.io/provider: infrastructure-aws
-  name: capa-selfsigned-issuer
-  namespace: capi-webhook-system
-spec:
-  selfSigned: {}
----
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
   name: capa-mutating-webhook-configuration
@@ -14050,11 +14084,138 @@ webhooks:
     - awsmanagedcontrolplanes
   sideEffects: None
 ---
+apiVersion: v1
+data:
+  credentials: ${AWS_B64ENCODED_CREDENTIALS}
+kind: Secret
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-manager-bootstrap-credentials
+  namespace: capi-webhook-system
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-webhook-service
+  namespace: capi-webhook-system
+spec:
+  ports:
+  - port: 443
+    targetPort: webhook-server
+  selector:
+    cluster.x-k8s.io/provider: infrastructure-aws
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+    control-plane: capa-controller-manager
+  name: capa-controller-manager
+  namespace: capi-webhook-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/provider: infrastructure-aws
+      control-plane: capa-controller-manager
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-aws
+        control-plane: capa-controller-manager
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: ${K8S_CP_LABEL:=node-role.kubernetes.io/control-plane}
+                operator: Exists
+            weight: 10
+          - preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+            weight: 10
+      containers:
+      - args:
+        - --leader-elect
+        - --feature-gates=EKS=${CAPA_EKS:=true},EKSEnableIAM=${CAPA_EKS_IAM:=false},EKSAllowAddRoles=${CAPA_EKS_ADD_ROLES:=false},EKSFargate=${EXP_EKS_FARGATE:=false},MachinePool=${EXP_MACHINE_POOL:=false},EventBridgeInstanceState=${EVENT_BRIDGE_INSTANCE_STATE:=false},AutoControllerIdentityCreator=${AUTO_CONTROLLER_IDENTITY_CREATOR:=true},BootstrapFormatIgnition=${EXP_BOOTSTRAP_FORMAT_IGNITION:=false},ExternalResourceGC=${EXP_EXTERNAL_RESOURCE_GC:=false}
+        - --v=${CAPA_LOGLEVEL:=0}
+        - --metrics-bind-addr=127.0.0.1:8080
+        image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: healthz
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        - containerPort: 9440
+          name: healthz
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: healthz
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 10
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: capa-webhook-service-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-serving-cert
+  namespace: capi-webhook-system
+spec:
+  dnsNames:
+  - capa-webhook-service.capi-webhook-system.svc
+  - capa-webhook-service.capi-webhook-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: capa-selfsigned-issuer
+  secretName: capa-webhook-service-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-selfsigned-issuer
+  namespace: capi-webhook-system
+spec:
+  selfSigned: {}
+---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
   name: capa-validating-webhook-configuration
