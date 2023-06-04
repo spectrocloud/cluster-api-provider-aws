@@ -113,6 +113,22 @@ TAG ?= dev
 ARCH ?= $(shell go env GOARCH)
 ALL_ARCH ?= amd64 arm arm64 ppc64le s390x
 
+# Fips Flags
+FIPS_ENABLE ?= ""
+
+RELEASE_LOC := release
+ifeq ($(FIPS_ENABLE),yes)
+  RELEASE_LOC := release-fips
+endif
+
+SPECTRO_VERSION ?= 4.0.0-dev
+TAG ?= v1.5.2-spectro-${SPECTRO_VERSION}
+ARCH ?= amd64
+# ALL_ARCH = amd64 arm arm64 ppc64le s390x
+ALL_ARCH = amd64 
+
+REGISTRY ?= gcr.io/spectro-dev-public/$(USER)/${RELEASE_LOC}
+
 # main controller
 CORE_IMAGE_NAME ?= cluster-api-aws-controller
 CORE_CONTROLLER_IMG ?= $(REGISTRY)/$(CORE_IMAGE_NAME)
@@ -372,7 +388,8 @@ clusterawsadm: ## Build clusterawsadm binary
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --build-arg ARCH=$(ARCH) --build-arg builder_image=$(GO_CONTAINER_IMAGE) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker build  --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	@echo $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-build-all ## Build all the architecture docker images
 docker-build-all: $(addprefix docker-build-,$(ALL_ARCH))
