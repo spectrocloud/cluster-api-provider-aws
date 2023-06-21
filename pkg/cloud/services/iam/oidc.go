@@ -352,6 +352,7 @@ func (s *Service) reconcileKubeAPIParameters(ctx context.Context) error {
 				Content: patchContent,
 			})
 
+		// init config
 		// panic checks to be safe
 		if controlPlanes.Items[i].Spec.KubeadmConfigSpec.InitConfiguration == nil {
 			controlPlanes.Items[i].Spec.KubeadmConfigSpec.InitConfiguration = &v1beta12.InitConfiguration{
@@ -365,6 +366,21 @@ func (s *Service) reconcileKubeAPIParameters(ctx context.Context) error {
 
 		// set the patch directory for kubeadmn init to apply before booting apiserver
 		controlPlanes.Items[i].Spec.KubeadmConfigSpec.InitConfiguration.Patches.Directory = "/etc/kubernetes/patches"
+
+		// join config
+		// panic checks to be safe
+		if controlPlanes.Items[i].Spec.KubeadmConfigSpec.JoinConfiguration == nil {
+			controlPlanes.Items[i].Spec.KubeadmConfigSpec.JoinConfiguration = &v1beta12.JoinConfiguration{
+				Patches: &v1beta12.Patches{},
+			}
+		}
+
+		if controlPlanes.Items[i].Spec.KubeadmConfigSpec.JoinConfiguration.Patches == nil {
+			controlPlanes.Items[i].Spec.KubeadmConfigSpec.JoinConfiguration.Patches = &v1beta12.Patches{}
+		}
+
+		// set the patch directory for kubeadmn join to apply before joining an apiserver
+		controlPlanes.Items[i].Spec.KubeadmConfigSpec.JoinConfiguration.Patches.Directory = "/etc/kubernetes/patches"
 
 		if err := managementClient.Update(ctx, &controlPlanes.Items[i]); err != nil {
 			return err
