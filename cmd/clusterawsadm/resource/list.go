@@ -18,6 +18,7 @@ package resource
 
 import (
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
@@ -43,7 +44,7 @@ func ListAWSResource(region, clusterName *string) (AWSResourceList, error) {
 		return resourceList, err
 	}
 
-	resourceClient := rgapi.New(sess)
+	resourceClient := rgapi.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 	input := &rgapi.GetResourcesInput{
 		TagFilters: []*rgapi.TagFilter{},
 	}
