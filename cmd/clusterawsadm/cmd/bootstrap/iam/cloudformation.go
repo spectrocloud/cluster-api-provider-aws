@@ -18,6 +18,7 @@ package iam
 
 import (
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -107,7 +108,7 @@ func createCloudFormationStackCmd() *cobra.Command {
 				return err
 			}
 
-			cfnSvc := cloudformation.NewService(cfn.New(sess))
+			cfnSvc := cloudformation.NewService(cfn.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov())))
 
 			err = cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
 			if err != nil {
@@ -153,7 +154,7 @@ func deleteCloudFormationStackCmd() *cobra.Command {
 				return err
 			}
 
-			cfnSvc := cloudformation.NewService(cfn.New(sess))
+			cfnSvc := cloudformation.NewService(cfn.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov())))
 
 			err = cfnSvc.DeleteStack(t.Spec.StackName, nil)
 			if err != nil {

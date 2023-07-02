@@ -72,7 +72,7 @@ func verifyClusterActiveAndOwned(eksClusterName, clusterName string, sess client
 }
 
 func getEKSCluster(eksClusterName string, sess client.ConfigProvider) (*eks.Cluster, error) {
-	eksClient := eks.New(sess)
+	eksClient := eks.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 	input := &eks.DescribeClusterInput{
 		Name: aws.String(eksClusterName),
 	}
@@ -82,7 +82,7 @@ func getEKSCluster(eksClusterName string, sess client.ConfigProvider) (*eks.Clus
 }
 
 func getEKSClusterAddon(eksClusterName, addonName string, sess client.ConfigProvider) (*eks.Addon, error) {
-	eksClient := eks.New(sess)
+	eksClient := eks.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 
 	describeInput := &eks.DescribeAddonInput{
 		AddonName:   &addonName,
@@ -111,7 +111,7 @@ func verifyConfigMapExists(ctx context.Context, name, namespace string, k8sclien
 }
 
 func VerifyRoleExistsAndOwned(roleName string, clusterName string, checkOwned bool, sess client.ConfigProvider) {
-	iamClient := iam.New(sess)
+	iamClient := iam.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 	input := &iam.GetRoleInput{
 		RoleName: aws.String(roleName),
 	}
@@ -133,7 +133,7 @@ func VerifyRoleExistsAndOwned(roleName string, clusterName string, checkOwned bo
 }
 
 func verifyManagedNodeGroup(eksClusterName, nodeGroupName string, checkOwned bool, sess client.ConfigProvider) {
-	eksClient := eks.New(sess)
+	eksClient := eks.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 	input := &eks.DescribeNodegroupInput{
 		ClusterName:   aws.String(eksClusterName),
 		NodegroupName: aws.String(nodeGroupName),

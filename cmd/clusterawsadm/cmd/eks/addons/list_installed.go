@@ -19,6 +19,7 @@ package addons
 import (
 	"fmt"
 	"os"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -65,7 +66,7 @@ func listInstalledAddons(region, clusterName, printerType *string) error {
 		return err
 	}
 
-	eksClient := eks.New(sess)
+	eksClient := eks.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 
 	input := &eks.ListAddonsInput{
 		ClusterName: clusterName,
