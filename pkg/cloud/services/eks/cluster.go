@@ -509,6 +509,11 @@ func (s *Service) reconcileVpcConfig(vpcConfig *eks.VpcConfigResponse) (*eks.Vpc
 	needsUpdate := !tristate.EqualWithDefault(false, vpcConfig.EndpointPrivateAccess, updatedVpcConfig.EndpointPrivateAccess) ||
 		!tristate.EqualWithDefault(true, vpcConfig.EndpointPublicAccess, updatedVpcConfig.EndpointPublicAccess) ||
 		!publicAccessCIDRsEqual(vpcConfig.PublicAccessCidrs, updatedVpcConfig.PublicAccessCidrs)
+
+	if *updatedVpcConfig.EndpointPublicAccess == false && len(updatedVpcConfig.PublicAccessCidrs) == 0 {
+		updatedVpcConfig.PublicAccessCidrs = []*string{}
+	}
+
 	if needsUpdate {
 		return &eks.VpcConfigRequest{
 			EndpointPublicAccess:  updatedVpcConfig.EndpointPublicAccess,
