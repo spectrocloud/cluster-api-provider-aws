@@ -161,6 +161,12 @@ func (s *Service) updateCAPIKubeconfigSecret(ctx context.Context, configSecret *
 	}
 
 	userName := s.getKubeConfigUserName(*cluster.Name, false)
+
+	if config.AuthInfos[userName] == nil {
+		config.AuthInfos[userName] = &api.AuthInfo{
+			Token: token,
+		}
+	}
 	config.AuthInfos[userName].Token = token
 
 	out, err := clientcmd.Write(*config)
