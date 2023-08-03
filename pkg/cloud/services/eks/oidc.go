@@ -65,6 +65,14 @@ func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.C
 		if err != nil {
 			return errors.Wrap(err, "failed to create OIDC provider")
 		}
+
+		s.scope.ControlPlane.Status.OIDCProvider.ARN = oidcProvider
+		anno := s.scope.ControlPlane.GetAnnotations()
+		anno["aws.spectrocloud.com/oidcProviderArn"] = oidcProvider
+		s.scope.ControlPlane.SetAnnotations(anno)
+		if err := s.scope.PatchObject(); err != nil {
+			return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
+		}
 	}
 
 	s.scope.ControlPlane.Status.OIDCProvider.ARN = oidcProvider
@@ -145,11 +153,18 @@ func (s *Service) reconcileTrustPolicy(ctx context.Context) error {
 }
 
 func (s *Service) deleteOIDCProvider(ctx context.Context) error {
-	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider || s.scope.ControlPlane.Status.OIDCProvider.ARN == "" {
+	anno := s.scope.ControlPlane.GetAnnotations()
+	arn := anno["aws.spectrocloud.com/oidcProviderArn"]
+
+	if arn == "" {
+		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
+	}
+
+	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider || arn == "" {
 		return nil
 	}
 
-	providerARN := s.scope.ControlPlane.Status.OIDCProvider.ARN
+	providerARN := arn
 	if err := s.DeleteOIDCProvider(ctx, &providerARN); err != nil {
 		return errors.Wrap(err, "failed to delete OIDC provider")
 	}
