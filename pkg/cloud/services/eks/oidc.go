@@ -137,12 +137,15 @@ func (s *Service) reconcileTrustPolicy() error {
 }
 
 func (s *Service) deleteOIDCProvider() error {
+
 	anno := s.scope.ControlPlane.GetAnnotations()
 	arn := anno["aws.spectrocloud.com/oidcProviderArn"]
 
 	if arn == "" {
 		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
 	}
+
+	s.scope.V(0).Info("Deleting oidc provider", "arn: ", arn)
 
 	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider || arn == "" {
 		return nil

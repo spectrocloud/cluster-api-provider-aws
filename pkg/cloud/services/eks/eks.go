@@ -67,7 +67,7 @@ func (s *Service) ReconcileControlPlane(ctx context.Context) error {
 
 // DeleteControlPlane deletes the EKS control plane.
 func (s *Service) DeleteControlPlane() (err error) {
-	s.scope.V(2).Info("Deleting EKS control plane")
+	s.scope.V(0).Info("Deleting EKS control plane")
 
 	// EKS Cluster
 	if err := s.deleteCluster(); err != nil {
@@ -84,7 +84,7 @@ func (s *Service) DeleteControlPlane() (err error) {
 		return err
 	}
 
-	s.scope.V(2).Info("Delete EKS control plane completed successfully")
+	s.scope.V(0).Info("Delete EKS control plane completed successfully")
 	return nil
 }
 
