@@ -439,8 +439,6 @@ spec:
         env:
         - name: AWS_SHARED_CREDENTIALS_FILE
           value: /home/.aws/credentials
-        - name: AWS_USE_FIPS_ENDPOINT
-          value: "true"
         image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
         imagePullPolicy: Always
         name: manager
