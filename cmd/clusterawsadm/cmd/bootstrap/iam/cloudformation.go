@@ -108,7 +108,7 @@ func createCloudFormationStackCmd() *cobra.Command {
 				return err
 			}
 
-			cfnSvc := cloudformation.NewService(cfn.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov())))
+			cfnSvc := cloudformation.NewService(cfn.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWS())))
 
 			err = cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
 			if err != nil {
@@ -154,7 +154,7 @@ func deleteCloudFormationStackCmd() *cobra.Command {
 				return err
 			}
 
-			cfnSvc := cloudformation.NewService(cfn.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov())))
+			cfnSvc := cloudformation.NewService(cfn.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWS())))
 
 			err = cfnSvc.DeleteStack(t.Spec.StackName, nil)
 			if err != nil {

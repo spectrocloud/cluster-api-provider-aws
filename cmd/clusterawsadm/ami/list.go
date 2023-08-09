@@ -82,7 +82,7 @@ func List(input ListInput) (*amiv1.AWSAMIList, error) {
 			return nil, err
 		}
 
-		ec2Client := ec2.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
+		ec2Client := ec2.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWS()))
 		imagesForRegion, err := getAllImages(ec2Client, input.OwnerID)
 		if err != nil {
 			return nil, err

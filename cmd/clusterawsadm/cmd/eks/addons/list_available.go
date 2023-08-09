@@ -66,7 +66,7 @@ func listAvailableAddons(region, clusterName, printerType *string) error {
 		return err
 	}
 
-	eksClient := eks.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
+	eksClient := eks.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWS()))
 
 	input := &eks.ListAddonsInput{
 		ClusterName: clusterName,

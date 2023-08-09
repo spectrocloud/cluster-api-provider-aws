@@ -44,7 +44,7 @@ func ListAWSResource(region, clusterName *string) (AWSResourceList, error) {
 		return resourceList, err
 	}
 
-	resourceClient := rgapi.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
+	resourceClient := rgapi.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWS()))
 	input := &rgapi.GetResourcesInput{
 		TagFilters: []*rgapi.TagFilter{},
 	}
