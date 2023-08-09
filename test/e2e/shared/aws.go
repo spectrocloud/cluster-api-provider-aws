@@ -574,7 +574,7 @@ func deleteCloudFormationStack(prov client.ConfigProvider, t *cfn_bootstrap.Temp
 func ensureTestImageUploaded(e2eCtx *E2EContext) error {
 	sessionForRepo := NewAWSSessionRepoWithKey(e2eCtx.Environment.BootstrapAccessKey)
 
-	ecrSvc := ecrpublic.New(sessionForRepo)
+	ecrSvc := ecrpublic.New(sessionForRepo, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 	repoName := ""
 	if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 		output, err := ecrSvc.CreateRepository(&ecrpublic.CreateRepositoryInput{
@@ -785,7 +785,7 @@ func conformanceImageID(e2eCtx *E2EContext) string {
 }
 
 func GetAvailabilityZones(sess client.ConfigProvider) []*ec2.AvailabilityZone {
-	ec2Client := ec2.New(sess)
+	ec2Client := ec2.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 	azs, err := ec2Client.DescribeAvailabilityZones(nil)
 	Expect(err).NotTo(HaveOccurred())
 	return azs.AvailabilityZones
@@ -802,7 +802,7 @@ type ServiceQuota struct {
 
 func EnsureServiceQuotas(sess client.ConfigProvider) map[string]*ServiceQuota {
 	limitedResources := getLimitedResources()
-	serviceQuotasClient := servicequotas.New(sess)
+	serviceQuotasClient := servicequotas.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWSGov()))
 
 	for k, v := range limitedResources {
 		out, err := serviceQuotasClient.GetServiceQuota(&servicequotas.GetServiceQuotaInput{
