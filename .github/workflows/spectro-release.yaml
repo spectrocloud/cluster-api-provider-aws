@@ -17,7 +17,7 @@ jobs:
       SPECTRO_VERSION: ${{ github.event.inputs.release_version }}
     steps:
       -
-        uses: mukunku/tag-exists-action@v1.2.0
+        uses: mukunku/tag-exists-action@v1.3.0
         id: checkTag
         with:
           tag: spectro-v${{ github.event.inputs.release_version }}
