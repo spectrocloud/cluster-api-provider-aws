@@ -96,7 +96,6 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 		}
 
 		log.V(1).Info("PaletteEndpointResolverForAWSGov", "resolve: ", resolve)
-
 		return resolve, nil
 	}
 
