@@ -19,6 +19,7 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			if err != nil {
 				log.Error(err, "Failed to unset env AWS_USE_FIPS_ENDPOINT")
 			}
+			isFipsEndpointEnabled.fipsEndpoint = "false"
 		}
 
 		resolve, err := endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
