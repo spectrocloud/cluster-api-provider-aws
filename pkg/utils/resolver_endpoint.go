@@ -3,20 +3,32 @@ package utils
 import (
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"k8s.io/klog/v2/klogr"
+	"os"
 )
+
+var isFipsEndpointEnabled struct {
+	fipsEndpoint string
+}
 
 func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 
 	log := klogr.New()
 	resolver := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
+		if isFipsEndpointEnabled.fipsEndpoint == "true" && isEnvFipsEndpointNeedToReset(region) {
+			err := os.Unsetenv("AWS_USE_FIPS_ENDPOINT")
+			if err != nil {
+				log.Error(err, "Failed to unset env AWS_USE_FIPS_ENDPOINT")
+			}
+		}
 
 		resolve, err := endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
 		if err != nil {
 			return resolve, err
 		}
 
-		log.V(0).Info("CustomEndpointResolverForAWS", " region: ", region, " service: ", service, " optFns: ", optFns)
+		log.V(1).Info("PaletteEndpointResolverForAWSGov", " region: ", region, " service: ", service, " optFns: ", optFns)
 
+		// Handle only for US-GOV regions exceptions
 		switch region {
 		case endpoints.UsGovEast1RegionID:
 			switch service {
@@ -83,9 +95,23 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			}
 		}
 
-		log.V(0).Info("CustomEndpointResolverForAWS", "resolve: ", resolve)
+		log.V(1).Info("PaletteEndpointResolverForAWSGov", "resolve: ", resolve)
+
 		return resolve, nil
 	}
 
 	return resolver
+}
+
+func isEnvFipsEndpointNeedToReset(region string) bool {
+	switch region {
+	case endpoints.UsEast1RegionID, endpoints.UsEast2RegionID, endpoints.UsWest1RegionID, endpoints.UsWest2RegionID, endpoints.UsGovEast1RegionID, endpoints.UsGovWest1RegionID:
+	default:
+		return true
+	}
+	return false
+}
+
+func init() {
+	isFipsEndpointEnabled.fipsEndpoint = os.Getenv("AWS_USE_FIPS_ENDPOINT")
 }
