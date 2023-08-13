@@ -26,7 +26,7 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			return resolve, err
 		}
 
-		log.V(1).Info("PaletteEndpointResolverForAWSGov", " region: ", region, " service: ", service, " optFns: ", optFns)
+		log.V(1).Info("CustomEndpointResolverForAWS", " region: ", region, " service: ", service, " optFns: ", optFns)
 
 		// Handle only for US-GOV regions exceptions
 		switch region {
@@ -95,7 +95,7 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			}
 		}
 
-		log.V(1).Info("PaletteEndpointResolverForAWSGov", "resolve: ", resolve)
+		log.V(1).Info("CustomEndpointResolverForAWS", "resolve: ", resolve)
 		return resolve, nil
 	}
 
