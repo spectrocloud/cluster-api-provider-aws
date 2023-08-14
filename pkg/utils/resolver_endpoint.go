@@ -12,13 +12,6 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 
 	log := klogr.New()
 	resolver := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
-		if isFipsEndpointEnabled && isEnvFipsEndpointNeedToReset(region) {
-			err := os.Unsetenv("AWS_USE_FIPS_ENDPOINT")
-			if err != nil {
-				log.Error(err, "Failed to unset env AWS_USE_FIPS_ENDPOINT")
-			}
-			isFipsEndpointEnabled = false
-		}
 
 		resolve, err := endpoints.DefaultResolver().EndpointFor(service, region, optFns...)
 		if err != nil {
@@ -26,7 +19,6 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 		}
 
 		log.V(1).Info("CustomEndpointResolverForAWS", " region: ", region, " service: ", service, " optFns: ", optFns)
-
 		// Handle only for US-GOV regions exceptions
 		switch region {
 		case endpoints.UsGovEast1RegionID:
@@ -94,11 +86,26 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			}
 		}
 
-		log.V(1).Info("CustomEndpointResolverForAWS", "resolve: ", resolve)
+		log.V(0).Info("CustomEndpointResolverForAWS", "resolve: ", resolve)
 		return resolve, nil
 	}
 
 	return resolver
+}
+
+func ResetFipsEndpointEnv(region string) error {
+	log := klogr.New()
+	if isFipsEndpointEnabled && isEnvFipsEndpointNeedToReset(region) {
+		log.V(1).Info("ResetFipsEndpointEnv required for non fips regions")
+		err := os.Unsetenv("AWS_USE_FIPS_ENDPOINT")
+		if err != nil {
+			log.Error(err, "Failed to unset env AWS_USE_FIPS_ENDPOINT")
+			return err
+		}
+		isFipsEndpointEnabled = false
+	}
+
+	return nil
 }
 
 func isEnvFipsEndpointNeedToReset(region string) bool {
@@ -111,8 +118,8 @@ func isEnvFipsEndpointNeedToReset(region string) bool {
 }
 
 func init() {
-	isenabled := os.Getenv("AWS_USE_FIPS_ENDPOINT")
-	if isenabled == "true" {
+	isEnabled := os.Getenv("AWS_USE_FIPS_ENDPOINT")
+	if isEnabled == "true" {
 		isFipsEndpointEnabled = true
 	}
 }
