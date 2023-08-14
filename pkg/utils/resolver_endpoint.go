@@ -3,7 +3,10 @@ package utils
 import (
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"k8s.io/klog/v2/klogr"
+	"os"
 )
+
+var isFIPSEndpointEnabled bool
 
 func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 
@@ -15,8 +18,8 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			return resolve, err
 		}
 
-		log.V(0).Info("CustomEndpointResolverForAWS", " region: ", region, " service: ", service, " optFns: ", optFns)
-
+		log.V(1).Info("CustomEndpointResolverForAWS", " region: ", region, " service: ", service, " optFns: ", optFns)
+		// Handle only for US-GOV regions exceptions
 		switch region {
 		case endpoints.UsGovEast1RegionID:
 			switch service {
@@ -79,7 +82,31 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			case "autoscaling-plans":
 				resolve.URL = "https://autoscaling-plans.us-gov-west-1.amazonaws.com"
 			case "autoscaling":
-				resolve.URL = "https://ec2autoscaling.us-gov-west-1.amazonaws.com"
+				resolve.URL = "https://autoscaling.us-gov-west-1.amazonaws.com"
+			}
+
+		case endpoints.UsEast1RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-east-1.amazonaws.com"
+			}
+
+		case endpoints.UsEast2RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-east-2.amazonaws.com"
+			}
+
+		case endpoints.UsWest1RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-west-1.amazonaws.com"
+			}
+
+		case endpoints.UsWest2RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-west-2.amazonaws.com"
 			}
 		}
 
@@ -88,4 +115,35 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 	}
 
 	return resolver
+}
+
+func ResetFipsEndpointEnv(region string) error {
+	log := klogr.New()
+	if isFIPSEndpointEnabled && shouldResetFIPSEndpointEnv(region) {
+		log.V(1).Info("ResetFipsEndpointEnv required for non fips regions")
+		err := os.Unsetenv("AWS_USE_FIPS_ENDPOINT")
+		if err != nil {
+			log.Error(err, "Failed to unset env AWS_USE_FIPS_ENDPOINT")
+			return err
+		}
+		isFIPSEndpointEnabled = false
+	}
+
+	return nil
+}
+
+func shouldResetFIPSEndpointEnv(region string) bool {
+	switch region {
+	case endpoints.UsEast1RegionID, endpoints.UsEast2RegionID, endpoints.UsWest1RegionID, endpoints.UsWest2RegionID, endpoints.UsGovEast1RegionID, endpoints.UsGovWest1RegionID:
+	default:
+		return true
+	}
+	return false
+}
+
+func init() {
+	isEnabled := os.Getenv("AWS_USE_FIPS_ENDPOINT")
+	if isEnabled == "true" {
+		isFIPSEndpointEnabled = true
+	}
 }
