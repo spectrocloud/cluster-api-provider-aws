@@ -82,7 +82,31 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 			case "autoscaling-plans":
 				resolve.URL = "https://autoscaling-plans.us-gov-west-1.amazonaws.com"
 			case "autoscaling":
-				resolve.URL = "https://ec2autoscaling.us-gov-west-1.amazonaws.com"
+				resolve.URL = "https://autoscaling.us-gov-west-1.amazonaws.com"
+			}
+
+		case endpoints.UsEast1RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-east-1.amazonaws.com"
+			}
+
+		case endpoints.UsEast2RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-east-2.amazonaws.com"
+			}
+
+		case endpoints.UsWest1RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-west-1.amazonaws.com"
+			}
+
+		case endpoints.UsWest2RegionID:
+			switch service {
+			case "autoscaling":
+				resolve.URL = "https://autoscaling.us-west-2.amazonaws.com"
 			}
 		}
 
