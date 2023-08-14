@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-var isFipsEndpointEnabled bool
+var isFIPSEndpointEnabled bool
 
 func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 
@@ -95,20 +95,20 @@ func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 
 func ResetFipsEndpointEnv(region string) error {
 	log := klogr.New()
-	if isFipsEndpointEnabled && isEnvFipsEndpointNeedToReset(region) {
+	if isFIPSEndpointEnabled && shouldResetFIPSEndpointEnv(region) {
 		log.V(1).Info("ResetFipsEndpointEnv required for non fips regions")
 		err := os.Unsetenv("AWS_USE_FIPS_ENDPOINT")
 		if err != nil {
 			log.Error(err, "Failed to unset env AWS_USE_FIPS_ENDPOINT")
 			return err
 		}
-		isFipsEndpointEnabled = false
+		isFIPSEndpointEnabled = false
 	}
 
 	return nil
 }
 
-func isEnvFipsEndpointNeedToReset(region string) bool {
+func shouldResetFIPSEndpointEnv(region string) bool {
 	switch region {
 	case endpoints.UsEast1RegionID, endpoints.UsEast2RegionID, endpoints.UsWest1RegionID, endpoints.UsWest2RegionID, endpoints.UsGovEast1RegionID, endpoints.UsGovWest1RegionID:
 	default:
@@ -120,6 +120,6 @@ func isEnvFipsEndpointNeedToReset(region string) bool {
 func init() {
 	isEnabled := os.Getenv("AWS_USE_FIPS_ENDPOINT")
 	if isEnabled == "true" {
-		isFipsEndpointEnabled = true
+		isFIPSEndpointEnabled = true
 	}
 }
