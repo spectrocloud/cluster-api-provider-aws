@@ -90,7 +90,6 @@ func (s *Service) ReconcileBucket() error {
 	}
 
 	if err := s.ensureBucketAccess(bucketName); err != nil {
-		s.scope.Info("TESTING.... ensureBucketAccess", "bucketName: ", bucketName)
 		return errors.Wrap(err, "ensuring bucket ACL ")
 	}
 

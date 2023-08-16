@@ -158,9 +158,7 @@ func CustomEndpointResolverForAWSIRSA(s3region string) endpoints.ResolverFunc {
 			return resolve, err
 		}
 
-		log.V(0).Info("CustomEndpointResolverForAWSIRSA", " region: ", s3region, " service: ", service, " optFns: ", optFns)
-
-		log.V(0).Info("CustomEndpointResolverForAWSIRSA", "resolve: ", resolve)
+		log.V(1).Info("CustomEndpointResolverForAWSIRSA", "resolve: ", resolve)
 		return resolve, nil
 	}
 
