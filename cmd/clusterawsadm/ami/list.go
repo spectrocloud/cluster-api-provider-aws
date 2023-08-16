@@ -18,6 +18,7 @@ package ami
 
 import (
 	"fmt"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -81,7 +82,7 @@ func List(input ListInput) (*amiv1.AWSAMIList, error) {
 			return nil, err
 		}
 
-		ec2Client := ec2.New(sess)
+		ec2Client := ec2.New(sess, aws.NewConfig().WithEndpointResolver(utils.CustomEndpointResolverForAWS()))
 		imagesForRegion, err := getAllImages(ec2Client, input.OwnerID)
 		if err != nil {
 			return nil, err
