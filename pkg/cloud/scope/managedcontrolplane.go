@@ -303,6 +303,11 @@ func (s *ManagedControlPlaneScope) Bucket() *infrav1.S3Bucket {
 	return nil // no s3 bucket for managed clusters
 }
 
+// ControlPlaneLoadBalancer returns the AWSLoadBalancerSpec.
+func (s *ManagedControlPlaneScope) ControlPlaneLoadBalancer() *infrav1.AWSLoadBalancerSpec {
+	return nil
+}
+
 // AssociateOIDCProvider returns if the cluster should have an OIDC Provider Associated.
 func (s *ManagedControlPlaneScope) AssociateOIDCProvider() bool {
 	return s.ControlPlane.Spec.AssociateOIDCProvider

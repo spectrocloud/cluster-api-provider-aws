@@ -44,6 +44,9 @@ func (src *AWSCluster) ConvertTo(dstRaw conversion.Hub) error {
 		}
 		restoreControlPlaneLoadBalancer(restored.Spec.ControlPlaneLoadBalancer, dst.Spec.ControlPlaneLoadBalancer)
 	}
+	for role, sg := range restored.Status.Network.SecurityGroups {
+		dst.Status.Network.SecurityGroups[role] = sg
+	}
 
 	dst.Spec.S3Bucket = restored.Spec.S3Bucket
 
@@ -55,6 +58,7 @@ func (src *AWSCluster) ConvertTo(dstRaw conversion.Hub) error {
 func restoreControlPlaneLoadBalancer(restored, dst *infrav1.AWSLoadBalancerSpec) {
 	dst.Name = restored.Name
 	dst.HealthCheckProtocol = restored.HealthCheckProtocol
+	dst.IngressRules = restored.IngressRules
 }
 
 // ConvertFrom converts the v1beta1 AWSCluster receiver to a v1alpha4 AWSCluster.
