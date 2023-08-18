@@ -275,7 +275,7 @@ func (s *Service) isBucketDeleteRequired() bool {
 	})
 
 	if len(bucketTagging.TagSet) == 0 {
-		s.scope.Info("Skipping bucket delete for external bucket")
+		s.scope.Info("Skipping deletion for external bucket")
 		return false
 	}
 
