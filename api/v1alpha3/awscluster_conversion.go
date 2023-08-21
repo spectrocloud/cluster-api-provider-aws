@@ -136,3 +136,7 @@ func Convert_v1beta1_AWSClusterSpec_To_v1alpha3_AWSClusterSpec(in *infrav1.AWSCl
 func Convert_v1beta1_AWSClusterStatus_To_v1alpha3_AWSClusterStatus(in *infrav1.AWSClusterStatus, out *AWSClusterStatus, s apiconversion.Scope) error {
 	return autoConvert_v1beta1_AWSClusterStatus_To_v1alpha3_AWSClusterStatus(in, out, s)
 }
+
+func Convert_v1beta1_IngressRule_To_v1alpha3_IngressRule(in *infrav1.IngressRule, out *IngressRule, s apiconversion.Scope) error {
+	return autoConvert_v1beta1_IngressRule_To_v1alpha3_IngressRule(in, out, s)
+}
