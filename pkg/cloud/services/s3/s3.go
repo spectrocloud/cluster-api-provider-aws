@@ -353,26 +353,23 @@ func (s *Service) ensureBucketAccess(bucketName string) error {
 			return errors.Wrap(err, "enabling bucket public access in different region")
 		}
 		if aerr.Code() == "BucketRegionError" {
-
-			//// TODO: Should we try to modify access and policy for bucket or just avoid doing modification without errors
-			//s.scope.Info("accessBucketFromDifferentRegion BucketRegionError")
-			//s3Client, err := s.accessBucketFromDifferentRegion()
-			//if err != nil {
-			//	s.scope.Info("accessBucketFromDifferentRegion ", "bucket: ", s.scope.Bucket().Name, err)
-			//	return errors.Wrap(err, "enabling bucket public access in different region")
-			//}
-			//_, err = s3Client.PutPublicAccessBlock(input)
-			//if err == nil {
-			//	s.scope.Info("accessBucketFromDifferentRegion PutPublicAccessBlock", "err: ", err)
-			//	return nil
-			//}
+			// TODO: Should we try to modify access and policy for bucket or just avoid doing modification without errors
+			s.scope.Info("accessBucketFromDifferentRegion BucketRegionError")
+			s3Client, err := s.accessBucketFromDifferentRegion()
+			if err != nil {
+				s.scope.Info("Error while accessing bucket from different region ", "bucket: ", s.scope.Bucket().Name, err)
+				return errors.Wrap(err, "enabling bucket public access in different region")
+			}
+			_, err = s3Client.PutPublicAccessBlock(input)
+			if err == nil {
+				s.scope.V(1).Info("Accessing bucket from different region, PutPublicAccessBlock")
+				return nil
+			}
 			return nil
 		}
 		return errors.Wrap(err, "enabling bucket public access")
 	}
-
 	s.scope.V(4).Info("Updated bucket ACL to allow public access", "bucket_name", bucketName)
-
 	return nil
 }
 
@@ -394,18 +391,18 @@ func (s *Service) ensureBucketPolicy(bucketName string) error {
 		}
 		if aerr.Code() == "BucketRegionError" {
 
-			//// TODO: Should we try to modify access and policy for bucket or just avoid doing modification without errors
-			//s.scope.Info("accessBucketFromDifferentRegion BucketRegionError")
-			//s3Client, err := s.accessBucketFromDifferentRegion()
-			//if err != nil {
-			//	s.scope.Info("accessBucketFromDifferentRegion ", "bucket: ", s.scope.Bucket().Name, err)
-			//	return errors.Wrap(err, "enabling bucket public access in different region")
-			//}
-			//_, err = s3Client.PutPublicAccessBlock(input)
-			//if err == nil {
-			//	s.scope.Info("accessBucketFromDifferentRegion PutPublicAccessBlock", "err: ", err)
-			//	return nil
-			//}
+			// TODO: Should we try to modify access and policy for bucket or just avoid doing modification without errors
+			s.scope.Info("Access bucket from different region")
+			s3Client, err := s.accessBucketFromDifferentRegion()
+			if err != nil {
+				s.scope.Info("Error while accessing bucket from different region ", "bucket: ", s.scope.Bucket().Name, err)
+				return errors.Wrap(err, "enabling bucket public access in different region")
+			}
+			_, err = s3Client.PutBucketPolicy(input)
+			if err == nil {
+				s.scope.V(1).Info("Accessing bucket from different region PutBucketPolicy")
+				return nil
+			}
 			return nil
 		}
 		return errors.Wrap(err, "creating S3 bucket policy")
