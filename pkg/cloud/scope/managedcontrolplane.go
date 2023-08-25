@@ -298,6 +298,10 @@ func (s *ManagedControlPlaneScope) Bastion() *infrav1.Bastion {
 	return &s.ControlPlane.Spec.Bastion
 }
 
+func (s *ManagedControlPlaneScope) ControlPlaneLoadBalancer() *infrav1.AWSLoadBalancerSpec {
+	return nil
+}
+
 // Bucket returns the s3 bucket details.
 func (s *ManagedControlPlaneScope) Bucket() *infrav1.S3Bucket {
 	return nil // no s3 bucket for managed clusters
