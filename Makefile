@@ -99,7 +99,7 @@ ifeq ($(FIPS_ENABLE),yes)
   RELEASE_LOC := release-fips
 endif
 
-SPECTRO_VERSION ?= 4.0.0-dev
+SPECTRO_VERSION ?= 4.0.0-dev-13
 TAG ?= v1.5.2-spectro-${SPECTRO_VERSION}
 ARCH ?= amd64
 # ALL_ARCH = amd64 arm arm64 ppc64le s390x
@@ -129,7 +129,7 @@ RBAC_ROOT ?= $(MANIFEST_ROOT)/rbac
 PULL_POLICY ?= Always
 
 # Set build time variables including version details
-LDFLAGS := $(shell source ./hack/version.sh; version::ldflags)
+#LDFLAGS := $(shell source ./hack/version.sh; version::ldflags)
 
 # Set USE_EXISTING_CLUSTER to use an existing kubernetes context
 USE_EXISTING_CLUSTER ?= "false"
@@ -213,7 +213,8 @@ generate-go-apis: ## Alias for .build/generate-go-apis
 .build: ## Create the .build folder
 	mkdir -p .build
 
-.build/generate-go-apis: .build $(API_FILES) $(CONTROLLER_GEN) $(DEFAULTER_GEN) $(CONVERSION_GEN) ## Generate all Go api files
+manifests: .build $(API_FILES) $(CONTROLLER_GEN) $(DEFAULTER_GEN) $(CONVERSION_GEN) ## Generate all Go api files
+	echo "GeneratingBinaries"
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		paths=./$(EXP_DIR)/api/... \
@@ -265,7 +266,8 @@ generate-go-apis: ## Alias for .build/generate-go-apis
 		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
 
 	$(CONVERSION_GEN) \
-		--input-dirs=./$(EXP_DIR)/api/v1alpha3 \
+		a
+
 		--input-dirs=./$(EXP_DIR)/api/v1alpha4 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api-provider-aws/api/v1alpha3 \
 		--extra-peer-dirs=sigs.k8s.io/cluster-api-provider-aws/api/v1alpha4 \

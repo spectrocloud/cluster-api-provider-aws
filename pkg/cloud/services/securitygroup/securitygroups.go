@@ -172,6 +172,7 @@ func (s *Service) ReconcileSecurityGroups() error {
 
 		toAuthorize := want.Difference(current)
 		if len(toAuthorize) > 0 {
+			s.scope.V(0).Info("SPECTRO::::::", "want", want, "current", current, "toAuthorize", toAuthorize)
 			if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 				if err := s.authorizeSecurityGroupIngressRules(sg.ID, toAuthorize); err != nil {
 					return false, err
@@ -517,6 +518,20 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 		}
 		if s.scope.Bastion().Enabled {
 			rules = append(rules, s.defaultSSHIngressRule(s.scope.SecurityGroups()[infrav1.SecurityGroupBastion].ID))
+		}
+		if s.scope.ControlPlaneLoadBalancer() != nil {
+			ingressRules := s.scope.ControlPlaneLoadBalancer().IngressRules
+			for i := range ingressRules {
+				if ingressRules[i].SourceSecurityGroupIDs == nil && ingressRules[i].SourceSecurityGroupRoles == nil { // if the rule doesn't have a source security group, use the control plane security group
+					ingressRules[i].SourceSecurityGroupIDs = []string{s.scope.SecurityGroups()[infrav1.SecurityGroupControlPlane].ID}
+					continue
+				}
+
+				for _, sourceSGRole := range ingressRules[i].SourceSecurityGroupRoles {
+					ingressRules[i].SourceSecurityGroupIDs = append(ingressRules[i].SourceSecurityGroupIDs, s.scope.SecurityGroups()[sourceSGRole].ID)
+				}
+			}
+			rules = append(rules, s.scope.ControlPlaneLoadBalancer().IngressRules...)
 		}
 		return append(cniRules, rules...), nil
 
