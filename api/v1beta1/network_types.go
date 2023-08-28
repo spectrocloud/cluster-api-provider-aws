@@ -448,7 +448,7 @@ type IngressRule struct {
 	// The security group role to allow access from. Cannot be specified with CidrBlocks.
 	// The field will be combined with source security group IDs if specified.
 	// +optional
-	SourceSecurityGroupRoles []SecurityGroupRole `json:"sourceSecurityGroupRoles,omitempty"`
+	//SourceSecurityGroupRoles []SecurityGroupRole `json:"sourceSecurityGroupRoles,omitempty"`
 }
 
 // String returns a string representation of the ingress rule.

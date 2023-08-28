@@ -1703,22 +1703,6 @@ spec:
                           items:
                             type: string
                           type: array
-                        sourceSecurityGroupRoles:
-                          description: The security group role to allow access from.
-                            Cannot be specified with CidrBlocks. The field will be
-                            combined with source security group IDs if specified.
-                          items:
-                            description: SecurityGroupRole defines the unique role
-                              of a security group.
-                            enum:
-                            - bastion
-                            - node
-                            - controlplane
-                            - apiserver-lb
-                            - lb
-                            - node-eks-additional
-                            type: string
-                          type: array
                         toPort:
                           description: ToPort is the end of port range.
                           format: int64
@@ -2387,23 +2371,6 @@ spec:
                                 description: The security group id to allow access
                                   from. Cannot be specified with CidrBlocks.
                                 items:
-                                  type: string
-                                type: array
-                              sourceSecurityGroupRoles:
-                                description: The security group role to allow access
-                                  from. Cannot be specified with CidrBlocks. The field
-                                  will be combined with source security group IDs
-                                  if specified.
-                                items:
-                                  description: SecurityGroupRole defines the unique
-                                    role of a security group.
-                                  enum:
-                                  - bastion
-                                  - node
-                                  - controlplane
-                                  - apiserver-lb
-                                  - lb
-                                  - node-eks-additional
                                   type: string
                                 type: array
                               toPort:

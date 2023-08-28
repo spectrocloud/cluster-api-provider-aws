@@ -381,11 +381,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*v1beta1.IngressRule)(nil), (*IngressRule)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_IngressRule_To_v1alpha3_IngressRule(a.(*v1beta1.IngressRule), b.(*IngressRule), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*Instance)(nil), (*v1beta1.Instance)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha3_Instance_To_v1beta1_Instance(a.(*Instance), b.(*v1beta1.Instance), scope)
 	}); err != nil {
@@ -503,6 +498,11 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddConversionFunc((*v1beta1.AWSMachineTemplateResource)(nil), (*AWSMachineTemplateResource)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_AWSMachineTemplateResource_To_v1alpha3_AWSMachineTemplateResource(a.(*v1beta1.AWSMachineTemplateResource), b.(*AWSMachineTemplateResource), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1beta1.IngressRule)(nil), (*IngressRule)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_IngressRule_To_v1alpha3_IngressRule(a.(*v1beta1.IngressRule), b.(*IngressRule), scope)
 	}); err != nil {
 		return err
 	}
@@ -1779,7 +1779,6 @@ func autoConvert_v1beta1_IngressRule_To_v1alpha3_IngressRule(in *v1beta1.Ingress
 	out.ToPort = in.ToPort
 	out.CidrBlocks = *(*[]string)(unsafe.Pointer(&in.CidrBlocks))
 	out.SourceSecurityGroupIDs = *(*[]string)(unsafe.Pointer(&in.SourceSecurityGroupIDs))
-	// WARNING: in.SourceSecurityGroupRoles requires manual conversion: does not exist in peer-type
 	return nil
 }
 
