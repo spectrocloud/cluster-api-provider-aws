@@ -136,9 +136,9 @@ func (s *Service) ReconcileSecurityGroups() error {
 
 	// Second iteration creates or updates all permissions on the security group to match
 	// the specified ingress rules.
-	for i := range s.scope.SecurityGroups() {
-		sg := s.scope.SecurityGroups()[i]
-		s.scope.V(2).Info("second pass security group reconciliation", "group-id", sg.ID, "name", sg.Name, "role", i)
+	for role := range s.scope.SecurityGroups() {
+		sg := s.scope.SecurityGroups()[role]
+		s.scope.V(2).Info("second pass security group reconciliation", "group-id", sg.ID, "name", sg.Name, "role", role)
 
 		if s.securityGroupIsOverridden(sg.ID) {
 			// skip rule/tag reconciliation on security groups that are overridden, assuming they're managed by another process
@@ -151,14 +151,14 @@ func (s *Service) ReconcileSecurityGroups() error {
 		}
 		current := sg.IngressRules
 
-		want, err := s.getSecurityGroupIngressRules(i)
+		want, err := s.getSecurityGroupIngressRules(role)
 		if err != nil {
 			return err
 		}
 
 		toRevoke := current.Difference(want)
 		if len(toRevoke) > 0 {
-			s.scope.V(0).Info("SPECTRO REVOKE::::::", "want", want, "current", current, "toRevoke", toRevoke)
+			s.scope.V(0).Info("SPECTRO REVOKE::::::", "rule", role, "want", want, "current", current, "toRevoke", toRevoke)
 			if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 				if err := s.revokeSecurityGroupIngressRules(sg.ID, toRevoke); err != nil {
 					return false, err
@@ -173,7 +173,7 @@ func (s *Service) ReconcileSecurityGroups() error {
 
 		toAuthorize := want.Difference(current)
 		if len(toAuthorize) > 0 {
-			s.scope.V(0).Info("SPECTRO AUTHORIZE::::::", "want", want, "current", current, "toAuthorize", toAuthorize)
+			s.scope.V(0).Info("SPECTRO AUTHORIZE::::::", "rule", role, "want", want, "current", current, "toAuthorize", toAuthorize)
 			if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 				if err := s.authorizeSecurityGroupIngressRules(sg.ID, toAuthorize); err != nil {
 					return false, err

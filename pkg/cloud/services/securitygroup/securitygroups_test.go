@@ -495,6 +495,28 @@ func TestAdditionalControlPlaneSecurityGroup(t *testing.T) {
 				SourceSecurityGroupIDs: []string{"test", "node-sg-id"},
 			},
 		},
+		{
+			name: "only ingressRules are specified",
+			controlPlaneLBSpec: &infrav1.AWSLoadBalancerSpec{
+				IngressRules: []infrav1.IngressRule{
+					{
+						Description: "test",
+						Protocol:    infrav1.SecurityGroupProtocolTCP,
+						FromPort:    22,
+						ToPort:      22,
+						CidrBlocks:  []string{"1.2.3.4"},
+					},
+				},
+			},
+			expectedAdditionalIngresRule: infrav1.IngressRule{
+				Description:            "test",
+				Protocol:               infrav1.SecurityGroupProtocolTCP,
+				FromPort:               22,
+				ToPort:                 22,
+				SourceSecurityGroupIDs: []string{"cp-sg-id"},
+				CidrBlocks:             []string{"1.2.3.4"},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -551,6 +573,10 @@ func TestAdditionalControlPlaneSecurityGroup(t *testing.T) {
 
 					if !reflect.DeepEqual(r.SourceSecurityGroupIDs, tc.expectedAdditionalIngresRule.SourceSecurityGroupIDs) {
 						t.Fatalf("Expected source security group IDs %v, got %v", tc.expectedAdditionalIngresRule.SourceSecurityGroupIDs, r.SourceSecurityGroupIDs)
+					}
+
+					if !reflect.DeepEqual(r.CidrBlocks, tc.expectedAdditionalIngresRule.CidrBlocks) {
+						t.Fatalf("Expected cidrBlocks %v, got %v", tc.expectedAdditionalIngresRule.CidrBlocks, r.CidrBlocks)
 					}
 				}
 			}
