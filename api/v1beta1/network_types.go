@@ -29,6 +29,9 @@ type NetworkStatus struct {
 
 	// APIServerELB is the Kubernetes api server classic load balancer.
 	APIServerELB ClassicELB `json:"apiServerElb,omitempty"`
+
+	// NatGatewaysIPs contains the public IPs of the NAT Gateways
+	NatGatewaysIPs []string `json:"natGatewaysIPs,omitempty"`
 }
 
 // ClassicELBScheme defines the scheme of a classic load balancer.

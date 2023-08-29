@@ -588,6 +588,258 @@ func TestAdditionalControlPlaneSecurityGroup(t *testing.T) {
 	}
 }
 
+func TestControlPlaneLoadBalancerIngressRules(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = infrav1.AddToScheme(scheme)
+
+	testCases := []struct {
+		name                string
+		awsCluster          *infrav1.AWSCluster
+		expectedIngresRules infrav1.IngressRules
+	}{
+		{
+			name: "when no ingress rules are passed and nat gateway IPs are not available, the default is set",
+			awsCluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					ControlPlaneLoadBalancer: &infrav1.AWSLoadBalancerSpec{},
+					NetworkSpec: infrav1.NetworkSpec{
+						VPC: infrav1.VPCSpec{
+							CidrBlock: "10.0.0.0/16",
+						},
+					},
+				},
+				Status: infrav1.AWSClusterStatus{},
+			},
+			expectedIngresRules: infrav1.IngressRules{
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{services.AnyIPv4CidrBlock},
+				},
+			},
+		},
+		{
+			name: "when no ingress rules are passed, allow the Nat Gateway IPs and default to allow all",
+			awsCluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					ControlPlaneLoadBalancer: &infrav1.AWSLoadBalancerSpec{},
+					NetworkSpec: infrav1.NetworkSpec{
+						VPC: infrav1.VPCSpec{
+							CidrBlock: "10.0.0.0/16",
+						},
+					},
+				},
+				Status: infrav1.AWSClusterStatus{
+					Network: infrav1.NetworkStatus{
+						NatGatewaysIPs: []string{"1.2.3.4"},
+					},
+				},
+			},
+			expectedIngresRules: infrav1.IngressRules{
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"1.2.3.4"},
+				},
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{services.AnyIPv4CidrBlock},
+				},
+			},
+		},
+		{
+			name: "defined rules are used",
+			awsCluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					ControlPlaneLoadBalancer: &infrav1.AWSLoadBalancerSpec{
+						IngressRules: infrav1.IngressRules{
+							{
+								Description: "My custom ingress rule",
+								Protocol:    infrav1.SecurityGroupProtocolTCP,
+								FromPort:    1234,
+								ToPort:      1234,
+								CidrBlocks:  []string{"172.126.1.1/0"},
+							},
+						},
+					},
+					NetworkSpec: infrav1.NetworkSpec{
+						VPC: infrav1.VPCSpec{
+							CidrBlock: "10.0.0.0/16",
+						},
+					},
+				},
+				Status: infrav1.AWSClusterStatus{
+					Network: infrav1.NetworkStatus{
+						NatGatewaysIPs: []string{"1.2.3.4"},
+					},
+				},
+			},
+			expectedIngresRules: infrav1.IngressRules{
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"1.2.3.4"},
+				},
+				infrav1.IngressRule{
+					Description: "My custom ingress rule",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    1234,
+					ToPort:      1234,
+					CidrBlocks:  []string{"172.126.1.1/0"},
+				},
+			},
+		},
+		{
+			name: "when no ingress rules are passed while using internal LB",
+			awsCluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					ControlPlaneLoadBalancer: &infrav1.AWSLoadBalancerSpec{
+						Scheme: &infrav1.ClassicELBSchemeInternal,
+					},
+					NetworkSpec: infrav1.NetworkSpec{
+						VPC: infrav1.VPCSpec{
+							CidrBlock: "10.0.0.0/16",
+						},
+					},
+				},
+			},
+			expectedIngresRules: infrav1.IngressRules{
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"10.0.0.0/16"},
+				},
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{services.AnyIPv4CidrBlock},
+				},
+			},
+		},
+		{
+			name: "defined rules are used while using internal LB",
+			awsCluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					ControlPlaneLoadBalancer: &infrav1.AWSLoadBalancerSpec{
+						IngressRules: infrav1.IngressRules{
+							{
+								Description: "My custom ingress rule",
+								Protocol:    infrav1.SecurityGroupProtocolTCP,
+								FromPort:    1234,
+								ToPort:      1234,
+								CidrBlocks:  []string{"172.126.1.1/0"},
+							},
+						},
+						Scheme: &infrav1.ClassicELBSchemeInternal,
+					},
+					NetworkSpec: infrav1.NetworkSpec{
+						VPC: infrav1.VPCSpec{
+							CidrBlock: "10.0.0.0/16",
+						},
+					},
+				},
+			},
+			expectedIngresRules: infrav1.IngressRules{
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"10.0.0.0/16"},
+				},
+				infrav1.IngressRule{
+					Description: "My custom ingress rule",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    1234,
+					ToPort:      1234,
+					CidrBlocks:  []string{"172.126.1.1/0"},
+				},
+			},
+		},
+		{
+			name: "defined cidrBlock with port 6443 is used",
+			awsCluster: &infrav1.AWSCluster{
+				Spec: infrav1.AWSClusterSpec{
+					ControlPlaneLoadBalancer: &infrav1.AWSLoadBalancerSpec{
+						IngressRules: infrav1.IngressRules{
+							{
+								Description: "My custom ingress rule",
+								Protocol:    infrav1.SecurityGroupProtocolTCP,
+								FromPort:    6443,
+								ToPort:      6443,
+								CidrBlocks:  []string{"172.126.1.1/0"},
+							},
+						},
+					},
+					NetworkSpec: infrav1.NetworkSpec{
+						VPC: infrav1.VPCSpec{
+							CidrBlock: "10.0.0.0/16",
+						},
+					},
+				},
+				Status: infrav1.AWSClusterStatus{
+					Network: infrav1.NetworkStatus{
+						NatGatewaysIPs: []string{"1.2.3.4"},
+					},
+				},
+			},
+			expectedIngresRules: infrav1.IngressRules{
+				infrav1.IngressRule{
+					Description: "Kubernetes API",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"1.2.3.4"},
+				},
+				infrav1.IngressRule{
+					Description: "My custom ingress rule",
+					Protocol:    infrav1.SecurityGroupProtocolTCP,
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"172.126.1.1/0"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cs, err := scope.NewClusterScope(scope.ClusterScopeParams{
+				Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+				Cluster: &clusterv1.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				},
+				AWSCluster: tc.awsCluster,
+			})
+			if err != nil {
+				t.Fatalf("Failed to create test context: %v", err)
+			}
+
+			s := NewService(cs, testSecurityGroupRoles)
+			rules, err := s.getSecurityGroupIngressRules(infrav1.SecurityGroupAPIServerLB)
+			if err != nil {
+				t.Fatalf("Failed to lookup controlplane load balancer security group ingress rules: %v", err)
+			}
+
+			g := NewGomegaWithT(t)
+			g.Expect(rules).To(Equal(tc.expectedIngresRules))
+		})
+	}
+}
+
 func TestDeleteSecurityGroups(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
