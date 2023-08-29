@@ -158,6 +158,7 @@ func (s *Service) ReconcileSecurityGroups() error {
 
 		toRevoke := current.Difference(want)
 		if len(toRevoke) > 0 {
+			s.scope.V(0).Info("SPECTRO REVOKE::::::", "want", want, "current", current, "toRevoke", toRevoke)
 			if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 				if err := s.revokeSecurityGroupIngressRules(sg.ID, toRevoke); err != nil {
 					return false, err
@@ -172,6 +173,7 @@ func (s *Service) ReconcileSecurityGroups() error {
 
 		toAuthorize := want.Difference(current)
 		if len(toAuthorize) > 0 {
+			s.scope.V(0).Info("SPECTRO AUTHORIZE::::::", "want", want, "current", current, "toAuthorize", toAuthorize)
 			if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
 				if err := s.authorizeSecurityGroupIngressRules(sg.ID, toAuthorize); err != nil {
 					return false, err
@@ -518,6 +520,20 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 		if s.scope.Bastion().Enabled {
 			rules = append(rules, s.defaultSSHIngressRule(s.scope.SecurityGroups()[infrav1.SecurityGroupBastion].ID))
 		}
+		if s.scope.ControlPlaneLoadBalancer() != nil {
+			ingressRules := s.scope.ControlPlaneLoadBalancer().IngressRules
+			for i := range ingressRules {
+				if ingressRules[i].SourceSecurityGroupIDs == nil && ingressRules[i].SourceSecurityGroupRoles == nil { // if the rule doesn't have a source security group, use the control plane security group
+					ingressRules[i].SourceSecurityGroupIDs = []string{s.scope.SecurityGroups()[infrav1.SecurityGroupControlPlane].ID}
+					continue
+				}
+
+				for _, sourceSGRole := range ingressRules[i].SourceSecurityGroupRoles {
+					ingressRules[i].SourceSecurityGroupIDs = append(ingressRules[i].SourceSecurityGroupIDs, s.scope.SecurityGroups()[sourceSGRole].ID)
+				}
+			}
+			rules = append(rules, s.scope.ControlPlaneLoadBalancer().IngressRules...)
+		}
 		return append(cniRules, rules...), nil
 
 	case infrav1.SecurityGroupNode:
@@ -553,7 +569,7 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 		}
 		return infrav1.IngressRules{}, nil
 	case infrav1.SecurityGroupAPIServerLB:
-		return infrav1.IngressRules{
+		rules := infrav1.IngressRules{
 			{
 				Description: "Kubernetes API",
 				Protocol:    infrav1.SecurityGroupProtocolTCP,
@@ -561,7 +577,11 @@ func (s *Service) getSecurityGroupIngressRules(role infrav1.SecurityGroupRole) (
 				ToPort:      int64(s.scope.APIServerPort()),
 				CidrBlocks:  []string{services.AnyIPv4CidrBlock},
 			},
-		}, nil
+		}
+		if s.scope.ControlPlaneLoadBalancer() != nil && len(s.scope.ControlPlaneLoadBalancer().IngressRules) > 0 {
+			rules = s.scope.ControlPlaneLoadBalancer().IngressRules
+		}
+		return rules, nil
 	case infrav1.SecurityGroupLB:
 		// We hand this group off to the in-cluster cloud provider, so these rules aren't used
 		return infrav1.IngressRules{}, nil
