@@ -663,6 +663,7 @@ func autoConvert_v1beta1_AWSMachinePoolStatus_To_v1alpha3_AWSMachinePoolStatus(i
 	}
 	out.Instances = *(*[]AWSMachinePoolInstanceStatus)(unsafe.Pointer(&in.Instances))
 	out.LaunchTemplateID = in.LaunchTemplateID
+	// WARNING: in.LaunchTemplateVersion requires manual conversion: does not exist in peer-type
 	out.FailureReason = (*errors.MachineStatusError)(unsafe.Pointer(in.FailureReason))
 	out.FailureMessage = (*string)(unsafe.Pointer(in.FailureMessage))
 	out.ASGStatus = (*ASGStatus)(unsafe.Pointer(in.ASGStatus))
@@ -788,6 +789,7 @@ func autoConvert_v1beta1_AWSManagedMachinePoolSpec_To_v1alpha3_AWSManagedMachine
 	out.ProviderIDList = *(*[]string)(unsafe.Pointer(&in.ProviderIDList))
 	// WARNING: in.CapacityType requires manual conversion: does not exist in peer-type
 	// WARNING: in.UpdateConfig requires manual conversion: does not exist in peer-type
+	// WARNING: in.AWSLaunchTemplate requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -818,6 +820,8 @@ func Convert_v1alpha3_AWSManagedMachinePoolStatus_To_v1beta1_AWSManagedMachinePo
 func autoConvert_v1beta1_AWSManagedMachinePoolStatus_To_v1alpha3_AWSManagedMachinePoolStatus(in *v1beta1.AWSManagedMachinePoolStatus, out *AWSManagedMachinePoolStatus, s conversion.Scope) error {
 	out.Ready = in.Ready
 	out.Replicas = in.Replicas
+	// WARNING: in.LaunchTemplateID requires manual conversion: does not exist in peer-type
+	// WARNING: in.LaunchTemplateVersion requires manual conversion: does not exist in peer-type
 	out.FailureReason = (*errors.MachineStatusError)(unsafe.Pointer(in.FailureReason))
 	out.FailureMessage = (*string)(unsafe.Pointer(in.FailureMessage))
 	if in.Conditions != nil {
