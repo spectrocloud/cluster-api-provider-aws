@@ -1099,12 +1099,217 @@ func TestIngressRulesFromSDKType(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Intermixed rules for same port and protocol",
+			input: &ec2.IpPermission{
+				IpProtocol: aws.String("tcp"),
+				FromPort:   aws.Int64(6443),
+				ToPort:     aws.Int64(6443),
+				IpRanges: []*ec2.IpRange{
+					{
+						CidrIp:      aws.String("0.0.0.0/0"),
+						Description: aws.String("Allow all"),
+					},
+					{
+						CidrIp:      aws.String("18.222.40.247/32"),
+						Description: aws.String("K8s-natRule"),
+					},
+				},
+				UserIdGroupPairs: []*ec2.UserIdGroupPair{
+					{
+						UserId:      aws.String("aws-user-id-1"),
+						GroupId:     aws.String("sg-source-1"),
+						Description: aws.String("sg-cp-1"),
+					},
+				},
+			},
+			expected: infrav1.IngressRules{
+				{
+					Description: "Allow all",
+					Protocol:    "tcp",
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"0.0.0.0/0"},
+				},
+				{
+					Description: "K8s-natRule",
+					Protocol:    "tcp",
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"18.222.40.247/32"},
+				},
+				{
+					Description:            "sg-cp-1",
+					Protocol:               "tcp",
+					FromPort:               6443,
+					ToPort:                 6443,
+					CidrBlocks:             nil,
+					SourceSecurityGroupIDs: []string{"sg-source-1"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewGomegaWithT(t)
 			output := ingressRulesFromSDKType(tc.input)
+
+			g.Expect(output).To(Equal(tc.expected))
+		})
+	}
+}
+
+func TestIngressRulesToSDKType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    infrav1.IngressRules
+		expected []*ec2.IpPermission
+	}{
+		{
+			name: "Intermixed rules for same port and protocol",
+			input: infrav1.IngressRules{
+				{
+					Description: "Allow all",
+					Protocol:    "tcp",
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"0.0.0.0/0"},
+				},
+				{
+					Description: "K8s-natRule",
+					Protocol:    "tcp",
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"18.222.40.247/32"},
+				},
+				{
+					Description:            "sg-cp-1",
+					Protocol:               "tcp",
+					FromPort:               6443,
+					ToPort:                 6443,
+					CidrBlocks:             nil,
+					SourceSecurityGroupIDs: []string{"sg-source-1"},
+				},
+			},
+			expected: []*ec2.IpPermission{
+				{
+					IpProtocol: aws.String("tcp"),
+					FromPort:   aws.Int64(6443),
+					ToPort:     aws.Int64(6443),
+					IpRanges: []*ec2.IpRange{
+						{
+							CidrIp:      aws.String("0.0.0.0/0"),
+							Description: aws.String("Allow all"),
+						},
+						{
+							CidrIp:      aws.String("18.222.40.247/32"),
+							Description: aws.String("K8s-natRule"),
+						},
+					},
+					UserIdGroupPairs: []*ec2.UserIdGroupPair{
+						{
+							//UserId:      aws.String("aws-user-id-1"),
+							GroupId:     aws.String("sg-source-1"),
+							Description: aws.String("sg-cp-1"),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Intermixed rules for different port and protocol",
+			input: infrav1.IngressRules{
+				{
+					Description: "Allow all",
+					Protocol:    "tcp",
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"0.0.0.0/0"},
+				},
+				{
+					Description: "K8s-natRule",
+					Protocol:    "tcp",
+					FromPort:    6443,
+					ToPort:      6443,
+					CidrBlocks:  []string{"18.222.40.247/32"},
+				},
+				{
+					Description: "K8s-natRule",
+					Protocol:    "tcp",
+					FromPort:    1234,
+					ToPort:      1234,
+					CidrBlocks:  []string{"18.222.40.247/32"},
+				},
+				{
+					Description:            "sg-cp-1",
+					Protocol:               "tcp",
+					FromPort:               445,
+					ToPort:                 445,
+					CidrBlocks:             nil,
+					SourceSecurityGroupIDs: []string{"sg-source-1"},
+				},
+				{
+					Description:            "sg-cp-2",
+					Protocol:               "tcp",
+					FromPort:               6443,
+					ToPort:                 6443,
+					CidrBlocks:             nil,
+					SourceSecurityGroupIDs: []string{"sg-source-1"},
+				},
+			},
+			expected: []*ec2.IpPermission{
+				{
+					IpProtocol: aws.String("tcp"),
+					FromPort:   aws.Int64(6443),
+					ToPort:     aws.Int64(6443),
+					IpRanges: []*ec2.IpRange{
+						{
+							CidrIp:      aws.String("0.0.0.0/0"),
+							Description: aws.String("Allow all"),
+						},
+						{
+							CidrIp:      aws.String("18.222.40.247/32"),
+							Description: aws.String("K8s-natRule"),
+						},
+					},
+					UserIdGroupPairs: []*ec2.UserIdGroupPair{
+						{
+							//UserId:      aws.String("aws-user-id-1"),
+							GroupId:     aws.String("sg-source-1"),
+							Description: aws.String("sg-cp-2"),
+						},
+					},
+				},
+				{
+					IpProtocol: aws.String("tcp"),
+					FromPort:   aws.Int64(1234),
+					ToPort:     aws.Int64(1234),
+					IpRanges: []*ec2.IpRange{
+						{
+							CidrIp:      aws.String("18.222.40.247/32"),
+							Description: aws.String("K8s-natRule"),
+						},
+					},
+				},
+				{
+					IpProtocol: aws.String("tcp"),
+					FromPort:   aws.Int64(445),
+					ToPort:     aws.Int64(445),
+					UserIdGroupPairs: []*ec2.UserIdGroupPair{
+						{
+							GroupId:     aws.String("sg-source-1"),
+							Description: aws.String("sg-cp-1"),
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			output := ingressRulesToSDKType(tc.input)
 
 			g.Expect(output).To(Equal(tc.expected))
 		})
