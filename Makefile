@@ -354,7 +354,7 @@ clusterawsadm: ## Build clusterawsadm binary
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build  --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker buildx build --platform linux/${ARCH} --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 	@echo $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-build-all ## Build all the architecture docker images
