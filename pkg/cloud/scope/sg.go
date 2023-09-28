@@ -42,4 +42,16 @@ type SGScope interface {
 
 	// Bastion returns the bastion details for the cluster.
 	Bastion() *infrav1.Bastion
+
+	// ControlPlaneLoadBalancer returns the AWSLoadBalancerSpec.
+	ControlPlaneLoadBalancer() *infrav1.AWSLoadBalancerSpec
+
+	// SetNatGatewaysIPs sets the Nat Gateways Public IPs.
+	SetNatGatewaysIPs(ips []string)
+
+	// GetNatGatewaysIPs gets the Nat Gateways Public IPs.
+	GetNatGatewaysIPs() []string
+
+	// NetworkSpec returns cluster network spec.
+	NetworkSpec() *infrav1.NetworkSpec
 }

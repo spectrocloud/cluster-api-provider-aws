@@ -171,6 +171,16 @@ func (s *ManagedControlPlaneScope) Subnets() infrav1.Subnets {
 	return s.ControlPlane.Spec.NetworkSpec.Subnets
 }
 
+// SetNatGatewaysIPs sets the Nat Gateways Public IPs.
+func (s *ManagedControlPlaneScope) SetNatGatewaysIPs(ips []string) {
+	s.ControlPlane.Status.Network.NatGatewaysIPs = ips
+}
+
+// GetNatGatewaysIPs gets the Nat Gateways Public IPs.
+func (s *ManagedControlPlaneScope) GetNatGatewaysIPs() []string {
+	return s.ControlPlane.Status.Network.NatGatewaysIPs
+}
+
 // IdentityRef returns the cluster identityRef.
 func (s *ManagedControlPlaneScope) IdentityRef() *infrav1.AWSIdentityReference {
 	return s.ControlPlane.Spec.IdentityRef
@@ -298,6 +308,10 @@ func (s *ManagedControlPlaneScope) Bastion() *infrav1.Bastion {
 	return &s.ControlPlane.Spec.Bastion
 }
 
+func (s *ManagedControlPlaneScope) ControlPlaneLoadBalancer() *infrav1.AWSLoadBalancerSpec {
+	return nil
+}
+
 // Bucket returns the s3 bucket details.
 func (s *ManagedControlPlaneScope) Bucket() *infrav1.S3Bucket {
 	return nil // no s3 bucket for managed clusters
@@ -414,4 +428,8 @@ func (s *ManagedControlPlaneScope) ServiceCidrs() *clusterv1.NetworkRanges {
 	}
 
 	return nil
+}
+
+func (s *ManagedControlPlaneScope) NetworkSpec() *infrav1.NetworkSpec {
+	return &s.ControlPlane.Spec.NetworkSpec
 }

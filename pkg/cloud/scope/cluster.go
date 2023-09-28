@@ -320,6 +320,16 @@ func (s *ClusterScope) SetFailureDomain(id string, spec clusterv1.FailureDomainS
 	s.AWSCluster.Status.FailureDomains[id] = spec
 }
 
+// SetNatGatewaysIPs sets the Nat Gateways Public IPs.
+func (s *ClusterScope) SetNatGatewaysIPs(ips []string) {
+	s.AWSCluster.Status.Network.NatGatewaysIPs = ips
+}
+
+// GetNatGatewaysIPs gets the Nat Gateways Public IPs.
+func (s *ClusterScope) GetNatGatewaysIPs() []string {
+	return s.AWSCluster.Status.Network.NatGatewaysIPs
+}
+
 // InfraCluster returns the AWS infrastructure cluster or control plane object.
 func (s *ClusterScope) InfraCluster() cloud.ClusterObject {
 	return s.AWSCluster
@@ -391,4 +401,9 @@ func (s *ClusterScope) ImageLookupOrg() string {
 // ImageLookupBaseOS returns the base operating system name to use when looking up AMIs.
 func (s *ClusterScope) ImageLookupBaseOS() string {
 	return s.AWSCluster.Spec.ImageLookupBaseOS
+}
+
+// NetworkSpec returns cluster network spec.
+func (s *ClusterScope) NetworkSpec() *infrav1.NetworkSpec {
+	return &s.AWSCluster.Spec.NetworkSpec
 }

@@ -1051,6 +1051,7 @@ func autoConvert_v1beta1_AWSLoadBalancerSpec_To_v1alpha3_AWSLoadBalancerSpec(in 
 	out.Subnets = *(*[]string)(unsafe.Pointer(&in.Subnets))
 	// WARNING: in.HealthCheckProtocol requires manual conversion: does not exist in peer-type
 	out.AdditionalSecurityGroups = *(*[]string)(unsafe.Pointer(&in.AdditionalSecurityGroups))
+	// WARNING: in.IngressRules requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -1763,6 +1764,7 @@ func autoConvert_v1alpha3_IngressRule_To_v1beta1_IngressRule(in *IngressRule, ou
 	out.ToPort = in.ToPort
 	out.CidrBlocks = *(*[]string)(unsafe.Pointer(&in.CidrBlocks))
 	out.SourceSecurityGroupIDs = *(*[]string)(unsafe.Pointer(&in.SourceSecurityGroupIDs))
+	out.SourceSecurityGroupRoles = *(*[]v1beta1.SecurityGroupRole)(unsafe.Pointer(&in.SourceSecurityGroupRoles))
 	return nil
 }
 
@@ -1778,6 +1780,7 @@ func autoConvert_v1beta1_IngressRule_To_v1alpha3_IngressRule(in *v1beta1.Ingress
 	out.ToPort = in.ToPort
 	out.CidrBlocks = *(*[]string)(unsafe.Pointer(&in.CidrBlocks))
 	out.SourceSecurityGroupIDs = *(*[]string)(unsafe.Pointer(&in.SourceSecurityGroupIDs))
+	out.SourceSecurityGroupRoles = *(*[]SecurityGroupRole)(unsafe.Pointer(&in.SourceSecurityGroupRoles))
 	return nil
 }
 
@@ -1905,6 +1908,7 @@ func autoConvert_v1alpha3_NetworkSpec_To_v1beta1_NetworkSpec(in *NetworkSpec, ou
 	out.Subnets = *(*v1beta1.Subnets)(unsafe.Pointer(&in.Subnets))
 	out.CNI = (*v1beta1.CNISpec)(unsafe.Pointer(in.CNI))
 	out.SecurityGroupOverrides = *(*map[v1beta1.SecurityGroupRole]string)(unsafe.Pointer(&in.SecurityGroupOverrides))
+	out.NodePortCIDRBlocks = *(*[]string)(unsafe.Pointer(&in.NodePortCIDRBlocks))
 	return nil
 }
 
@@ -1920,6 +1924,7 @@ func autoConvert_v1beta1_NetworkSpec_To_v1alpha3_NetworkSpec(in *v1beta1.Network
 	out.Subnets = *(*Subnets)(unsafe.Pointer(&in.Subnets))
 	out.CNI = (*CNISpec)(unsafe.Pointer(in.CNI))
 	out.SecurityGroupOverrides = *(*map[SecurityGroupRole]string)(unsafe.Pointer(&in.SecurityGroupOverrides))
+	out.NodePortCIDRBlocks = *(*[]string)(unsafe.Pointer(&in.NodePortCIDRBlocks))
 	return nil
 }
 

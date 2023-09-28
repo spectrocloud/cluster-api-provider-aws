@@ -223,6 +223,9 @@ type NetworkSpec struct {
 	// This is optional - if not provided new security groups will be created for the cluster
 	// +optional
 	SecurityGroupOverrides map[SecurityGroupRole]string `json:"securityGroupOverrides,omitempty"`
+
+	// NodePortCIDRBlocks is a set of allowedCIDRBlocks to use for cluster instances
+	NodePortCIDRBlocks []string `json:"nodePortCIDRBlocks,omitempty"`
 }
 
 // VPCSpec configures an AWS VPC.
@@ -499,6 +502,8 @@ type IngressRule struct {
 	// The security group id to allow access from. Cannot be specified with CidrBlocks.
 	// +optional
 	SourceSecurityGroupIDs []string `json:"sourceSecurityGroupIds,omitempty"`
+
+	SourceSecurityGroupRoles []SecurityGroupRole `json:"sourceSecurityGroupRoles,omitempty"`
 }
 
 // String returns a string representation of the ingress rule.
