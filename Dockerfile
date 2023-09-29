@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.1-experimental
-
 # Copyright 2019 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +13,9 @@
 # limitations under the License.
 
 # Build the manager binary
-ARG builder_image
-FROM ${builder_image} as toolchain
-
+ARG BUILDER_GOLANG_VERSION
+# First stage: build the executable.
+FROM gcr.io/spectro-images-public/golang:${BUILDER_GOLANG_VERSION}-alpine as toolchain
 # Run this with docker build --build_arg $(go env GOPROXY) to override the goproxy
 ARG goproxy=https://proxy.golang.org
 ENV GOPROXY=$goproxy
