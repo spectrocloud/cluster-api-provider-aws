@@ -10,12 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: gcr.io/spectro-dev-public/bulwark/gosec:latest
-      env:
-        REPO: ${{ github.event.repository.name }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      credentials:
-        username: _json_key
-        password: ${{ secrets.GCR_SPCD_JSON_KEY }}
     steps:
 
       - name: run-gosec-scan
