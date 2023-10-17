@@ -12,8 +12,6 @@ jobs:
       image: gcr.io/spectro-dev-public/bulwark/gitleaks:latest
       env:
         REPO: ${{ github.event.repository.name }}
-        ref: ${{ github.event.pull_request.head.ref }}
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITLEAKS_CONFIG: /workspace/config.toml
     steps:

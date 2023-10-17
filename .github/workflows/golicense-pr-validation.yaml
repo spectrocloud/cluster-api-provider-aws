@@ -26,7 +26,5 @@ jobs:
 
       - name: golicense-scan
         run: |
-          go-licenses check --ignore github.com/spectrocloud ./../bulwark
-          go-licenses check --ignore github.com/spectrocloud ./../dynamo
-          go-licenses check --ignore github.com/spectrocloud ./../spate/genco
+          go-licenses check --ignore github.com/spectrocloud ./../
 #          go-licenses check --ignore github.com/spectrocloud ./spate/xk6-spate

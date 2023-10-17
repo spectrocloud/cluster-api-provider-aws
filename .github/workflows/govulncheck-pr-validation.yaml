@@ -26,8 +26,6 @@ jobs:
       - name: govulncheck-scan
         run: |
           go version
-          govulncheck -mode source ./../bulwark
-          govulncheck -mode source ./../dynamo
-          govulncheck -mode source ./../spate/genco
-          govulncheck -mode source ./../spate/xk6-spate
+          govulncheck -mode source ./../
+   
 
