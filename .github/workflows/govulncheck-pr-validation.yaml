@@ -26,6 +26,6 @@ jobs:
       - name: govulncheck-scan
         run: |
           go version
-          govulncheck -mode source ./../
+          govulncheck -mode source ./../../
    
 
