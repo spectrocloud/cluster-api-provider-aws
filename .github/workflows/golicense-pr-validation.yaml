@@ -26,7 +26,7 @@ jobs:
 
       - name: golicense-scan
         run: |
-          go-licenses check --ignore github.com/spectrocloud go.mod
+          go-licenses check --ignore github.com/spectrocloud ./
           go-licenses check --ignore github.com/spectrocloud ./docs/triage-party
           go-licenses check --ignore github.com/spectrocloud ./hack/tools
 #          go-licenses check --ignore github.com/spectrocloud ./spate/xk6-spate

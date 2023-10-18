@@ -26,7 +26,7 @@ jobs:
       - name: govulncheck-scan
         run: |
           go version
-          govulncheck -mode source go.mod
+          govulncheck -mode source ./
           govulncheck -mode source ./docs/triage-party
           govulncheck -mode source ./hack/tools
           
