@@ -7,6 +7,7 @@ import (
 	v14 "k8s.io/api/admissionregistration/v1"
 	v13 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	v12 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -146,6 +147,36 @@ func reconcileService(ctx context.Context, ns string, remoteClient client.Client
 	return remoteClient.Create(ctx, service)
 }
 
+func reconcilePodDistributionBudget(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
+	check := &v13.Deployment{}
+	if err := remoteClient.Get(ctx, types.NamespacedName{
+		Name:      podIdentityWebhookName,
+		Namespace: ns,
+	}, check); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if check.UID != "" {
+		return nil
+	}
+
+	pdb := &policyv1.PodDisruptionBudget{
+		ObjectMeta: objectMeta(podIdentityWebhookName, ns),
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MaxUnavailable: &intstr.IntOrString{
+				Type:   intstr.Int,
+				IntVal: 1,
+			},
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": podIdentityWebhookName,
+				},
+			},
+		},
+	}
+	return remoteClient.Create(ctx, pdb)
+}
+
 func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
 	check := &v13.Deployment{}
 	if err := remoteClient.Get(ctx, types.NamespacedName{
@@ -176,6 +207,14 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 					},
 				},
 				Spec: corev1.PodSpec{
+					PriorityClassName: "palette-spectro-cluster-critical",
+					Tolerations: []corev1.Toleration{
+						{
+							Effect:   corev1.TaintEffect("NoSchedule"),
+							Key:      "node-role.kubernetes.io/control-plane",
+							Operator: "Exists",
+						},
+					},
 					ServiceAccountName: podIdentityWebhookName,
 					Containers: []corev1.Container{
 						{
@@ -300,6 +339,10 @@ func reconcilePodIdentityWebhookComponents(ctx context.Context, ns string, secre
 	}
 
 	if err := reconcileMutatingWebHook(ctx, ns, secret, remoteClient); err != nil {
+		return err
+	}
+
+	if err := reconcilePodDistributionBudget(ctx, ns, secret, remoteClient); err != nil {
 		return err
 	}
 
