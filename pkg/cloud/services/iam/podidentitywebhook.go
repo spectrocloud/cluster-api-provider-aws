@@ -155,11 +155,38 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 		return err
 	}
 
+	// Check if the toleration already exists
+	tolerationExists := false
+	for _, t := range check.Spec.Template.Spec.Tolerations {
+		if t.Key == "node-role.kubernetes.io/control-plane" && t.Effect == "NoSchedule" && t.Operator == "Exists" {
+			tolerationExists = true
+			break
+		}
+	}
+
+	toleration := []corev1.Toleration{
+		{
+			Effect:   corev1.TaintEffect("NoSchedule"),
+			Key:      "node-role.kubernetes.io/control-plane",
+			Operator: "Exists",
+		},
+	}
+
 	if check.UID != "" {
-		return nil
+		if !tolerationExists {
+			check.Spec.Template.Spec.Tolerations = append(check.Spec.Template.Spec.Tolerations, toleration...)
+
+			// Update the deployment with the new toleration
+			if err := remoteClient.Update(ctx, check); err != nil {
+				return err
+			}
+		}
 	}
 
 	replicas := int32(1)
+	T := true
+	F := false
+
 	deployment := &v13.Deployment{
 		ObjectMeta: objectMeta(podIdentityWebhookName, ns),
 		Spec: v13.DeploymentSpec{
@@ -176,16 +203,20 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 					},
 				},
 				Spec: corev1.PodSpec{
-					Tolerations: []corev1.Toleration{
-						{
-							Effect:   corev1.TaintEffect("NoSchedule"),
-							Key:      "node-role.kubernetes.io/control-plane",
-							Operator: "Exists",
-						},
-					},
+					Tolerations:        toleration,
 					ServiceAccountName: podIdentityWebhookName,
 					Containers: []corev1.Container{
 						{
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: &F,
+								RunAsNonRoot:             &T,
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
+								},
+							},
 							Name:            podIdentityWebhookName,
 							Image:           podIdentityWebhookImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
@@ -235,7 +266,6 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 	}
 
 	if check.UID != "" {
-		return nil
 	}
 
 	caBundle, ok := secret.Data["ca.crt"]
