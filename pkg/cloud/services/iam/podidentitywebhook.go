@@ -19,7 +19,7 @@ import (
 
 const (
 	podIdentityWebhookName  = "pod-identity-webhook"
-	podIdentityWebhookImage = "amazon/amazon-eks-pod-identity-webhook:v0.4.0"
+	podIdentityWebhookImage = "amazon/amazon-eks-pod-identity-webhook:v0.5.2"
 )
 
 func reconcileServiceAccount(ctx context.Context, ns string, remoteClient client.Client) error {
@@ -155,105 +155,107 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 		return err
 	}
 
-	// Check if the toleration already exists
-	tolerationExists := false
-	for _, t := range check.Spec.Template.Spec.Tolerations {
-		if t.Key == "node-role.kubernetes.io/control-plane" && t.Effect == "NoSchedule" && t.Operator == "Exists" {
-			tolerationExists = true
-			break
-		}
-	}
-
-	toleration := []corev1.Toleration{
+	tolerations := []corev1.Toleration{
 		{
-			Effect:   corev1.TaintEffect("NoSchedule"),
-			Key:      "node-role.kubernetes.io/control-plane",
-			Operator: "Exists",
+			Key:    "node-role.kubernetes.io/control-plane",
+			Effect: corev1.TaintEffectNoSchedule,
+		}, {
+			Key:    "node-role.kubernetes.io/master",
+			Effect: corev1.TaintEffectNoSchedule,
 		},
 	}
 
-	if check.UID != "" {
-		if !tolerationExists {
-			check.Spec.Template.Spec.Tolerations = append(check.Spec.Template.Spec.Tolerations, toleration...)
+	if check.UID == "" {
+		replicas := int32(1)
 
-			// Update the deployment with the new toleration
-			if err := remoteClient.Update(ctx, check); err != nil {
-				return err
+		deployment := &v13.Deployment{
+			ObjectMeta: objectMeta(podIdentityWebhookName, ns),
+			Spec: v13.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": podIdentityWebhookName,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": podIdentityWebhookName,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Tolerations:        tolerations,
+						ServiceAccountName: podIdentityWebhookName,
+						Containers: []corev1.Container{
+							{
+								Name:            podIdentityWebhookName,
+								Image:           podIdentityWebhookImage,
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      "webhook-certs",
+										MountPath: "/etc/webhook/certs/",
+										ReadOnly:  false,
+									},
+								},
+								Command: []string{
+									"/webhook",
+									"--in-cluster=false",
+									"--namespace=" + ns,
+									"--service-name=" + podIdentityWebhookName,
+									"--annotation-prefix=eks.amazonaws.com",
+									"--token-audience=sts.amazonaws.com",
+									"--logtostderr",
+								},
+							},
+						},
+						Volumes: []corev1.Volume{
+							{
+								Name: "webhook-certs",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: secret.Name,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		return remoteClient.Create(ctx, deployment)
+	}
+
+	needsUpdate := false
+	if podIdentityWebhookImage != check.Spec.Template.Spec.Containers[0].Image {
+		for i, c := range check.Spec.Template.Spec.Containers {
+			if c.Name == podIdentityWebhookName && c.Image != podIdentityWebhookImage {
+				check.Spec.Template.Spec.Containers[i].Image = podIdentityWebhookImage
+				needsUpdate = true
+				break
 			}
 		}
 	}
 
-	replicas := int32(1)
-	T := true
-	F := false
-
-	deployment := &v13.Deployment{
-		ObjectMeta: objectMeta(podIdentityWebhookName, ns),
-		Spec: v13.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app": podIdentityWebhookName,
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": podIdentityWebhookName,
-					},
-				},
-				Spec: corev1.PodSpec{
-					Tolerations:        toleration,
-					ServiceAccountName: podIdentityWebhookName,
-					Containers: []corev1.Container{
-						{
-							SecurityContext: &corev1.SecurityContext{
-								AllowPrivilegeEscalation: &F,
-								RunAsNonRoot:             &T,
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-								SeccompProfile: &corev1.SeccompProfile{
-									Type: corev1.SeccompProfileTypeRuntimeDefault,
-								},
-							},
-							Name:            podIdentityWebhookName,
-							Image:           podIdentityWebhookImage,
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "webhook-certs",
-									MountPath: "/etc/webhook/certs/",
-									ReadOnly:  false,
-								},
-							},
-							Command: []string{
-								"/webhook",
-								"--in-cluster=false",
-								"--namespace=" + ns,
-								"--service-name=" + podIdentityWebhookName,
-								"--annotation-prefix=eks.amazonaws.com",
-								"--token-audience=sts.amazonaws.com",
-								"--logtostderr",
-							},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "webhook-certs",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: secret.Name,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+	for _, tol := range tolerations {
+		found := false
+		for _, t := range check.Spec.Template.Spec.Tolerations {
+			if t.Key == tol.Key && t.Effect == tol.Effect {
+				found = true
+			}
+		}
+		if !found {
+			check.Spec.Template.Spec.Tolerations = append(check.Spec.Template.Spec.Tolerations, tol)
+			needsUpdate = true
+		}
 	}
 
-	return remoteClient.Create(ctx, deployment)
+	if needsUpdate {
+		return remoteClient.Update(ctx, check)
+	}
+
+	return nil
 }
 
 func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
@@ -265,49 +267,64 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 		return err
 	}
 
-	if check.UID != "" {
-	}
+	whFailurePolicy := v14.Fail
+	mutatingWebhookFQN := podIdentityWebhookName + ".amazonaws.com"
 
-	caBundle, ok := secret.Data["ca.crt"]
-	if !ok {
-		return errors.New("no CA certificate for the pod identity webhook certificate")
-	}
+	if check.UID == "" {
+		caBundle, ok := secret.Data["ca.crt"]
+		if !ok {
+			return errors.New("no CA certificate for the pod identity webhook certificate")
+		}
 
-	mwhMeta := objectMeta(podIdentityWebhookName, ns)
-	fail := v14.Fail
-	none := v14.SideEffectClassNone
-	mutate := "/mutate"
-	mwh := &v14.MutatingWebhookConfiguration{
-		ObjectMeta: mwhMeta,
-		Webhooks: []v14.MutatingWebhook{
-			{
-				Name:          podIdentityWebhookName + ".amazonaws.com",
-				FailurePolicy: &fail,
-				ClientConfig: v14.WebhookClientConfig{
-					Service: &v14.ServiceReference{
-						Name:      podIdentityWebhookName,
-						Namespace: ns,
-						Path:      &mutate,
+		mwhMeta := objectMeta(podIdentityWebhookName, ns)
+		none := v14.SideEffectClassNone
+		mutate := "/mutate"
+		mwh := &v14.MutatingWebhookConfiguration{
+			ObjectMeta: mwhMeta,
+			Webhooks: []v14.MutatingWebhook{
+				{
+					Name:          mutatingWebhookFQN,
+					FailurePolicy: &whFailurePolicy,
+					ClientConfig: v14.WebhookClientConfig{
+						Service: &v14.ServiceReference{
+							Name:      podIdentityWebhookName,
+							Namespace: ns,
+							Path:      &mutate,
+						},
+						CABundle: caBundle,
 					},
-					CABundle: caBundle,
-				},
-				Rules: []v14.RuleWithOperations{
-					{
-						Operations: []v14.OperationType{v14.Create},
-						Rule: v14.Rule{
-							APIGroups:   []string{""},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"pods"},
+					Rules: []v14.RuleWithOperations{
+						{
+							Operations: []v14.OperationType{v14.Create},
+							Rule: v14.Rule{
+								APIGroups:   []string{""},
+								APIVersions: []string{"v1"},
+								Resources:   []string{"pods"},
+							},
 						},
 					},
+					SideEffects:             &none,
+					AdmissionReviewVersions: []string{"v1beta1"},
 				},
-				SideEffects:             &none,
-				AdmissionReviewVersions: []string{"v1beta1"},
 			},
-		},
+		}
+
+		return remoteClient.Create(ctx, mwh)
 	}
 
-	return remoteClient.Create(ctx, mwh)
+	needsUpdate := false
+	for _, wh := range check.Webhooks {
+		if wh.Name == mutatingWebhookFQN && wh.FailurePolicy != nil && *wh.FailurePolicy != whFailurePolicy {
+			wh.FailurePolicy = &whFailurePolicy
+			needsUpdate = true
+			break
+		}
+	}
+
+	if needsUpdate {
+		return remoteClient.Update(ctx, check)
+	}
+	return nil
 }
 
 // reconcilePodIdentityWebhookComponents will create sa, cr, crb, service, deployment and a mutating webhook in kube-system. The
