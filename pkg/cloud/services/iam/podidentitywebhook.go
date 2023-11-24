@@ -12,14 +12,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	podIdentityWebhookName  = "pod-identity-webhook"
 	podIdentityWebhookImage = "amazon/amazon-eks-pod-identity-webhook:v0.5.2"
+
+	labelNodeRoleMaster       = "node-role.kubernetes.io/master"
+	labelNodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
 )
 
 func reconcileServiceAccount(ctx context.Context, ns string, remoteClient client.Client) error {
@@ -155,13 +157,42 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 		return err
 	}
 
+	nodeAffinity := &corev1.NodeAffinity{
+		PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+			{
+				Weight: 10,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      labelNodeRoleMaster,
+							Operator: corev1.NodeSelectorOpExists,
+						}, {
+							Key:      labelNodeRoleControlPlane,
+							Operator: corev1.NodeSelectorOpExists,
+						},
+					},
+				},
+			}, {
+				Weight: 10,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      labelNodeRoleControlPlane,
+							Operator: corev1.NodeSelectorOpExists,
+						},
+					},
+				},
+			},
+		},
+	}
+
 	tolerations := []corev1.Toleration{
 		{
-			Key:      "node-role.kubernetes.io/control-plane",
+			Key:      labelNodeRoleControlPlane,
 			Effect:   corev1.TaintEffectNoSchedule,
 			Operator: corev1.TolerationOpExists,
 		}, {
-			Key:      "node-role.kubernetes.io/master",
+			Key:      labelNodeRoleMaster,
 			Effect:   corev1.TaintEffectNoSchedule,
 			Operator: corev1.TolerationOpExists,
 		},
@@ -186,6 +217,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 						},
 					},
 					Spec: corev1.PodSpec{
+						Affinity:           &corev1.Affinity{NodeAffinity: nodeAffinity},
 						Tolerations:        tolerations,
 						ServiceAccountName: podIdentityWebhookName,
 						Containers: []corev1.Container{
@@ -240,6 +272,30 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 		}
 	}
 
+	if check.Spec.Template.Spec.Affinity == nil {
+		check.Spec.Template.Spec.Affinity = &corev1.Affinity{}
+	}
+	if check.Spec.Template.Spec.Affinity.NodeAffinity == nil {
+		check.Spec.Template.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+	}
+
+	for _, aff := range nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		found := false
+		for _, a := range check.Spec.Template.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+			for _, e := range a.Preference.MatchExpressions {
+				for _, e2 := range aff.Preference.MatchExpressions {
+					if e.Key == e2.Key && e.Operator == e2.Operator {
+						found = true
+					}
+				}
+			}
+		}
+		if !found {
+			check.Spec.Template.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(check.Spec.Template.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution, aff)
+			needsUpdate = true
+		}
+	}
+
 	for _, tol := range tolerations {
 		found := false
 		for _, t := range check.Spec.Template.Spec.Tolerations {
@@ -269,7 +325,7 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 		return err
 	}
 
-	whFailurePolicy := v14.Fail
+	whFailurePolicyFail := v14.Fail
 	mutatingWebhookFQN := podIdentityWebhookName + ".amazonaws.com"
 
 	if check.UID == "" {
@@ -286,7 +342,7 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 			Webhooks: []v14.MutatingWebhook{
 				{
 					Name:          mutatingWebhookFQN,
-					FailurePolicy: &whFailurePolicy,
+					FailurePolicy: &whFailurePolicyFail,
 					ClientConfig: v14.WebhookClientConfig{
 						Service: &v14.ServiceReference{
 							Name:      podIdentityWebhookName,
@@ -315,17 +371,17 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 	}
 
 	needsUpdate := false
-	for _, wh := range check.Webhooks {
-		if wh.Name == mutatingWebhookFQN && wh.FailurePolicy != nil && *wh.FailurePolicy != whFailurePolicy {
-			wh.FailurePolicy = &whFailurePolicy
+	for i := range check.Webhooks {
+		if check.Webhooks[i].Name == mutatingWebhookFQN && (check.Webhooks[i].FailurePolicy == nil || *check.Webhooks[i].FailurePolicy != whFailurePolicyFail) {
+			check.Webhooks[i].FailurePolicy = &whFailurePolicyFail
 			needsUpdate = true
-			break
 		}
 	}
 
 	if needsUpdate {
 		return remoteClient.Update(ctx, check)
 	}
+
 	return nil
 }
 
