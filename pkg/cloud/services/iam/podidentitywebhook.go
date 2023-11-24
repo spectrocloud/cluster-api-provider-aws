@@ -157,11 +157,13 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 
 	tolerations := []corev1.Toleration{
 		{
-			Key:    "node-role.kubernetes.io/control-plane",
-			Effect: corev1.TaintEffectNoSchedule,
+			Key:      "node-role.kubernetes.io/control-plane",
+			Effect:   corev1.TaintEffectNoSchedule,
+			Operator: corev1.TolerationOpExists,
 		}, {
-			Key:    "node-role.kubernetes.io/master",
-			Effect: corev1.TaintEffectNoSchedule,
+			Key:      "node-role.kubernetes.io/master",
+			Effect:   corev1.TaintEffectNoSchedule,
+			Operator: corev1.TolerationOpExists,
 		},
 	}
 
@@ -241,7 +243,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	for _, tol := range tolerations {
 		found := false
 		for _, t := range check.Spec.Template.Spec.Tolerations {
-			if t.Key == tol.Key && t.Effect == tol.Effect {
+			if t.Key == tol.Key && t.Effect == tol.Effect && t.Operator == tol.Operator {
 				found = true
 			}
 		}
