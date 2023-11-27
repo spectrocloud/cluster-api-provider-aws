@@ -188,13 +188,11 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 
 	tolerations := []corev1.Toleration{
 		{
-			Key:      labelNodeRoleControlPlane,
-			Effect:   corev1.TaintEffectNoSchedule,
-			Operator: corev1.TolerationOpExists,
+			Key:    labelNodeRoleControlPlane,
+			Effect: corev1.TaintEffectNoSchedule,
 		}, {
-			Key:      labelNodeRoleMaster,
-			Effect:   corev1.TaintEffectNoSchedule,
-			Operator: corev1.TolerationOpExists,
+			Key:    labelNodeRoleMaster,
+			Effect: corev1.TaintEffectNoSchedule,
 		},
 	}
 
@@ -282,10 +280,12 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	for _, aff := range nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
 		found := false
 		for _, a := range check.Spec.Template.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
-			for _, e := range a.Preference.MatchExpressions {
-				for _, e2 := range aff.Preference.MatchExpressions {
-					if e.Key == e2.Key && e.Operator == e2.Operator {
-						found = true
+			if len(a.Preference.MatchExpressions) == len(aff.Preference.MatchExpressions) {
+				for _, e := range a.Preference.MatchExpressions {
+					for _, e2 := range aff.Preference.MatchExpressions {
+						if e.Key == e2.Key && e.Operator == e2.Operator {
+							found = true
+						}
 					}
 				}
 			}
@@ -299,7 +299,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	for _, tol := range tolerations {
 		found := false
 		for _, t := range check.Spec.Template.Spec.Tolerations {
-			if t.Key == tol.Key && t.Effect == tol.Effect && t.Operator == tol.Operator {
+			if t.Key == tol.Key && t.Effect == tol.Effect {
 				found = true
 			}
 		}
