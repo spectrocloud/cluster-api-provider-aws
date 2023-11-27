@@ -156,20 +156,19 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	}
 
 	// Check if the toleration already exists
+	cpNoScheduleToleration := corev1.Toleration{
+		Effect:   corev1.TaintEffect("NoSchedule"),
+		Key:      "node-role.kubernetes.io/control-plane",
+		Operator: "Exists",
+	}
+
+	// Check if the toleration already exists
 	tolerationExists := false
 	for _, t := range check.Spec.Template.Spec.Tolerations {
-		if t.Key == "node-role.kubernetes.io/control-plane" && t.Effect == "NoSchedule" && t.Operator == "Exists" {
+		if cmp.Equal(t, cpNoScheduleToleration) {
 			tolerationExists = true
 			break
 		}
-	}
-
-	toleration := []corev1.Toleration{
-		{
-			Effect:   corev1.TaintEffect("NoSchedule"),
-			Key:      "node-role.kubernetes.io/control-plane",
-			Operator: "Exists",
-		},
 	}
 
 	if check.UID != "" {
