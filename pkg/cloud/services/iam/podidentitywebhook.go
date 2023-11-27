@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/go-cmp/cmp"
 	v14 "k8s.io/api/admissionregistration/v1"
 	v13 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -199,29 +198,6 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 
 	if check.UID == "" {
 		replicas := int32(1)
-	// Check if the toleration already exists
-	tolerationExists := false
-	for _, t := range check.Spec.Template.Spec.Tolerations {
-		if cmp.Equal(t, cpNoScheduleToleration) {
-			tolerationExists = true
-			break
-		}
-	}
-
-	if check.UID != "" {
-		if !tolerationExists {
-			check.Spec.Template.Spec.Tolerations = append(check.Spec.Template.Spec.Tolerations, cpNoScheduleToleration)
-
-			// Update the deployment with the new toleration
-			if err := remoteClient.Update(ctx, check); err != nil {
-				return err
-			}
-		}
-	}
-
-	replicas := int32(1)
-	T := true
-	F := false
 
 		deployment := &v13.Deployment{
 			ObjectMeta: objectMeta(podIdentityWebhookName, ns),
@@ -455,8 +431,8 @@ func objectMeta(name, namespace string) metav1.ObjectMeta {
 	return meta
 }
 
-// reconcileCertifcateSecret takes a secret and moves it to the workload cluster.
-func reconcileCertifcateSecret(ctx context.Context, cert *corev1.Secret, remoteClient client.Client) error {
+// reconcileCertificateSecret takes a secret and moves it to the workload cluster.
+func reconcileCertificateSecret(ctx context.Context, cert *corev1.Secret, remoteClient client.Client) error {
 	// check if the secret was created by cert-manager
 	certCheck := &corev1.Secret{}
 	if err := remoteClient.Get(ctx, types.NamespacedName{
