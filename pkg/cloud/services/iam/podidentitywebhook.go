@@ -163,6 +163,8 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 		Operator: "Exists",
 	}
 
+	tolerations := []corev1.Toleration{cpNoScheduleToleration}
+
 	// Check if the toleration already exists
 	tolerationExists := false
 	for _, t := range check.Spec.Template.Spec.Tolerations {
@@ -174,7 +176,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 
 	if check.UID != "" {
 		if !tolerationExists {
-			check.Spec.Template.Spec.Tolerations = append(check.Spec.Template.Spec.Tolerations, toleration...)
+			check.Spec.Template.Spec.Tolerations = append(check.Spec.Template.Spec.Tolerations, cpNoScheduleToleration)
 
 			// Update the deployment with the new toleration
 			if err := remoteClient.Update(ctx, check); err != nil {
@@ -203,7 +205,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 					},
 				},
 				Spec: corev1.PodSpec{
-					Tolerations:        toleration,
+					Tolerations:        tolerations,
 					ServiceAccountName: podIdentityWebhookName,
 					Containers: []corev1.Container{
 						{
