@@ -18,7 +18,7 @@ import (
 
 const (
 	podIdentityWebhookName  = "pod-identity-webhook"
-	podIdentityWebhookImage = "amazon/amazon-eks-pod-identity-webhook:v0.5.2"
+	podIdentityWebhookImage = "amazon/amazon-eks-pod-identity-webhook:v0.4.0"
 
 	labelNodeRoleMaster       = "node-role.kubernetes.io/master"
 	labelNodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
@@ -260,16 +260,6 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	}
 
 	needsUpdate := false
-	if podIdentityWebhookImage != check.Spec.Template.Spec.Containers[0].Image {
-		for i, c := range check.Spec.Template.Spec.Containers {
-			if c.Name == podIdentityWebhookName && c.Image != podIdentityWebhookImage {
-				check.Spec.Template.Spec.Containers[i].Image = podIdentityWebhookImage
-				needsUpdate = true
-				break
-			}
-		}
-	}
-
 	if check.Spec.Template.Spec.Affinity == nil {
 		check.Spec.Template.Spec.Affinity = &corev1.Affinity{}
 	}
