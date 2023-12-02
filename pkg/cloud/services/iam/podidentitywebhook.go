@@ -306,7 +306,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	return nil
 }
 
-func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
+func reconcileMutatingWebhook(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
 	check := &v14.MutatingWebhookConfiguration{}
 	if err := remoteClient.Get(ctx, types.NamespacedName{
 		Name:      podIdentityWebhookName,
@@ -315,64 +315,50 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 		return err
 	}
 
-	whFailurePolicyFail := v14.Fail
-	mutatingWebhookFQN := podIdentityWebhookName + ".amazonaws.com"
+	if check.UID != "" {
+		return nil
+	}
 
-	if check.UID == "" {
-		caBundle, ok := secret.Data["ca.crt"]
-		if !ok {
-			return errors.New("no CA certificate for the pod identity webhook certificate")
-		}
+	caBundle, ok := secret.Data["ca.crt"]
+	if !ok {
+		return errors.New("no CA certificate for the pod identity webhook certificate")
+	}
 
-		mwhMeta := objectMeta(podIdentityWebhookName, ns)
-		none := v14.SideEffectClassNone
-		mutate := "/mutate"
-		mwh := &v14.MutatingWebhookConfiguration{
-			ObjectMeta: mwhMeta,
-			Webhooks: []v14.MutatingWebhook{
-				{
-					Name:          mutatingWebhookFQN,
-					FailurePolicy: &whFailurePolicyFail,
-					ClientConfig: v14.WebhookClientConfig{
-						Service: &v14.ServiceReference{
-							Name:      podIdentityWebhookName,
-							Namespace: ns,
-							Path:      &mutate,
-						},
-						CABundle: caBundle,
+	mwhMeta := objectMeta(podIdentityWebhookName, ns)
+	fail := v14.Ignore
+	none := v14.SideEffectClassNone
+	mutate := "/mutate"
+	mwh := &v14.MutatingWebhookConfiguration{
+		ObjectMeta: mwhMeta,
+		Webhooks: []v14.MutatingWebhook{
+			{
+				Name:          podIdentityWebhookName + ".amazonaws.com",
+				FailurePolicy: &fail,
+				ClientConfig: v14.WebhookClientConfig{
+					Service: &v14.ServiceReference{
+						Name:      podIdentityWebhookName,
+						Namespace: ns,
+						Path:      &mutate,
 					},
-					Rules: []v14.RuleWithOperations{
-						{
-							Operations: []v14.OperationType{v14.Create},
-							Rule: v14.Rule{
-								APIGroups:   []string{""},
-								APIVersions: []string{"v1"},
-								Resources:   []string{"pods"},
-							},
-						},
-					},
-					SideEffects:             &none,
-					AdmissionReviewVersions: []string{"v1beta1"},
+					CABundle: caBundle,
 				},
+				Rules: []v14.RuleWithOperations{
+					{
+						Operations: []v14.OperationType{v14.Create},
+						Rule: v14.Rule{
+							APIGroups:   []string{""},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"pods"},
+						},
+					},
+				},
+				SideEffects:             &none,
+				AdmissionReviewVersions: []string{"v1beta1"},
 			},
-		}
-
-		return remoteClient.Create(ctx, mwh)
+		},
 	}
 
-	needsUpdate := false
-	for i := range check.Webhooks {
-		if check.Webhooks[i].Name == mutatingWebhookFQN && (check.Webhooks[i].FailurePolicy == nil || *check.Webhooks[i].FailurePolicy != whFailurePolicyFail) {
-			check.Webhooks[i].FailurePolicy = &whFailurePolicyFail
-			needsUpdate = true
-		}
-	}
-
-	if needsUpdate {
-		return remoteClient.Update(ctx, check)
-	}
-
-	return nil
+	return remoteClient.Create(ctx, mwh)
 }
 
 // reconcilePodIdentityWebhookComponents will create sa, cr, crb, service, deployment and a mutating webhook in kube-system. The
@@ -401,7 +387,7 @@ func reconcilePodIdentityWebhookComponents(ctx context.Context, ns string, secre
 		return err
 	}
 
-	if err := reconcileMutatingWebHook(ctx, ns, secret, remoteClient); err != nil {
+	if err := reconcileMutatingWebhook(ctx, ns, secret, remoteClient); err != nil {
 		return err
 	}
 
