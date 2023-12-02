@@ -218,7 +218,7 @@ func reconcileDeployment(ctx context.Context, ns string, secret *corev1.Secret, 
 	return remoteClient.Create(ctx, deployment)
 }
 
-func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
+func reconcileMutatingWebhook(ctx context.Context, ns string, secret *corev1.Secret, remoteClient client.Client) error {
 	check := &v14.MutatingWebhookConfiguration{}
 	if err := remoteClient.Get(ctx, types.NamespacedName{
 		Name:      podIdentityWebhookName,
@@ -299,7 +299,7 @@ func reconcilePodIdentityWebhookComponents(ctx context.Context, ns string, secre
 		return err
 	}
 
-	if err := reconcileMutatingWebHook(ctx, ns, secret, remoteClient); err != nil {
+	if err := reconcileMutatingWebhook(ctx, ns, secret, remoteClient); err != nil {
 		return err
 	}
 
