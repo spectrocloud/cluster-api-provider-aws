@@ -540,6 +540,7 @@ spec:
                 - AL2_x86_64
                 - AL2_x86_64_GPU
                 - AL2_ARM_64
+                - CUSTOM
                 type: string
               amiVersion:
                 description: AMIVersion defines the desired AMI release version. If

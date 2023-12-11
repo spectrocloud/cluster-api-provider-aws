@@ -390,7 +390,7 @@ func (s *Service) CreateLaunchTemplate(scope scope.LaunchTemplateScope, imageID 
 
 	additionalTags := scope.AdditionalTags()
 	// Set the cloud provider tag
-	additionalTags[infrav1.ClusterAWSCloudProviderTagKey(s.scope.Name())] = string(infrav1.ResourceLifecycleOwned)
+	additionalTags[infrav1.ClusterAWSCloudProviderTagKey(s.scope.KubernetesClusterName())] = string(infrav1.ResourceLifecycleOwned)
 
 	tags := infrav1.Build(infrav1.BuildParams{
 		ClusterName: s.scope.KubernetesClusterName(),

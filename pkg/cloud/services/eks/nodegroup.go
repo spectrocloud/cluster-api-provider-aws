@@ -349,14 +349,26 @@ func (s *NodegroupService) reconcileNodegroupVersion(ng *eks.Nodegroup) error {
 			NodegroupName: aws.String(s.scope.NodegroupName()),
 		}
 
+		// Launch template details can't be null for Custom ami type node group
+		if ng.AmiType != nil && *ng.AmiType == "CUSTOM" && s.scope.ManagedMachinePool.Status.LaunchTemplateID != nil {
+			input.LaunchTemplate = &eks.LaunchTemplateSpecification{
+				Id:      s.scope.ManagedMachinePool.Status.LaunchTemplateID,
+				Version: statusLaunchTemplateVersion,
+			}
+		}
+
 		var updateMsg string
 		// Either update k8s version or AMI version
 		switch {
 		case specVersion != nil && ngVersion.LessThan(specVersion):
 			// NOTE: you can only upgrade increments of minor versions. If you want to upgrade 1.14 to 1.16 we
 			// need to go 1.14-> 1.15 and then 1.15 -> 1.16.
-			input.Version = aws.String(versionToEKS(ngVersion.WithMinor(ngVersion.Minor() + 1)))
-			updateMsg = fmt.Sprintf("to version %s", *input.Version)
+			if ng.AmiType != nil && *ng.AmiType == "CUSTOM" && s.scope.ManagedMachinePool.Status.LaunchTemplateID != nil {
+				input.Version = nil
+			} else {
+				input.Version = aws.String(versionToEKS(ngVersion.WithMinor(ngVersion.Minor() + 1)))
+				updateMsg = fmt.Sprintf("to version %s", *input.Version)
+			}
 		case specAMI != nil && *specAMI != ngAMI:
 			input.ReleaseVersion = specAMI
 			updateMsg = fmt.Sprintf("to AMI version %s", *input.ReleaseVersion)
