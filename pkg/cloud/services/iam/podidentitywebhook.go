@@ -326,6 +326,20 @@ func reconcileMutatingWebHook(ctx context.Context, ns string, secret *corev1.Sec
 	}
 
 	if check.UID != "" {
+		updateAnnotations := false
+		if len(check.Annotations) == 0 {
+			check.Annotations = map[string]string{
+				certManagerInjectCAAnnotation: fmt.Sprintf("%s/%s", ns, secret.Name),
+			}
+			updateAnnotations = true
+		} else if check.Annotations[certManagerInjectCAAnnotation] == "" {
+			check.Annotations[certManagerInjectCAAnnotation] = fmt.Sprintf("%s/%s", ns, secret.Name)
+			updateAnnotations = true
+		}
+
+		if updateAnnotations {
+			return remoteClient.Update(ctx, check)
+		}
 		return nil
 	}
 
