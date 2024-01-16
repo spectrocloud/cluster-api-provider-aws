@@ -537,7 +537,7 @@ func (s *NodegroupService) reconcileNodegroup() error {
 		return errors.Wrap(err, "failed to set status")
 	}
 
-	if s.scope.ManagedMachinePool.Status.FailureMessage != nil {
+	if s.scope.ManagedMachinePool.Status.FailureReason != nil && s.scope.ManagedMachinePool.Status.FailureMessage != nil {
 		return errors.Errorf("reason: %v message: %s",
 			*s.scope.ManagedMachinePool.Status.FailureReason, *s.scope.ManagedMachinePool.Status.FailureMessage)
 	}
