@@ -19,9 +19,9 @@ package eks
 import (
 	"context"
 	"fmt"
-	"slices"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"slices"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/version"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/controlplane/eks/api/v1beta1"
@@ -536,6 +537,10 @@ func (s *NodegroupService) reconcileNodegroup() error {
 		return errors.Wrap(err, "failed to set status")
 	}
 
+	if s.scope.ManagedMachinePool.Status.FailureMessage != nil {
+		return errors.Errorf("reason: %v message: %s",
+			*s.scope.ManagedMachinePool.Status.FailureReason, *s.scope.ManagedMachinePool.Status.FailureMessage)
+	}
 	switch *ng.Status {
 	case eks.NodegroupStatusCreating, eks.NodegroupStatusUpdating:
 		ng, err = s.waitForNodegroupActive()
@@ -615,15 +620,26 @@ func (s *NodegroupService) setStatus(ng *eks.Nodegroup) error {
 		managedPool.Status.Ready = true
 	case eks.NodegroupStatusDegraded:
 		issueErrMsgSet := make([]string, 0)
+		var errMsgStr string
+
 		for _, iss := range ng.Health.Issues {
 			errMsg := iss.GoString()
 			if slices.Contains(issueErrMsgSet, errMsg) {
 				continue
 			}
 			issueErrMsgSet = append(issueErrMsgSet, errMsg)
+			errMsgStr = fmt.Sprintf("%s %s", errMsgStr, errMsg)
 		}
 
-		return errors.Errorf("EKS nodegroup in %s status due to issues %v", *ng.Status, issueErrMsgSet)
+		var reason capierrors.MachineStatusError
+		if strings.Contains(errMsgStr, "VcpuLimitExceeded") {
+			reason = capierrors.InsufficientResourcesMachineError
+		}
+
+		managedPool.Status.Ready = false
+		managedPool.Status.FailureReason = &reason
+		managedPool.Status.FailureMessage = &errMsgStr
+		return nil
 	default:
 		return errors.Errorf("unexpected EKS nodegroup status %s", *ng.Status)
 	}
@@ -674,6 +690,5 @@ func (s *NodegroupService) waitForNodegroupActive() (*eks.Nodegroup, error) {
 	if err := s.setStatus(ng); err != nil {
 		return nil, errors.Wrap(err, "failed to set status")
 	}
-
 	return ng, nil
 }
