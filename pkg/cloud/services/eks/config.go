@@ -275,7 +275,7 @@ func (s *Service) createUserKubeconfigSecret(ctx context.Context, cluster *eksty
 }
 
 func (s *Service) updateUserKubeconfigSecret(ctx context.Context, configSecret *corev1.Secret, cluster *ekstypes.Cluster) error {
-	s.scope.Debug("Updating EKS kubeconfigs for cluster", "cluster-name", s.scope.KubernetesClusterName())
+	s.scope.Trace("Updating EKS kubeconfigs for cluster", "cluster-name", s.scope.KubernetesClusterName())
 
 	data, ok := configSecret.Data[secret.KubeconfigDataName]
 	if !ok {
