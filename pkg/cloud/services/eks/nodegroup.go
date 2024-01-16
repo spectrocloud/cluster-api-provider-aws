@@ -19,6 +19,8 @@ package eks
 import (
 	"context"
 	"fmt"
+	"slices"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -611,6 +613,17 @@ func (s *NodegroupService) setStatus(ng *eks.Nodegroup) error {
 		managedPool.Status.Ready = false
 	case eks.NodegroupStatusUpdating:
 		managedPool.Status.Ready = true
+	case eks.NodegroupStatusDegraded:
+		issueErrMsgSet := make([]string, 0)
+		for _, iss := range ng.Health.Issues {
+			errMsg := iss.GoString()
+			if slices.Contains(issueErrMsgSet, errMsg) {
+				continue
+			}
+			issueErrMsgSet = append(issueErrMsgSet, errMsg)
+		}
+
+		return errors.Errorf("EKS nodegroup in %s status due to issues %v", *ng.Status, issueErrMsgSet)
 	default:
 		return errors.Errorf("unexpected EKS nodegroup status %s", *ng.Status)
 	}
