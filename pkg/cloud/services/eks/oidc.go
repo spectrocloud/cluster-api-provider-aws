@@ -53,6 +53,9 @@ func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 		}
 		s.scope.ControlPlane.Status.OIDCProvider.ARN = oidcProvider
 		anno := s.scope.ControlPlane.GetAnnotations()
+		if anno == nil {
+			anno = make(map[string]string)
+		}
 		anno["aws.spectrocloud.com/oidcProviderArn"] = oidcProvider
 		s.scope.ControlPlane.SetAnnotations(anno)
 		if err := s.scope.PatchObject(); err != nil {
