@@ -161,6 +161,9 @@ func (s *Service) deleteOIDCProvider() error {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
 
+	anno["aws.spectrocloud.com/oidcProviderArn"] = ""
+	s.scope.ControlPlane.SetAnnotations(anno)
+
 	return nil
 }
 
