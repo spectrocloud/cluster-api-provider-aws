@@ -63,7 +63,7 @@ func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 		if anno == nil {
 			anno = make(map[string]string)
 		}
-		anno["aws.spectrocloud.com/oidcProviderArn"] = oidcProvider
+		anno[OidcProviderArnAnnotation] = oidcProvider
 		s.scope.ControlPlane.SetAnnotations(anno)
 		if err := s.scope.PatchObject(); err != nil {
 			return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
