@@ -45,6 +45,13 @@ var (
 	whitespaceRe = regexp.MustCompile(`(?m)[\t\n]`)
 )
 
+const (
+	// OidcProviderArnAnnotation set/unset this annotation to managed control plane.
+	// This is required in case of force pivot control plane status do not have ARN in status.
+	// In that cases annotation will be used to delete oidc resource.
+	OidcProviderArnAnnotation = "aws.spectrocloud.com/oidcProviderArn"
+)
+
 func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.Cluster) error {
 	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider || s.scope.ControlPlane.Status.OIDCProvider.ARN != "" {
 		return nil
@@ -68,7 +75,10 @@ func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.C
 
 		s.scope.ControlPlane.Status.OIDCProvider.ARN = oidcProvider
 		anno := s.scope.ControlPlane.GetAnnotations()
-		anno["aws.spectrocloud.com/oidcProviderArn"] = oidcProvider
+		if anno == nil {
+			anno = make(map[string]string)
+		}
+		anno[OidcProviderArnAnnotation] = oidcProvider
 		s.scope.ControlPlane.SetAnnotations(anno)
 		if err := s.scope.PatchObject(); err != nil {
 			return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
@@ -153,10 +163,15 @@ func (s *Service) reconcileTrustPolicy(ctx context.Context) error {
 }
 
 func (s *Service) deleteOIDCProvider(ctx context.Context) error {
-	anno := s.scope.ControlPlane.GetAnnotations()
-	arn := anno["aws.spectrocloud.com/oidcProviderArn"]
+
+	// In case of force pivot managed control plane do not have ARN in status, that lead to oidcProvider not getting cleaned up during delete.
+	// OidcProviderArnAnnotation will be used to avoid it.
+
+	annotations := s.scope.ControlPlane.GetAnnotations()
+	arn := annotations[OidcProviderArnAnnotation]
 
 	if arn == "" {
+		// Upgrade support for cluster without OidcProviderArnAnnotation set
 		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
 	}
 
@@ -173,6 +188,10 @@ func (s *Service) deleteOIDCProvider(ctx context.Context) error {
 	if err := s.scope.PatchObject(); err != nil {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
+
+	// Remove OidcProviderArnAnnotation after successfully deleting oidc provider
+	annotations[OidcProviderArnAnnotation] = ""
+	s.scope.ControlPlane.SetAnnotations(annotations)
 
 	return nil
 }
