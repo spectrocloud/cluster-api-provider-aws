@@ -36,6 +36,13 @@ import (
 	"sigs.k8s.io/cluster-api/controllers/remote"
 )
 
+const (
+	// OIDCProviderARNAnnotation set/unset this annotation to managed control plane.
+	// This is required in case of force pivot control plane status do not have ARN in status.
+	// In that cases annotation will be used to delete oidc resource.
+	OIDCProviderARNAnnotation = "aws.spectrocloud.com/oidcProviderArn"
+)
+
 func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider {
 		return nil
@@ -56,7 +63,7 @@ func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 		if anno == nil {
 			anno = make(map[string]string)
 		}
-		anno["aws.spectrocloud.com/oidcProviderArn"] = oidcProvider
+		anno[OIDCProviderARNAnnotation] = oidcProvider
 		s.scope.ControlPlane.SetAnnotations(anno)
 		if err := s.scope.PatchObject(); err != nil {
 			return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
@@ -140,10 +147,15 @@ func (s *Service) reconcileTrustPolicy() error {
 }
 
 func (s *Service) deleteOIDCProvider() error {
-	anno := s.scope.ControlPlane.GetAnnotations()
-	arn := anno["aws.spectrocloud.com/oidcProviderArn"]
+
+	// In case of force pivot managed control plane do not have ARN in status, that lead to oidcProvider not getting cleaned up during delete.
+	// OIDCProviderARNAnnotation will be used to avoid it.
+
+	annotations := s.scope.ControlPlane.GetAnnotations()
+	arn := annotations[OIDCProviderARNAnnotation]
 
 	if arn == "" {
+		// Upgrade support for cluster without OIDCProviderARNAnnotation set
 		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
 	}
 
@@ -160,6 +172,10 @@ func (s *Service) deleteOIDCProvider() error {
 	if err := s.scope.PatchObject(); err != nil {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
+
+	// Remove OIDCProviderARNAnnotation after successfully deleting oidc provider
+	annotations[OIDCProviderARNAnnotation] = ""
+	s.scope.ControlPlane.SetAnnotations(annotations)
 
 	return nil
 }
