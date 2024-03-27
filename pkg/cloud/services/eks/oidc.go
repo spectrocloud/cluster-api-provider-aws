@@ -147,10 +147,15 @@ func (s *Service) reconcileTrustPolicy() error {
 }
 
 func (s *Service) deleteOIDCProvider() error {
+
+	// In case of force pivot managed control plane do not have ARN in status, that lead to oidcProvider not getting cleaned up during delete.
+	// OidcProviderArnAnnotation will be used to avoid it.
+
 	annotations := s.scope.ControlPlane.GetAnnotations()
 	arn := annotations[OidcProviderArnAnnotation]
 
 	if arn == "" {
+		// Upgrade support for cluster without OidcProviderArnAnnotation set
 		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
 	}
 
@@ -168,6 +173,7 @@ func (s *Service) deleteOIDCProvider() error {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
 
+	// Remove OidcProviderArnAnnotation after successfully deleting oidc provider
 	annotations[OidcProviderArnAnnotation] = ""
 	s.scope.ControlPlane.SetAnnotations(annotations)
 
