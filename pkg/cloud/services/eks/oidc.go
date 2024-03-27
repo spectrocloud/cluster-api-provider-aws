@@ -36,6 +36,13 @@ import (
 	"sigs.k8s.io/cluster-api/controllers/remote"
 )
 
+const (
+	// OidcProviderArnAnnotation set/unset this annotation to managed control plane.
+	// This is required in case of force pivot control plane status do not have ARN in status.
+	// In that cases annotation will be used to delete oidc resource.
+	OidcProviderArnAnnotation = "aws.spectrocloud.com/oidcProviderArn"
+)
+
 func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 	if !s.scope.ControlPlane.Spec.AssociateOIDCProvider {
 		return nil
@@ -141,7 +148,7 @@ func (s *Service) reconcileTrustPolicy() error {
 
 func (s *Service) deleteOIDCProvider() error {
 	annotations := s.scope.ControlPlane.GetAnnotations()
-	arn := annotations["aws.spectrocloud.com/oidcProviderArn"]
+	arn := annotations[OidcProviderArnAnnotation]
 
 	if arn == "" {
 		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
@@ -161,7 +168,7 @@ func (s *Service) deleteOIDCProvider() error {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
 
-	annotations["aws.spectrocloud.com/oidcProviderArn"] = ""
+	annotations[OidcProviderArnAnnotation] = ""
 	s.scope.ControlPlane.SetAnnotations(annotations)
 
 	return nil
