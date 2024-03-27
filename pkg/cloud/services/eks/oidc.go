@@ -140,8 +140,8 @@ func (s *Service) reconcileTrustPolicy() error {
 }
 
 func (s *Service) deleteOIDCProvider() error {
-	anno := s.scope.ControlPlane.GetAnnotations()
-	arn := anno["aws.spectrocloud.com/oidcProviderArn"]
+	annotations := s.scope.ControlPlane.GetAnnotations()
+	arn := annotations["aws.spectrocloud.com/oidcProviderArn"]
 
 	if arn == "" {
 		arn = s.scope.ControlPlane.Status.OIDCProvider.ARN
@@ -161,8 +161,8 @@ func (s *Service) deleteOIDCProvider() error {
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
 
-	anno["aws.spectrocloud.com/oidcProviderArn"] = ""
-	s.scope.ControlPlane.SetAnnotations(anno)
+	annotations["aws.spectrocloud.com/oidcProviderArn"] = ""
+	s.scope.ControlPlane.SetAnnotations(annotations)
 
 	return nil
 }
