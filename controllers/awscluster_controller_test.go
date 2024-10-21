@@ -149,7 +149,7 @@ func TestAWSClusterReconciler_IntegrationTests(t *testing.T) {
 				IsPublic:         false,
 			},
 		})
-		_, err = reconciler.reconcileNormal(ctx, cs)
+		_, err = reconciler.reconcileNormal(cs)
 		g.Expect(err).To(BeNil())
 		g.Expect(cs.VPC().ID).To(Equal("vpc-exists"))
 		expectAWSClusterConditions(g, cs.AWSCluster, []conditionAssertion{
@@ -205,7 +205,7 @@ func TestAWSClusterReconciler_IntegrationTests(t *testing.T) {
 		reconciler.networkServiceFactory = func(clusterScope scope.ClusterScope) services.NetworkInterface {
 			return s
 		}
-		_, err = reconciler.reconcileNormal(ctx, cs)
+		_, err = reconciler.reconcileNormal(cs)
 		g.Expect(err.Error()).To(ContainSubstring("The maximum number of VPCs has been reached"))
 	})
 	t.Run("Should successfully delete AWSCluster with managed VPC", func(t *testing.T) {
@@ -282,8 +282,7 @@ func TestAWSClusterReconciler_IntegrationTests(t *testing.T) {
 
 		_, err = reconciler.reconcileDelete(ctx, cs)
 		g.Expect(err).To(BeNil())
-		expectAWSClusterConditions(g, cs.AWSCluster, []conditionAssertion{
-			{infrav1.LoadBalancerReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletedReason},
+		expectAWSClusterConditions(g, cs.AWSCluster, []conditionAssertion{{infrav1.LoadBalancerReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletedReason},
 			{infrav1.BastionHostReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletedReason},
 			{infrav1.SecondaryCidrsReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason},
 			{infrav1.RouteTablesReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletedReason},
@@ -503,8 +502,7 @@ func mockedCreateVPCCalls(m *mocks.MockEC2APIMockRecorder) {
 				Name:   aws.String("vpc-id"),
 				Values: aws.StringSlice([]string{"vpc-exists"}),
 			},
-		},
-	})).Return(&ec2.DescribeSubnetsOutput{
+		}})).Return(&ec2.DescribeSubnetsOutput{
 		Subnets: []*ec2.Subnet{
 			{
 				VpcId:               aws.String("vpc-exists"),
@@ -546,8 +544,7 @@ func mockedCreateVPCCalls(m *mocks.MockEC2APIMockRecorder) {
 				Name:   aws.String("vpc-id"),
 				Values: aws.StringSlice([]string{"vpc-exists"}),
 			},
-		},
-	})).Return(&ec2.DescribeRouteTablesOutput{
+		}})).Return(&ec2.DescribeRouteTablesOutput{
 		RouteTables: []*ec2.RouteTable{
 			{
 				Routes: []*ec2.Route{
@@ -568,8 +565,7 @@ func mockedCreateVPCCalls(m *mocks.MockEC2APIMockRecorder) {
 				Name:   aws.String("state"),
 				Values: aws.StringSlice([]string{ec2.VpcStatePending, ec2.VpcStateAvailable}),
 			},
-		},
-	}), gomock.Any()).Return(nil)
+		}}), gomock.Any()).Return(nil)
 	m.DescribeVpcs(gomock.Eq(&ec2.DescribeVpcsInput{
 		VpcIds: []*string{
 			aws.String("vpc-exists"),
@@ -617,8 +613,7 @@ func mockedDeleteVPCCalls(m *mocks.MockEC2APIMockRecorder) {
 				Name:   aws.String("vpc-id"),
 				Values: aws.StringSlice([]string{"vpc-exists"}),
 			},
-		},
-	})).Return(&ec2.DescribeSubnetsOutput{
+		}})).Return(&ec2.DescribeSubnetsOutput{
 		Subnets: []*ec2.Subnet{
 			{
 				VpcId:               aws.String("vpc-exists"),
@@ -639,8 +634,7 @@ func mockedDeleteVPCCalls(m *mocks.MockEC2APIMockRecorder) {
 				Name:   aws.String("tag-key"),
 				Values: aws.StringSlice([]string{"sigs.k8s.io/cluster-api-provider-aws/cluster/test-cluster"}),
 			},
-		},
-	})).Return(&ec2.DescribeRouteTablesOutput{
+		}})).Return(&ec2.DescribeRouteTablesOutput{
 		RouteTables: []*ec2.RouteTable{
 			{
 				Routes: []*ec2.Route{
@@ -687,15 +681,13 @@ func mockedDeleteVPCCalls(m *mocks.MockEC2APIMockRecorder) {
 				Name:   aws.String("state"),
 				Values: aws.StringSlice([]string{ec2.VpcStatePending, ec2.VpcStateAvailable}),
 			},
-		},
-	}), gomock.Any()).Return(nil).AnyTimes()
+		}}), gomock.Any()).Return(nil).AnyTimes()
 	m.DescribeAddresses(gomock.Eq(&ec2.DescribeAddressesInput{
 		Filters: []*ec2.Filter{
 			{
 				Name:   aws.String("tag-key"),
 				Values: aws.StringSlice([]string{"sigs.k8s.io/cluster-api-provider-aws/cluster/test-cluster"}),
-			},
-		},
+			}},
 	})).Return(&ec2.DescribeAddressesOutput{
 		Addresses: []*ec2.Address{
 			{
