@@ -104,7 +104,7 @@ type AWSManagedMachinePoolSpec struct {
 
 	// AMIType defines the AMI type
 	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64;AL2023_x86_64_STANDARD;AL2023_ARM_64_STANDARD
-	// +kubebuilder:default:=AL2_x86_64
+	// +kubebuilder:default:=AL2023_ARM_64_STANDARD
 	// +optional
 	AMIType *ManagedMachineAMIType `json:"amiType,omitempty"`
 
