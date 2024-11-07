@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.1-experimental
-
 # Copyright 2019 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,14 +13,22 @@
 # limitations under the License.
 
 # Build the manager binary
-FROM golang:1.17.3 as toolchain
-
+ARG BUILDER_GOLANG_VERSION
+# First stage: build the executable.
+FROM gcr.io/spectro-images-public/golang:${BUILDER_GOLANG_VERSION}-alpine as toolchain
 # Run this with docker build --build_arg $(go env GOPROXY) to override the goproxy
 ARG goproxy=https://proxy.golang.org
 ENV GOPROXY=$goproxy
 
+# FIPS
+ARG CRYPTO_LIB
+ENV GOEXPERIMENT=${CRYPTO_LIB:+boringcrypto}
+
 FROM toolchain as builder
 WORKDIR /workspace
+
+RUN apk update
+RUN apk add git gcc g++ curl
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -40,12 +46,19 @@ COPY ./ ./
 ARG package=.
 ARG ARCH
 ARG LDFLAGS
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN  --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.local/share/golang \
-    CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -ldflags "${LDFLAGS} -extldflags '-static'"  -o manager ${package}
+    if [ ${CRYPTO_LIB} ]; \
+    then \
+      GOARCH=${ARCH} go-build-fips.sh -a -o manager sigs.k8s.io/cluster-api-provider-aws ;\
+    else \
+      GOARCH=${ARCH} go-build-static.sh -a -o manager sigs.k8s.io/cluster-api-provider-aws ;\
+    fi
+RUN if [ "${CRYPTO_LIB}" ]; then assert-static.sh manager; fi
+RUN if [ "${CRYPTO_LIB}" ]; then assert-fips.sh manager; fi
+RUN scan-govulncheck.sh manager
 ENTRYPOINT [ "/start.sh", "/workspace/manager" ]
-
 # Copy the controller-manager into a thin image
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
