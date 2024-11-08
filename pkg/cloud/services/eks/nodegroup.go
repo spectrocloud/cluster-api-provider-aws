@@ -538,6 +538,8 @@ func (s *NodegroupService) reconcileNodegroup() error {
 	switch *ng.Status {
 	case eks.NodegroupStatusCreating, eks.NodegroupStatusUpdating:
 		ng, err = s.waitForNodegroupActive()
+	case eks.NodegroupStatusCreateFailed:
+		return fmt.Errorf("NodeGroup status is %s", *ng.Status)
 	default:
 		break
 	}
