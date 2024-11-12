@@ -333,10 +333,7 @@ func (s *NodegroupService) reconcileNodegroupVersion(ng *eks.Nodegroup) error {
 	if s.scope.Version() != nil {
 		specVersion = parseEKSVersion(*s.scope.Version())
 	}
-	ngVersion, err := version.ParseGeneric(*ng.Version)
-	if err != nil {
-		return fmt.Errorf("nodegroup k8s version is empty and status is %v", *ng.Status)
-	}
+	ngVersion := version.MustParseGeneric(*ng.Version)
 	specAMI := s.scope.ManagedMachinePool.Spec.AMIVersion
 	ngAMI := *ng.ReleaseVersion
 	statusLaunchTemplateVersion := s.scope.ManagedMachinePool.Status.LaunchTemplateVersion
