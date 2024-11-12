@@ -222,8 +222,7 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 		RemoteAccess:  remoteAccess,
 		UpdateConfig:  s.updateConfig(),
 	}
-	// if managedPool.AMIType != nil && (managedPool.AWSLaunchTemplate == nil /*|| managedPool.AWSLaunchTemplate.AMI.ID == nil*/) {
-	if managedPool.AMIType != nil {
+	if managedPool.AMIType != nil && (managedPool.AWSLaunchTemplate == nil /*|| managedPool.AWSLaunchTemplate.AMI.ID == nil*/) {
 		input.AmiType = aws.String(string(*managedPool.AMIType))
 	}
 	if managedPool.DiskSize != nil {
@@ -334,7 +333,10 @@ func (s *NodegroupService) reconcileNodegroupVersion(ng *eks.Nodegroup) error {
 	if s.scope.Version() != nil {
 		specVersion = parseEKSVersion(*s.scope.Version())
 	}
-	ngVersion := version.MustParseGeneric(*ng.Version)
+	ngVersion, err := version.ParseGeneric(*ng.Version)
+	if err != nil {
+		return fmt.Errorf("nodegroup k8s version is empty and status is %v", *ng.Status)
+	}
 	specAMI := s.scope.ManagedMachinePool.Spec.AMIVersion
 	ngAMI := *ng.ReleaseVersion
 	statusLaunchTemplateVersion := s.scope.ManagedMachinePool.Status.LaunchTemplateVersion
@@ -538,8 +540,6 @@ func (s *NodegroupService) reconcileNodegroup() error {
 	switch *ng.Status {
 	case eks.NodegroupStatusCreating, eks.NodegroupStatusUpdating:
 		ng, err = s.waitForNodegroupActive()
-	case eks.NodegroupStatusCreateFailed:
-		return fmt.Errorf("NodeGroup status is %s", *ng.Status)
 	default:
 		break
 	}
