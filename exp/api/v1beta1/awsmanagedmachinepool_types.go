@@ -45,7 +45,6 @@ const (
 	Al2023x86_64Nvidia ManagedMachineAMIType = "AL2023_x86_64_NVIDIA"
 	// AL2023_x86_64_NEURON
 	Al2023x86_64Neuron ManagedMachineAMIType = "AL2023_x86_64_NEURON"
-
 )
 
 // ManagedMachinePoolCapacityType specifies the capacity type to be used for the managed MachinePool.
