@@ -22,12 +22,7 @@ import (
 )
 
 func (t Template) fargateProfilePolicies(roleSpec *bootstrapv1.AWSIAMRoleSpec) []string {
-	var policies []string
-	if t.Spec.Partition == bootstrapv1.DefaultPartitionNameUSGov {
-		policies = eks.FargateRolePoliciesAWSUSGov()
-	} else {
-		policies = eks.FargateRolePolicies()
-	}
+	policies := eks.GenerateFargateRolePoliciesARN(t.Spec.Partition)
 	if roleSpec.ExtraPolicyAttachments != nil {
 		policies = append(policies, roleSpec.ExtraPolicyAttachments...)
 	}
