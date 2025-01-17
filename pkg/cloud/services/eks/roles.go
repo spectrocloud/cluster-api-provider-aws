@@ -47,13 +47,6 @@ func NodegroupRolePolicies() []string {
 	}
 }
 
-// FargateRolePolicies gives the policies required for a fargate role.
-func FargateRolePolicies() []string {
-	return []string{
-		"arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
-	}
-}
-
 // NodegroupRolePolicies gives the policies required for a nodegroup role.
 func NodegroupRolePoliciesAWSUSGov() []string {
 	return []string{
@@ -63,11 +56,46 @@ func NodegroupRolePoliciesAWSUSGov() []string {
 	}
 }
 
+func GenerateNodegroupRolePoliciesARN(partition string) []string {
+	arns := []string{
+		"AmazonEKSWorkerNodePolicy",
+		"AmazonEKS_CNI_Policy",
+		"AmazonEC2ContainerRegistryReadOnly",
+	}
+
+	policies := []string{}
+	for _, arn := range arns {
+		policies = append(policies, generatePartitionBasedPolicyARN(partition, arn))
+	}
+	return policies
+}
+
+// FargateRolePolicies gives the policies required for a fargate role.
+func FargateRolePolicies() []string {
+	return []string{
+		"arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+	}
+}
+
 // FargateRolePolicies gives the policies required for a fargate role.
 func FargateRolePoliciesAWSUSGov() []string {
 	return []string{
 		"arn:aws-us-gov:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
 	}
+}
+
+func GenerateFargateRolePoliciesARN(partition string) []string {
+	return []string{
+		generatePartitionBasedPolicyARN(partition, "AmazonEKSFargatePodExecutionRolePolicy"),
+	}
+}
+
+func generatePartitionBasedPolicyARN(partition, name string) string {
+	if partition == "" {
+		partition = "aws"
+	}
+
+	return fmt.Sprintf("arn:%s:iam::aws:policy/%s", partition, name)
 }
 
 func (s *Service) reconcileControlPlaneIAMRole() error {
