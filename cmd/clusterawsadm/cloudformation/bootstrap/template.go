@@ -189,7 +189,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if !t.Spec.EKS.DefaultControlPlaneRole.Disable && !t.Spec.EKS.Disable {
 		template.Resources[AWSIAMRoleEKSControlPlane] = &cfn_iam.Role{
-			RoleName:                 ekscontrolplanev1.DefaultEKSControlPlaneRole,
+			RoleName:                 t.NewManagedName(ekscontrolplanev1.DefaultEKSControlPlaneRole),
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{"eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksControlPlanePolicies(),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.DefaultControlPlaneRole.Tags),
@@ -199,7 +199,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if !t.Spec.EKS.ManagedMachinePool.Disable && !t.Spec.EKS.Disable {
 		template.Resources[AWSIAMRoleEKSNodegroup] = &cfn_iam.Role{
-			RoleName:                 expinfrav1.DefaultEKSNodegroupRole,
+			RoleName:                 t.NewManagedName(expinfrav1.DefaultEKSNodegroupRole),
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{"ec2.amazonaws.com", "eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksMachinePoolPolicies(),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.ManagedMachinePool.Tags),
@@ -209,7 +209,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if !t.Spec.EKS.Fargate.Disable && !t.Spec.EKS.Disable {
 		template.Resources[AWSIAMRoleEKSFargate] = &cfn_iam.Role{
-			RoleName:                 expinfrav1.DefaultEKSFargateRole,
+			RoleName:                 t.NewManagedName(expinfrav1.DefaultEKSFargateRole),
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{eksiam.EKSFargateService}),
 			ManagedPolicyArns:        t.fargateProfilePolicies(t.Spec.EKS.Fargate),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.Fargate.Tags),
