@@ -32,23 +32,28 @@ import (
 
 // Constants that define resources for a Template.
 const (
-	AWSIAMGroupBootstrapper                      = "AWSIAMGroupBootstrapper"
-	AWSIAMInstanceProfileControllers             = "AWSIAMInstanceProfileControllers"
-	AWSIAMInstanceProfileControlPlane            = "AWSIAMInstanceProfileControlPlane"
-	AWSIAMInstanceProfileNodes                   = "AWSIAMInstanceProfileNodes"
-	AWSIAMRoleControllers                        = "AWSIAMRoleControllers"
-	AWSIAMRoleControlPlane                       = "AWSIAMRoleControlPlane"
-	AWSIAMRoleNodes                              = "AWSIAMRoleNodes"
-	AWSIAMRoleEKSControlPlane                    = "AWSIAMRoleEKSControlPlane"
-	AWSIAMRoleEKSNodegroup                       = "AWSIAMRoleEKSNodegroup"
-	AWSIAMRoleEKSFargate                         = "AWSIAMRoleEKSFargate"
-	AWSIAMUserBootstrapper                       = "AWSIAMUserBootstrapper"
-	ControllersPolicy                 PolicyName = "AWSIAMManagedPolicyControllers"
-	ControllersPolicyEKS              PolicyName = "AWSIAMManagedPolicyControllersEKS"
-	ControlPlanePolicy                PolicyName = "AWSIAMManagedPolicyCloudProviderControlPlane"
-	NodePolicy                        PolicyName = "AWSIAMManagedPolicyCloudProviderNodes"
-	CSIPolicy                         PolicyName = "AWSEBSCSIPolicyController"
-	EKSConsolePolicy                  PolicyName = "AWSIAMManagedPolicyEKSConsole"
+	// Groups
+	AWSIAMGroupBootstrapper = "AWSIAMGroupBootstrapper"
+	// Instance Profiles
+	AWSIAMInstanceProfileControllers  = "AWSIAMInstanceProfileControllers"
+	AWSIAMInstanceProfileControlPlane = "AWSIAMInstanceProfileControlPlane"
+	AWSIAMInstanceProfileNodes        = "AWSIAMInstanceProfileNodes"
+	// User
+	AWSIAMUserBootstrapper = "AWSIAMUserBootstrapper"
+	// Roles
+	AWSIAMRoleControllers     = "AWSIAMRoleControllers"
+	AWSIAMRoleControlPlane    = "AWSIAMRoleControlPlane"
+	AWSIAMRoleNodes           = "AWSIAMRoleNodes"
+	AWSIAMRoleEKSControlPlane = "AWSIAMRoleEKSControlPlane"
+	AWSIAMRoleEKSNodegroup    = "AWSIAMRoleEKSNodegroup"
+	AWSIAMRoleEKSFargate      = "AWSIAMRoleEKSFargate"
+	// Policies
+	ControllersPolicy    PolicyName = "AWSIAMManagedPolicyControllers"
+	ControllersPolicyEKS PolicyName = "AWSIAMManagedPolicyControllersEKS"
+	ControlPlanePolicy   PolicyName = "AWSIAMManagedPolicyCloudProviderControlPlane"
+	NodePolicy           PolicyName = "AWSIAMManagedPolicyCloudProviderNodes"
+	CSIPolicy            PolicyName = "AWSEBSCSIPolicyController"
+	EKSConsolePolicy     PolicyName = "AWSIAMManagedPolicyEKSConsole"
 )
 
 // Template is an AWS CloudFormation template to bootstrap
@@ -77,11 +82,12 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if t.Spec.BootstrapUser.Enable {
 		template.Resources[AWSIAMUserBootstrapper] = &cfn_iam.User{
-			UserName:          t.Spec.BootstrapUser.UserName,
-			Groups:            t.bootstrapUserGroups(),
-			ManagedPolicyArns: t.Spec.ControlPlane.ExtraPolicyAttachments,
-			Policies:          t.bootstrapUserPolicy(),
-			Tags:              converters.MapToCloudFormationTags(t.Spec.BootstrapUser.Tags),
+			UserName:            t.Spec.BootstrapUser.UserName,
+			Groups:              t.bootstrapUserGroups(),
+			ManagedPolicyArns:   t.Spec.ControlPlane.ExtraPolicyAttachments,
+			Policies:            t.bootstrapUserPolicy(),
+			Tags:                converters.MapToCloudFormationTags(t.Spec.BootstrapUser.Tags),
+			PermissionsBoundary: t.Spec.PermissionsBoundary,
 		}
 
 		template.Resources[AWSIAMGroupBootstrapper] = &cfn_iam.Group{
@@ -140,6 +146,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 		ManagedPolicyArns:        t.Spec.ControlPlane.ExtraPolicyAttachments,
 		Policies:                 t.controlPlanePolicies(),
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.ControlPlane.Tags),
+		PermissionsBoundary:      t.Spec.PermissionsBoundary,
 	}
 
 	template.Resources[AWSIAMRoleControllers] = &cfn_iam.Role{
@@ -147,6 +154,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 		AssumeRolePolicyDocument: t.controllersTrustPolicy(),
 		Policies:                 t.controllersRolePolicy(),
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.ClusterAPIControllers.Tags),
+		PermissionsBoundary:      t.Spec.PermissionsBoundary,
 	}
 
 	template.Resources[AWSIAMRoleNodes] = &cfn_iam.Role{
@@ -155,6 +163,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 		ManagedPolicyArns:        t.nodeManagedPolicies(),
 		Policies:                 t.nodePolicies(),
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.Nodes.Tags),
+		PermissionsBoundary:      t.Spec.PermissionsBoundary,
 	}
 
 	template.Resources[AWSIAMInstanceProfileControlPlane] = &cfn_iam.InstanceProfile{
@@ -184,6 +193,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{"eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksControlPlanePolicies(),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.DefaultControlPlaneRole.Tags),
+			PermissionsBoundary:      t.Spec.PermissionsBoundary,
 		}
 	}
 
@@ -193,6 +203,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{"ec2.amazonaws.com", "eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksMachinePoolPolicies(),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.ManagedMachinePool.Tags),
+			PermissionsBoundary:      t.Spec.PermissionsBoundary,
 		}
 	}
 
@@ -202,6 +213,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{eksiam.EKSFargateService}),
 			ManagedPolicyArns:        t.fargateProfilePolicies(t.Spec.EKS.Fargate),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.Fargate.Tags),
+			PermissionsBoundary:      t.Spec.PermissionsBoundary,
 		}
 	}
 
