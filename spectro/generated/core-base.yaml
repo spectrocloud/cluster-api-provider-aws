@@ -397,6 +397,17 @@ metadata:
   namespace: capa-system
 type: Opaque
 ---
+apiVersion: v1
+data:
+  capa-ca-bundle.pem: ${AWS_B64ENCODED_CABUNDLE}
+kind: Secret
+metadata:
+  labels:
+    cluster.x-k8s.io/provider: infrastructure-aws
+  name: capa-manager-bootstrap-ca-bundle
+  namespace: capa-system
+type: Opaque
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -457,3 +468,6 @@ spec:
       - name: credentials
         secret:
           secretName: capa-manager-bootstrap-credentials
+      - name: ca-bundle
+        secret:
+          secretName: capa-manager-bootstrap-ca-bundle

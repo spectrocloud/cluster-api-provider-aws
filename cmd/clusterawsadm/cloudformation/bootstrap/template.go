@@ -76,6 +76,10 @@ func (t Template) NewManagedName(name string) string {
 	return fmt.Sprintf("%s%s%s", t.Spec.NamePrefix, name, *t.Spec.NameSuffix)
 }
 
+func (t Template) NewEKSManagedName(name string) string {
+	return fmt.Sprintf("%s%s", t.Spec.NamePrefix, name)
+}
+
 // RenderCloudFormation will render and return a cloudformation Template.
 func (t Template) RenderCloudFormation() *cloudformation.Template {
 	template := cloudformation.NewTemplate()
@@ -189,7 +193,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if !t.Spec.EKS.DefaultControlPlaneRole.Disable && !t.Spec.EKS.Disable {
 		template.Resources[AWSIAMRoleEKSControlPlane] = &cfn_iam.Role{
-			RoleName:                 t.NewManagedName(ekscontrolplanev1.DefaultEKSControlPlaneRole),
+			RoleName:                 t.NewEKSManagedName(ekscontrolplanev1.DefaultEKSControlPlaneRole),
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{"eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksControlPlanePolicies(),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.DefaultControlPlaneRole.Tags),
@@ -199,7 +203,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if !t.Spec.EKS.ManagedMachinePool.Disable && !t.Spec.EKS.Disable {
 		template.Resources[AWSIAMRoleEKSNodegroup] = &cfn_iam.Role{
-			RoleName:                 t.NewManagedName(expinfrav1.DefaultEKSNodegroupRole),
+			RoleName:                 t.NewEKSManagedName(expinfrav1.DefaultEKSNodegroupRole),
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{"ec2.amazonaws.com", "eks.amazonaws.com"}),
 			ManagedPolicyArns:        t.eksMachinePoolPolicies(),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.ManagedMachinePool.Tags),
@@ -209,7 +213,7 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	if !t.Spec.EKS.Fargate.Disable && !t.Spec.EKS.Disable {
 		template.Resources[AWSIAMRoleEKSFargate] = &cfn_iam.Role{
-			RoleName:                 t.NewManagedName(expinfrav1.DefaultEKSFargateRole),
+			RoleName:                 t.NewEKSManagedName(expinfrav1.DefaultEKSFargateRole),
 			AssumeRolePolicyDocument: AssumeRolePolicy(iamv1.PrincipalService, []string{eksiam.EKSFargateService}),
 			ManagedPolicyArns:        t.fargateProfilePolicies(t.Spec.EKS.Fargate),
 			Tags:                     converters.MapToCloudFormationTags(t.Spec.EKS.Fargate.Tags),
