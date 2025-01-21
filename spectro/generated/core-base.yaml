@@ -399,7 +399,7 @@ type: Opaque
 ---
 apiVersion: v1
 data:
-  capa-ca-bundle.pem: ${AWS_B64ENCODED_CABUNDLE}
+  ca-chain.cert.pem: ${AWS_B64ENCODED_CABUNDLE}
 kind: Secret
 metadata:
   labels:
@@ -450,12 +450,17 @@ spec:
         env:
         - name: AWS_SHARED_CREDENTIALS_FILE
           value: /home/.aws/credentials
+        - name: AWS_CA_BUNDLE
+          value: /home/.aws/ca-bundle/ca-chain.cert.pem
         image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
         imagePullPolicy: Always
         name: manager
         volumeMounts:
         - mountPath: /home/.aws
           name: credentials
+        - name: ca-bundle
+          mountPath: /home/.aws/ca-bundle
+          subPath: ca-chain.cert.pem
       securityContext:
         fsGroup: 1000
       terminationGracePeriodSeconds: 10
