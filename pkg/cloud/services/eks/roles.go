@@ -18,8 +18,9 @@ package eks
 
 import (
 	"fmt"
-	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
 	"strings"
+
+	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/api/bootstrap/v1beta1"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -31,6 +32,7 @@ import (
 	eksiam "sigs.k8s.io/cluster-api-provider-aws/pkg/cloud/services/eks/iam"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/eks"
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/record"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -38,28 +40,10 @@ const (
 	maxIAMRoleNameLength = 64
 )
 
-// NodegroupRolePolicies gives the policies required for a nodegroup role.
-func NodegroupRolePolicies() []string {
-	return []string{
-		"arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-		"arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-		"arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-	}
-}
-
-// NodegroupRolePolicies gives the policies required for a nodegroup role.
-func NodegroupRolePoliciesAWSUSGov() []string {
-	return []string{
-		"arn:aws-us-gov:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-		"arn:aws-us-gov:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-		"arn:aws-us-gov:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-	}
-}
-
 func GenerateNodegroupRolePoliciesARN(partition string) []string {
 	arns := []string{
 		"AmazonEKSWorkerNodePolicy",
-		"AmazonEKS_CNI_Policy",
+		"AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
 		"AmazonEC2ContainerRegistryReadOnly",
 	}
 
@@ -137,16 +121,13 @@ func (s *Service) reconcileControlPlaneIAMRole() error {
 		return nil
 	}
 
-	//TODO: check tags and trust relationship to see if they need updating
-	var policies []*string
-	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
-		policies = []*string{
-			aws.String("arn:aws-us-gov:iam::aws:policy/AmazonEKSClusterPolicy"),
-		}
-	} else {
-		policies = []*string{
-			aws.String("arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"),
-		}
+	partition, err := utils.PartitionForRegion(s.scope.ControlPlane.Spec.Region)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get partition for region %s", s.scope.ControlPlane.Spec.Region)
+	}
+
+	policies := []*string{
+		aws.String(generatePartitionBasedPolicyARN(partition, "AmazonEKSClusterPolicy")),
 	}
 
 	if s.scope.ControlPlane.Spec.RoleAdditionalPolicies != nil {
@@ -256,12 +237,12 @@ func (s *NodegroupService) reconcileNodegroupIAMRole() error {
 		return errors.Wrapf(err, "error ensuring tags and policy document are set on node role")
 	}
 
-	var policies []string
-	if strings.Contains(s.scope.ControlPlane.Spec.Region, v1beta1.DefaultPartitionNameUSGov) {
-		policies = NodegroupRolePoliciesAWSUSGov()
-	} else {
-		policies = NodegroupRolePolicies()
+	partition, err := utils.PartitionForRegion(s.scope.ControlPlane.Spec.Region)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get partition for region %s", s.scope.ControlPlane.Spec.Region)
 	}
+
+	policies := GenerateNodegroupRolePoliciesARN(partition)
 	if len(s.scope.ManagedMachinePool.Spec.RoleAdditionalPolicies) > 0 {
 		if !s.scope.AllowAdditionalRoles() {
 			return ErrCannotUseAdditionalRoles
