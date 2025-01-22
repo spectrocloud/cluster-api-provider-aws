@@ -1,15 +1,16 @@
 package utils
 
 import (
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/onsi/gomega"
-	"os"
-	"strings"
-	"testing"
 )
 
 func TestResolverEndpointAWSSCS(t *testing.T) {
@@ -210,6 +211,74 @@ func TestDisableFipsEndpointForSC2S(t *testing.T) {
 			modified := options.UseFIPSEndpoint != tt.initialFipsState
 			if modified != tt.expectModification {
 				t.Errorf("Unexpected modification for region %q: got %v, want %v", tt.region, modified, tt.expectModification)
+			}
+		})
+	}
+}
+
+func TestPartitionForRegion(t *testing.T) {
+	tests := []struct {
+		name          string
+		region        string
+		wantPartition string
+		wantError     bool
+	}{
+		{
+			name:          "Standard AWS region",
+			region:        "us-east-1",
+			wantPartition: "aws",
+			wantError:     false,
+		},
+		{
+			name:          "China region",
+			region:        "cn-north-1",
+			wantPartition: "aws-cn",
+			wantError:     false,
+		},
+		{
+			name:          "GovCloud region",
+			region:        "us-gov-west-1",
+			wantPartition: "aws-us-gov",
+			wantError:     false,
+		},
+		{
+			name:          "ISO partition region",
+			region:        "us-iso-east-1",
+			wantPartition: "aws-iso",
+			wantError:     false,
+		},
+		{
+			name:          "ISOB partition region",
+			region:        "us-isob-east-1",
+			wantPartition: "aws-iso-b",
+			wantError:     false,
+		},
+		{
+			name:          "Unknown region partition aws",
+			region:        "unknown-region",
+			wantPartition: "aws",
+			wantError:     false,
+		},
+		{
+			name:          "Empty region",
+			region:        "",
+			wantPartition: "",
+			wantError:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			partition, err := PartitionForRegion(tt.region)
+
+			if partition != tt.wantPartition {
+				t.Errorf("Test %q failed: expected partition %q, got %q", tt.name, tt.wantPartition, partition)
+			}
+
+			if err != nil && !tt.wantError {
+				t.Errorf("Test %q failed: expected no error, got %q", tt.name, err.Error())
+			} else if err == nil && tt.wantError {
+				t.Errorf("Test %q failed: expected error, got nil", tt.name)
 			}
 		})
 	}

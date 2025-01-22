@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -16,7 +17,7 @@ func init() {
 
 var isFIPSEndpointEnabled bool
 
-func CustomEndpointResolverForAWS() endpoints.ResolverFunc { 
+func CustomEndpointResolverForAWS() endpoints.ResolverFunc {
 
 	log := klogr.New()
 	resolver := func(service, region string, optFns ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
@@ -173,4 +174,16 @@ func disableFipsEndpointForSC2S(region string) func(*endpoints.Options) {
 			ep.UseFIPSEndpoint = endpoints.FIPSEndpointStateDisabled
 		}
 	}
+}
+
+func PartitionForRegion(region string) (string, error) {
+	resolver := endpoints.DefaultResolver()
+
+	// Resolve the endpoint for the given region and a generic service
+	endpoint, err := resolver.EndpointFor("ec2", region, func(opt *endpoints.Options) {})
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve partition for region %s: %w", region, err)
+	}
+
+	return endpoint.PartitionID, nil
 }
