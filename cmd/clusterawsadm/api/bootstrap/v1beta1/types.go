@@ -213,9 +213,6 @@ type AWSIAMConfigurationSpec struct {
 	// Partition is the AWS security partition being used. Defaults to "aws"
 	Partition string `json:"partition,omitempty"`
 
-	// PermissionsBoundary is the ARN of the permissions boundary to use for the roles created by clusterawsadm.
-	PermissionsBoundary string `json:"permissionsBoundary,omitempty"`
-
 	// SecureSecretsBackend, when set to parameter-store will create AWS Systems Manager
 	// Parameter Storage policies. By default or with the value of secrets-manager,
 	// will generate AWS Secrets Manager policies instead.
