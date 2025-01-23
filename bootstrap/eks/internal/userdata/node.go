@@ -26,7 +26,17 @@ import (
 
 const (
 	nodeUserData = `#!/bin/bash
+{{- if .PreBootstrapCommands }}
+{{- range .PreBootstrapCommands }}
+{{.}}
+{{- end }}
+{{- end }}
 /etc/eks/bootstrap.sh {{.ClusterName}} {{- template "args" . }}
+{{- if .PostBootstrapCommands }}
+{{- range .PostBootstrapCommands }}
+{{.}}
+{{- end }}
+{{- end }}
 `
 )
 
@@ -41,6 +51,8 @@ type NodeInput struct {
 	PauseContainerAccount *string
 	PauseContainerVersion *string
 	UseMaxPods            *bool
+	PreBootstrapCommands  []string
+	PostBootstrapCommands []string
 	// NOTE: currently the IPFamily/ServiceIPV6Cidr isn't exposed to the user.
 	// TODO (richardcase): remove the above comment when IPV6 / dual stack is implemented.
 	IPFamily        *string

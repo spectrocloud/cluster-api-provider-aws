@@ -46,6 +46,12 @@ type EKSConfigSpec struct {
 	// UseMaxPods  sets --max-pods for the kubelet when true.
 	// +optional
 	UseMaxPods *bool `json:"useMaxPods,omitempty"`
+	// PreBootstrapCommands
+	// +optional
+	PreBootstrapCommands []string `json:"preBootstrapCommands,omitempty"`
+	// PostBootstrapCommands
+	// +optional
+	PostBootstrapCommands []string `json:"postBootstrapCommands,omitempty"`
 
 	// TODO(richardcase): this can be uncommented when we get to the ipv6/dual-stack implementation
 	// ServiceIPV6Cidr is the ipv6 cidr range of the cluster. If this is specified then

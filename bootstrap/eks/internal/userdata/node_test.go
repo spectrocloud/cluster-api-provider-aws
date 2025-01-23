@@ -167,6 +167,83 @@ func TestNewNode(t *testing.T) {
 /etc/eks/bootstrap.sh test-cluster --docker-config-json '{"debug":true}'
 `),
 		},
+		{
+			name: "with PreBootstrapCommands",
+			args: args{
+				input: &NodeInput{
+					ClusterName: "test-cluster",
+					PreBootstrapCommands: []string{
+						"echo 'hello world'",
+						"echo 'goodbye world'",
+					},
+				},
+			},
+			expectedBytes: []byte(`#!/bin/bash
+echo 'hello world'
+echo 'goodbye world'
+/etc/eks/bootstrap.sh test-cluster
+`),
+			expectErr: false,
+		},
+		{
+			name: "with PostBootstrapCommands",
+			args: args{
+				input: &NodeInput{
+					ClusterName: "test-cluster",
+					PostBootstrapCommands: []string{
+						"echo 'hello world'",
+						"echo 'goodbye world'",
+					},
+				},
+			},
+			expectedBytes: []byte(`#!/bin/bash
+/etc/eks/bootstrap.sh test-cluster
+echo 'hello world'
+echo 'goodbye world'
+`),
+			expectErr: false,
+		},
+		{
+			name: "with PreBootstrapCommands and PostBootstrapCommands",
+			args: args{
+				input: &NodeInput{
+					ClusterName: "test-cluster",
+					PreBootstrapCommands: []string{
+						"echo 'hello world'",
+					},
+					PostBootstrapCommands: []string{
+						"echo 'goodbye world'",
+					},
+				},
+			},
+			expectedBytes: []byte(`#!/bin/bash
+echo 'hello world'
+/etc/eks/bootstrap.sh test-cluster
+echo 'goodbye world'
+`),
+			expectErr: false,
+		},
+		{
+			name: "with PreBootstrapCommands, PostBootstrapCommands and args(Container runtime)",
+			args: args{
+				input: &NodeInput{
+					ClusterName: "test-cluster",
+					PreBootstrapCommands: []string{
+						"echo 'hello world'",
+					},
+					PostBootstrapCommands: []string{
+						"echo 'goodbye world'",
+					},
+					ContainerRuntime: pointer.String("containerd"),
+				},
+			},
+			expectedBytes: []byte(`#!/bin/bash
+echo 'hello world'
+/etc/eks/bootstrap.sh test-cluster --container-runtime containerd
+echo 'goodbye world'
+`),
+			expectErr: false,
+		},
 	}
 
 	for _, testcase := range tests {
