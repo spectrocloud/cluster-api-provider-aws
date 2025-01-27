@@ -21,12 +21,13 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 )
 
-func TestEKSConfigReconciler_ReturnEarlyIfClusterInfraNotReady(t *testing.T) {
+func TestEKSConfigReconcilerReturnEarlyIfClusterInfraNotReady(t *testing.T) {
 	g := NewWithT(t)
 
 	cluster := newCluster("cluster")
@@ -42,13 +43,12 @@ func TestEKSConfigReconciler_ReturnEarlyIfClusterInfraNotReady(t *testing.T) {
 	}
 
 	g.Eventually(func(gomega Gomega) {
-		result, err := reconciler.joinWorker(context.Background(), cluster, config)
-		gomega.Expect(result).To(Equal(reconcile.Result{}))
+		err := reconciler.joinWorker(context.Background(), cluster, config, configOwner("Machine"))
 		gomega.Expect(err).NotTo(HaveOccurred())
 	}).Should(Succeed())
 }
 
-func TestEKSConfigReconciler_ReturnEarlyIfClusterControlPlaneNotInitialized(t *testing.T) {
+func TestEKSConfigReconcilerReturnEarlyIfClusterControlPlaneNotInitialized(t *testing.T) {
 	g := NewWithT(t)
 
 	cluster := newCluster("cluster")
@@ -64,8 +64,15 @@ func TestEKSConfigReconciler_ReturnEarlyIfClusterControlPlaneNotInitialized(t *t
 	}
 
 	g.Eventually(func(gomega Gomega) {
-		result, err := reconciler.joinWorker(context.Background(), cluster, config)
-		gomega.Expect(result).To(Equal(reconcile.Result{}))
+		err := reconciler.joinWorker(context.Background(), cluster, config, configOwner("Machine"))
 		gomega.Expect(err).NotTo(HaveOccurred())
 	}).Should(Succeed())
+}
+
+func configOwner(kind string) *bsutil.ConfigOwner {
+	unstructuredOwner := unstructured.Unstructured{
+		Object: map[string]interface{}{"kind": kind},
+	}
+	configOwner := bsutil.ConfigOwner{Unstructured: &unstructuredOwner}
+	return &configOwner
 }
