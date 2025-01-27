@@ -4,7 +4,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -320,7 +319,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -810,7 +808,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -3314,7 +3311,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -3651,7 +3647,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -6477,7 +6472,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -7909,7 +7903,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -9053,7 +9046,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -12502,7 +12494,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -13454,7 +13445,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -13860,7 +13850,6 @@ metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
     controller-gen.kubebuilder.io/version: v0.7.1-0.20211110210727-ab52f76cc7d1
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
     cluster.x-k8s.io/v1alpha3: v1alpha3
@@ -14202,7 +14191,6 @@ kind: MutatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
   name: capa-mutating-webhook-configuration
@@ -14464,7 +14452,6 @@ kind: ValidatingWebhookConfiguration
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: capi-webhook-system/capa-serving-cert
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-aws
   name: capa-validating-webhook-configuration
