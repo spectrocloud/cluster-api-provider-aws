@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	defaultSSHKeyName = "default"
+	defaultSSHKeyName         = "default"
 	defaultUsGovPartitionName = "us-gov"
 )
 
