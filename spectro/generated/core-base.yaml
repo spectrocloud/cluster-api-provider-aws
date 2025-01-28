@@ -450,8 +450,8 @@ spec:
         env:
         - name: AWS_SHARED_CREDENTIALS_FILE
           value: /home/.aws/credentials
-        - name: AWS_CA_BUNDLE
-          value: /home/.aws/ca-bundle/ca-chain.cert.pem
+        - name: AWS_SDK_LOAD_CONFIG
+          value: "true"
         image: gcr.io/k8s-staging-cluster-api-aws/cluster-api-aws-controller:latest
         imagePullPolicy: Always
         name: manager
