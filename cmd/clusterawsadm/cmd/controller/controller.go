@@ -19,10 +19,10 @@ package controller
 
 import (
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/util"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/controller/credentials"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/controller/rollout"
-	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 )
 
 // RootCmd is the root of the `controller command`.
@@ -31,7 +31,7 @@ func RootCmd() *cobra.Command {
 		Use:   "controller [command]",
 		Short: "controller commands",
 		Args:  cobra.NoArgs,
-		Long: cmd.LongDesc(`
+		Long: util.LongDesc(`
 			All controller related actions such as:
 			# Zero controller credentials and rollout controllers
 		`),

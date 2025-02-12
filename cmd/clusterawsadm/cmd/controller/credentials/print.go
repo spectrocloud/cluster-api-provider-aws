@@ -21,12 +21,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/util"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/controller"
-	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 )
 
 // PrintCredentialsCmd is a CLI command that will print credentials the controller is using.
@@ -34,10 +34,10 @@ func PrintCredentialsCmd() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "print-credentials",
 		Short: "print credentials the controller is using",
-		Long: cmd.LongDesc(`
+		Long: util.LongDesc(`
 			print credentials the controller is using
 		`),
-		Example: cmd.Examples(`
+		Example: util.Examples(`
 		# print credentials
 		clusterawsadm controller print-credentials --kubeconfig=kubeconfig --namespace=capa-system
 		`),

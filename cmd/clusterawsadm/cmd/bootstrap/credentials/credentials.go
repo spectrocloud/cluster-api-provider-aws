@@ -21,12 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/util"
 
 	"github.com/spf13/cobra"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/flags"
 	creds "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/credentials"
-	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 )
 
 const (
@@ -86,10 +86,10 @@ func RootCmd() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "credentials",
 		Short: `Encode credentials to use with Kubernetes Cluster API Provider AWS`,
-		Long: cmd.LongDesc(`
+		Long: util.LongDesc(`
 			Encode credentials to use with Kubernetes Cluster API Provider AWS.
 			` + CredentialHelp + EncodingHelp),
-		Example: cmd.Examples(examples),
+		Example: util.Examples(examples),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},
@@ -113,10 +113,10 @@ func generateAWSDefaultProfileWithChain() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "encode-as-profile",
 		Short: "Generate an AWS profile from the current environment",
-		Long: cmd.LongDesc(`
+		Long: util.LongDesc(`
 		Generate an AWS profile from the current environment for the ephemeral bootstrap cluster.
 		` + CredentialHelp + EncodingHelp),
-		Example: cmd.Examples(examples),
+		Example: util.Examples(examples),
 		RunE: func(c *cobra.Command, args []string) error {
 			flags.CredentialWarning(c)
 

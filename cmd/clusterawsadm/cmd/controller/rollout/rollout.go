@@ -18,9 +18,9 @@ package rollout
 
 import (
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/util"
 
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/controller/rollout"
-	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 )
 
 var (
@@ -34,10 +34,10 @@ func RolloutControllersCmd() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "rollout-controller",
 		Short: "initiates rollout and restart on capa-controller-manager deployment",
-		Long: cmd.LongDesc(`
+		Long: util.LongDesc(`
 			initiates rollout and restart on capa-controller-manager deployment
 		`),
-		Example: cmd.Examples(`
+		Example: util.Examples(`
 		# rollout controller deployment
 		clusterawsadm controller rollout-controller --kubeconfig=kubeconfig --namespace=capa-system
 		`),

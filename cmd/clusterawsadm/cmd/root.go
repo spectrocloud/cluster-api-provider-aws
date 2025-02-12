@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/util"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -35,7 +36,6 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/gc"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/resource"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cmd/version"
-	"sigs.k8s.io/cluster-api/cmd/clusterctl/cmd"
 )
 
 var (
@@ -47,7 +47,7 @@ func RootCmd() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "clusterawsadm",
 		Short: "Kubernetes Cluster API Provider AWS Management Utility",
-		Long: cmd.LongDesc(`
+		Long: util.LongDesc(`
 			clusterawsadm provides helpers for bootstrapping Kubernetes Cluster
 			API Provider AWS. Use clusterawsadm to view required AWS Identity and Access Management
 			(IAM) policies as JSON docs, or create IAM roles and instance profiles automatically
@@ -55,7 +55,7 @@ func RootCmd() *cobra.Command {
 
 			clusterawsadm additionally helps provide credentials for use with clusterctl.
 		`),
-		Example: cmd.Examples(`
+		Example: util.Examples(`
 			# Create AWS Identity and Access Management (IAM) roles for use with
 			# Kubernetes Cluster API Provider AWS.
 			clusterawsadm bootstrap iam create-cloudformation-stack
