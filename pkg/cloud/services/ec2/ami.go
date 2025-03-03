@@ -221,9 +221,9 @@ func (s *Service) defaultBastionAMILookup(region string) (string, error) {
 
 	if strings.Contains(region, defaultUsGovPartitionName) {
 		filter := &ec2.Filter{
-				Name:   aws.String("owner-id"),
-				Values: []*string{aws.String(ubuntuOwnerIDUsGov)},
-			}
+			Name:   aws.String("owner-id"),
+			Values: []*string{aws.String(ubuntuOwnerIDUsGov)},
+		}
 		describeImageInput.Filters = append(describeImageInput.Filters, filter)
 	} else {
 		filter := &ec2.Filter{

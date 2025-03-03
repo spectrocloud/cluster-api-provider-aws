@@ -175,6 +175,13 @@ log::info "aws.cluster.x-k8s.io encrypted cloud-init script $0 started"
 log::info "secret prefix: ${SECRET_PREFIX}"
 log::info "secret count: ${CHUNKS}"
 
+{{if .B64CABundle}}
+log::info "writing AWS CA bundle to /etc/ssl/certs/aws-ca-bundle.crt"
+echo "{{.B64CABundle}}" | base64 -d > /etc/ssl/certs/aws-ca-bundle.crt
+update-ca-certificates
+export AWS_CA_BUNDLE=/etc/ssl/certs/aws-ca-bundle.crt
+{{end}}
+
 if test -f "${FILE}"; then
   log::info "encrypted userdata already written to disk"
   log::success_exit
