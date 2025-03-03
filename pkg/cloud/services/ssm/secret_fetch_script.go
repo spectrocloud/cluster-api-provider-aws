@@ -175,9 +175,9 @@ log::info "aws.cluster.x-k8s.io encrypted cloud-init script $0 started"
 log::info "secret prefix: ${SECRET_PREFIX}"
 log::info "secret count: ${CHUNKS}"
 
-{{if .B64CABundle}}
+{{if .CABundle}}
 log::info "writing AWS CA bundle to /etc/ssl/certs/aws-ca-bundle.crt"
-echo "{{.B64CABundle}}" | base64 -d > /etc/ssl/certs/aws-ca-bundle.crt
+echo "{{.CABundle}}" > /etc/ssl/certs/aws-ca-bundle.crt
 update-ca-certificates
 {{end}}
 
