@@ -452,8 +452,6 @@ spec:
         volumeMounts:
         - mountPath: /home/.aws
           name: credentials
-        - mountPath: /home/.aws/ca-bundle
-          name: ca-bundle
       securityContext:
         fsGroup: 1000
       terminationGracePeriodSeconds: 10
