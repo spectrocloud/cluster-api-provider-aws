@@ -55,7 +55,7 @@ type scriptVariables struct {
 	Chunks       int32
 	Region       string
 	Endpoint     string
-	CABundle     []byte
+	CABundle     string
 }
 
 // GenerateInitDocument renders a given template, applies MIME properties
@@ -84,7 +84,7 @@ func GenerateInitDocument(secretPrefix string, chunks int32, region string, endp
 		return []byte{}, fmt.Errorf("failed to get AWS CA bundle: %w", err)
 	}
 	if caBundle != nil {
-		scriptVariables.CABundle = caBundle
+		scriptVariables.CABundle = string(caBundle)
 	}
 
 	var scriptBuf bytes.Buffer
