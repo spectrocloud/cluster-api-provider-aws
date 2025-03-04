@@ -19,8 +19,8 @@ package mime
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
-	"html"
 	"html/template"
 	"mime/multipart"
 	"net/textproto"
@@ -54,7 +54,7 @@ type scriptVariables struct {
 	Chunks       int32
 	Region       string
 	Endpoint     string
-	CABundle     string
+	B64CABundle  string
 }
 
 // GenerateInitDocument renders a given template, applies MIME properties
@@ -83,7 +83,7 @@ func GenerateInitDocument(secretPrefix string, chunks int32, region string, endp
 		return []byte{}, fmt.Errorf("failed to get AWS CA bundle: %w", err)
 	}
 	if caBundle != nil {
-		scriptVariables.CABundle = html.EscapeString(string(caBundle))
+		scriptVariables.B64CABundle = base64.StdEncoding.EncodeToString(caBundle)
 	}
 
 	var scriptBuf bytes.Buffer
