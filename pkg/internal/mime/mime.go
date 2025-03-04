@@ -17,14 +17,13 @@ limitations under the License.
 package mime
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"html"
 	"html/template"
 	"mime/multipart"
 	"net/textproto"
-	"os"
 	"strings"
 
 	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
@@ -84,7 +83,7 @@ func GenerateInitDocument(secretPrefix string, chunks int32, region string, endp
 		return []byte{}, fmt.Errorf("failed to get AWS CA bundle: %w", err)
 	}
 	if caBundle != nil {
-		scriptVariables.CABundle = string(caBundle)
+		scriptVariables.CABundle = html.EscapeString(string(caBundle))
 	}
 
 	var scriptBuf bytes.Buffer
@@ -111,34 +110,4 @@ func GenerateInitDocument(secretPrefix string, chunks int32, region string, endp
 	}
 
 	return buf.Bytes(), nil
-}
-
-func getCABundlePathFromAWSConfig() string {
-	awsConfigFile := os.Getenv("AWS_CONFIG_FILE")
-	if awsConfigFile == "" {
-		return ""
-	}
-
-	file, err := os.Open(awsConfigFile)
-	if err != nil {
-		return ""
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "ca_bundle") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				return strings.TrimSpace(parts[1])
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return ""
-	}
-
-	return ""
 }

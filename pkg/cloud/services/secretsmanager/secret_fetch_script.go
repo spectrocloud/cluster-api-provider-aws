@@ -176,10 +176,10 @@ log::info "secret prefix: ${SECRET_PREFIX}"
 log::info "secret count: ${CHUNKS}"
 
 {{if .CABundle}}
-log::info "writing AWS CA bundle to /etc/ssl/certs/aws-ca-bundle.crt"
-echo "{{.CABundle}}" > /etc/ssl/certs/aws-ca-bundle.crt
+log::info "writing AWS CA bundle to /etc/ssl/certs/aws-ca-bundle.crt.pem"
+echo "{{.CABundle}}" > /etc/ssl/certs/aws-ca-bundle.crt.pem.pem
 update-ca-certificates
-export AWS_CA_BUNDLE=/etc/ssl/certs/aws-ca-bundle.crt
+export AWS_CA_BUNDLE=/etc/ssl/certs/aws-ca-bundle.crt.pem
 {{end}}
 
 if test -f "${FILE}"; then
