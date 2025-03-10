@@ -37,6 +37,14 @@ const (
 	Al2x86_64GPU ManagedMachineAMIType = "AL2_x86_64_GPU"
 	// Al2Arm64 is the Arm AMI type.
 	Al2Arm64 ManagedMachineAMIType = "AL2_ARM_64"
+	// Al2023x86_64 is the AL2023 x86-64 AMI type.
+	Al2023x86_64 ManagedMachineAMIType = "AL2023_x86_64_STANDARD"
+	// Al2023Arm64 is the AL2023 Arm AMI type.
+	Al2023Arm64 ManagedMachineAMIType = "AL2023_ARM_64_STANDARD"
+	// AL2023_x86_64_NVIDIA
+	Al2023x86_64Nvidia ManagedMachineAMIType = "AL2023_x86_64_NVIDIA"
+	// AL2023_x86_64_NEURON
+	Al2023x86_64Neuron ManagedMachineAMIType = "AL2023_x86_64_NEURON"
 )
 
 // ManagedMachinePoolCapacityType specifies the capacity type to be used for the managed MachinePool.
@@ -99,7 +107,7 @@ type AWSManagedMachinePoolSpec struct {
 	AMIVersion *string `json:"amiVersion,omitempty"`
 
 	// AMIType defines the AMI type
-	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64
+	// +kubebuilder:validation:Enum:=AL2_x86_64;AL2_x86_64_GPU;AL2_ARM_64;AL2023_x86_64_STANDARD;AL2023_ARM_64_STANDARD;AL2023_x86_64_NVIDIA;AL2023_x86_64_NEURON;CUSTOM
 	// +kubebuilder:default:=AL2_x86_64
 	// +optional
 	AMIType *ManagedMachineAMIType `json:"amiType,omitempty"`
