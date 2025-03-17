@@ -413,6 +413,11 @@ func findStringInSlice(slice []*string, toFind string) bool {
 	return false
 }
 
+// "identity": {
+// 	"oidc": {
+// 			"issuer": "https://oidc.eks.us-east-1.amazonaws.com/id/AFDC82E69B82D086C19F12F5CB446A71"
+// 	}
+// },
 const stsAWSAudience = "sts.amazonaws.com"
 
 // CreateOIDCProvider will create an OIDC provider.
@@ -427,7 +432,7 @@ func (s *IAMService) CreateOIDCProvider(cluster *eks.Cluster) (string, error) {
 
 	thumbprint, err := fetchRootCAThumbprint(issuerURL.String())
 	if err != nil {
-		return "", err
+		return "", errors.Errorf("error fetching root CA thumbprint: %v", err)
 	}
 	input := iam.CreateOpenIDConnectProviderInput{
 		ClientIDList:   aws.StringSlice([]string{stsAWSAudience}),
@@ -469,7 +474,22 @@ func (s *IAMService) getOIDCProviderARN(issuer string) (string, error) {
 }
 
 func fetchRootCAThumbprint(issuerURL string) (string, error) {
-	response, err := http.Get(issuerURL)
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs: x509.NewCertPool(),
+			},
+		},
+	}
+
+	caCert, err := ioutil.ReadFile("/home/.aws/ca_bundle")
+	if err != nil {
+		return "", err
+	}
+
+	client.Transport.(*http.Transport).TLSClientConfig.RootCAs.AppendCertsFromPEM(caCert)
+
+	response, err := client.Get(issuerURL)
 	if err != nil {
 		return "", err
 	}
