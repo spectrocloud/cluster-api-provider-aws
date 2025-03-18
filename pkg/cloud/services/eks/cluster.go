@@ -120,6 +120,10 @@ func (s *Service) reconcileCluster(ctx context.Context) error {
 		return errors.Wrap(err, "failed reconciling cluster config")
 	}
 
+	if err := s.reconcileLogging(cluster.Logging); err != nil {
+		return errors.Wrap(err, "failed reconciling logging")
+	}
+
 	if err := s.reconcileEKSEncryptionConfig(cluster.EncryptionConfig); err != nil {
 		return errors.Wrap(err, "failed reconciling eks encryption config")
 	}
@@ -439,11 +443,6 @@ func (s *Service) reconcileClusterConfig(cluster *eks.Cluster) error {
 	var needsUpdate bool
 	input := eks.UpdateClusterConfigInput{Name: aws.String(s.scope.KubernetesClusterName())}
 
-	if updateLogging := s.reconcileLogging(cluster.Logging); updateLogging != nil {
-		needsUpdate = true
-		input.Logging = updateLogging
-	}
-
 	updateVpcConfig, err := s.reconcileVpcConfig(cluster.ResourcesVpcConfig)
 	if err != nil {
 		return errors.Wrap(err, "couldn't create vpc config for cluster")
@@ -475,15 +474,39 @@ func (s *Service) reconcileClusterConfig(cluster *eks.Cluster) error {
 	return nil
 }
 
-func (s *Service) reconcileLogging(logging *eks.Logging) *eks.Logging {
+func (s *Service) reconcileLogging(logging *eks.Logging) error {
+	input := eks.UpdateClusterConfigInput{Name: aws.String(s.scope.KubernetesClusterName())}
+
 	for _, logSetup := range logging.ClusterLogging {
 		for _, l := range logSetup.Types {
 			enabled := s.scope.ControlPlane.Spec.Logging.IsLogEnabled(*l)
 			if enabled != *logSetup.Enabled {
-				return makeEksLogging(s.scope.ControlPlane.Spec.Logging)
+				input.Logging = makeEksLogging(s.scope.ControlPlane.Spec.Logging)
 			}
 		}
 	}
+
+	if input.Logging != nil {
+		if err := input.Validate(); err != nil {
+			return errors.Wrap(err, "created invalid UpdateClusterConfigInput")
+		}
+
+		if err := wait.WaitForWithRetryable(wait.NewBackoff(), func() (bool, error) {
+			if _, err := s.EKSClient.UpdateClusterConfig(&input); err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					return false, aerr
+				}
+				return false, err
+			}
+			conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneUpdatingCondition)
+			record.Eventf(s.scope.ControlPlane, "InitiatedUpdateEKSControlPlane", "Initiated logging update for EKS control plane %s", s.scope.KubernetesClusterName())
+			return true, nil
+		}); err != nil {
+			record.Warnf(s.scope.ControlPlane, "FailedUpdateEKSControlPlane", "Failed to update EKS control plane logging: %v", err)
+			return errors.Wrapf(err, "failed to update EKS cluster")
+		}
+	}
+
 	return nil
 }
 
