@@ -297,6 +297,7 @@ func makeVpcConfig(subnets infrav1.Subnets, endpointAccess ekscontrolplanev1.End
 	vpcConfig := &eks.VpcConfigRequest{
 		EndpointPublicAccess:  endpointAccess.Public,
 		EndpointPrivateAccess: endpointAccess.Private,
+		PublicAccessCidrs:     []*string{},
 		SubnetIds:             subnetIds,
 	}
 
