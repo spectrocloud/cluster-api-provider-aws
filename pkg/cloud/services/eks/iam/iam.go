@@ -17,10 +17,11 @@ limitations under the License.
 package iam
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -36,6 +37,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/converters"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 )
 
 const (
@@ -413,11 +415,11 @@ func findStringInSlice(slice []*string, toFind string) bool {
 	return false
 }
 
-// "identity": {
-// 	"oidc": {
-// 			"issuer": "https://oidc.eks.us-east-1.amazonaws.com/id/AFDC82E69B82D086C19F12F5CB446A71"
-// 	}
-// },
+//	"identity": {
+//		"oidc": {
+//				"issuer": "https://oidc.eks.us-east-1.amazonaws.com/id/AFDC82E69B82D086C19F12F5CB446A71"
+//		}
+//	},
 const stsAWSAudience = "sts.amazonaws.com"
 
 // CreateOIDCProvider will create an OIDC provider.
@@ -474,22 +476,17 @@ func (s *IAMService) getOIDCProviderARN(issuer string) (string, error) {
 }
 
 func fetchRootCAThumbprint(issuerURL string) (string, error) {
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: x509.NewCertPool(),
-			},
-		},
-	}
-
-	caCert, err := ioutil.ReadFile("/home/.aws/ca_bundle")
+	httpHandler, err := utils.NewHttpHandlerWithAWSCABundle(context.TODO(), "")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error creating http handler: %w", err)
 	}
 
-	client.Transport.(*http.Transport).TLSClientConfig.RootCAs.AppendCertsFromPEM(caCert)
+	httpClient, err := httpHandler.GetHttpClient()
+	if err != nil {
+		return "", fmt.Errorf("error creating http client: %w", err)
+	}
 
-	response, err := client.Get(issuerURL)
+	response, err := httpClient.Get(issuerURL)
 	if err != nil {
 		return "", err
 	}

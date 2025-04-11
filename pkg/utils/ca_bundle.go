@@ -49,7 +49,7 @@ func GetAWSCABundle(ctx context.Context, profile string) ([]byte, error) {
 		return nil, nil
 	}
 
-	cabundle, err := os.ReadFile(cabundlePath.String())
+	cabundle, err := os.ReadFile(cabundlePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ca bundle file: %w", err)
 	}
