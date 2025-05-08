@@ -18,11 +18,15 @@ package mime
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"mime/multipart"
 	"net/textproto"
 	"strings"
+
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 )
 
 const (
@@ -50,6 +54,7 @@ type scriptVariables struct {
 	Chunks       int32
 	Region       string
 	Endpoint     string
+	B64CABundle  string
 }
 
 // GenerateInitDocument renders a given template, applies MIME properties
@@ -71,6 +76,14 @@ func GenerateInitDocument(secretPrefix string, chunks int32, region string, endp
 		Chunks:       chunks,
 		Region:       region,
 		Endpoint:     endpoint,
+	}
+
+	caBundle, err := utils.GetAWSCABundle(context.TODO(), "")
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to get AWS CA bundle: %w", err)
+	}
+	if caBundle != nil {
+		scriptVariables.B64CABundle = base64.StdEncoding.EncodeToString(caBundle)
 	}
 
 	var scriptBuf bytes.Buffer

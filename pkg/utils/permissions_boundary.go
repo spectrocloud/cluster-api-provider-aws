@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	permissionsBoundaryFile = "/home/.aws/permissionsBoundary"
+	permissionsBoundaryFile = "/home/.aws/permissions_boundary"
 )
 
 var (

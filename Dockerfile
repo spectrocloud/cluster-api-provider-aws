@@ -60,7 +60,8 @@ RUN if [ "${CRYPTO_LIB}" ]; then assert-fips.sh manager; fi
 #RUN scan-govulncheck.sh manager
 ENTRYPOINT [ "/start.sh", "/workspace/manager" ]
 # Copy the controller-manager into a thin image
-FROM gcr.io/distroless/static:nonroot
+# FROM gcr.io/distroless/static:nonroot
+FROM alpine:3.14
 WORKDIR /
 COPY --from=builder /workspace/manager .
 # Use uid of nonroot user (65532) because kubernetes expects numeric user when applying pod security policies

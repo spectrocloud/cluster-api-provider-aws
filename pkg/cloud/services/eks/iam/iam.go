@@ -17,10 +17,11 @@ limitations under the License.
 package iam
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -36,6 +37,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-aws/cmd/clusterawsadm/converters"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/iam/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/pkg/utils"
 )
 
 const (
@@ -413,6 +415,11 @@ func findStringInSlice(slice []*string, toFind string) bool {
 	return false
 }
 
+//	"identity": {
+//		"oidc": {
+//				"issuer": "https://oidc.eks.us-east-1.amazonaws.com/id/AFDC82E69B82D086C19F12F5CB446A71"
+//		}
+//	},
 const stsAWSAudience = "sts.amazonaws.com"
 
 // CreateOIDCProvider will create an OIDC provider.
@@ -427,7 +434,7 @@ func (s *IAMService) CreateOIDCProvider(cluster *eks.Cluster) (string, error) {
 
 	thumbprint, err := fetchRootCAThumbprint(issuerURL.String())
 	if err != nil {
-		return "", err
+		return "", errors.Errorf("error fetching root CA thumbprint: %v", err)
 	}
 	input := iam.CreateOpenIDConnectProviderInput{
 		ClientIDList:   aws.StringSlice([]string{stsAWSAudience}),
@@ -469,7 +476,17 @@ func (s *IAMService) getOIDCProviderARN(issuer string) (string, error) {
 }
 
 func fetchRootCAThumbprint(issuerURL string) (string, error) {
-	response, err := http.Get(issuerURL)
+	httpHandler, err := utils.NewHttpHandlerWithAWSCABundle(context.TODO(), "")
+	if err != nil {
+		return "", fmt.Errorf("error creating http handler: %w", err)
+	}
+
+	httpClient, err := httpHandler.GetHttpClient()
+	if err != nil {
+		return "", fmt.Errorf("error creating http client: %w", err)
+	}
+
+	response, err := httpClient.Get(issuerURL)
 	if err != nil {
 		return "", err
 	}
