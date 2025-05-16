@@ -105,13 +105,58 @@ func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.C
 		return errors.Wrap(err, "failed to tag OIDC provider")
 	}
 
-	if s.scope.ControlPlane.Status.OIDCProvider.TrustPolicy == "" {
+	s.scope.Info("Reconciling trust policy", "cluster-name", cluster.Name)
+	if s.scope.ControlPlane.Status.OIDCProvider.TrustPolicy == "" || !s.isTrustPolicyConfigMapPresent(ctx) {
 		if err := s.reconcileTrustPolicy(ctx); err != nil {
 			return errors.Wrap(err, "failed to reconcile trust policy in workload cluster")
 		}
 	}
 
 	return nil
+}
+
+// isTrustPolicyConfigMapPresent checks if the trust policy ConfigMap exists in the target workload cluster.
+// Used to detect out-of-band deletion of the CM so we re-reconcile it (the OIDCProvider.TrustPolicy status
+// field alone can be stale when a user removes the CM directly).
+func (s *Service) isTrustPolicyConfigMapPresent(ctx context.Context) bool {
+	s.scope.Info("Checking if ConfigMap is present")
+	clusterKey := client.ObjectKey{
+		Name:      s.scope.Name(),
+		Namespace: s.scope.Namespace(),
+	}
+
+	restConfig, err := remote.RESTConfig(ctx, s.scope.ControlPlane.Name, s.scope.Client, clusterKey)
+	if err != nil {
+		s.scope.Error(err, "failed to get remote client")
+		return false
+	}
+
+	remoteClient, err := client.New(restConfig, client.Options{})
+	if err != nil {
+		s.scope.Error(err, "failed to get client for remote cluster")
+		return false
+	}
+
+	configMapRef := types.NamespacedName{
+		Name:      trustPolicyConfigMapName,
+		Namespace: trustPolicyConfigMapNamespace,
+	}
+
+	trustPolicyConfigMap := &corev1.ConfigMap{}
+
+	err = remoteClient.Get(ctx, configMapRef, trustPolicyConfigMap)
+	if err != nil {
+		s.scope.Error(err, "failed to get trust policy config map")
+		return false
+	}
+
+	if apierrors.IsNotFound(err) {
+		s.scope.Info("ConfigMap is not present")
+		return false
+	}
+
+	s.scope.Info("ConfigMap is present")
+	return true
 }
 
 func (s *Service) reconcileTrustPolicy(ctx context.Context) error {
