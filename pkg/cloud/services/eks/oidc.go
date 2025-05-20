@@ -103,24 +103,31 @@ func (s *Service) reconcileOIDCProvider(cluster *eks.Cluster) error {
 		return errors.Wrap(err, "failed to tag OIDC provider")
 	}
 
-	if s.scope.ControlPlane.Status.OIDCProvider.TrustPolicy == "" {
+	// if s.scope.ControlPlane.Status.OIDCProvider.TrustPolicy == "" {
 		policy, err := converters.IAMPolicyDocumentToJSON(s.buildOIDCTrustPolicy())
 		if err != nil {
 			return errors.Wrap(err, "failed to parse IAM policy")
 		}
+
+		// First ensure the trust policy configmap is created in the target cluster
 		if err := s.reconcileTrustPolicy(); err != nil {
+			s.scope.Error(err, "failed to reconcile trust policy in workload cluster")
 			return errors.Wrap(err, "failed to reconcile trust policy in workload cluster")
 		}
+
+		// Only update status if configmap creation was successful
 		s.scope.ControlPlane.Status.OIDCProvider.TrustPolicy = whitespaceRe.ReplaceAllString(policy, "")
 		if err := s.scope.PatchObject(); err != nil {
 			return errors.Wrap(err, "failed to update control plane with OIDC provider trustPolicy")
 		}
-	}
+	// }
 
 	return nil
 }
 
 func (s *Service) reconcileTrustPolicy() error {
+
+	s.Info("TESTING.... reconciling trust policy")
 	ctx := context.Background()
 
 	clusterKey := client.ObjectKey{
@@ -162,11 +169,11 @@ func (s *Service) reconcileTrustPolicy() error {
 	if trustPolicyConfigMap.UID == "" {
 		trustPolicyConfigMap.Name = trustPolicyConfigMapName
 		trustPolicyConfigMap.Namespace = trustPolicyConfigMapNamespace
-		s.Debug("Creating new Trust Policy ConfigMap", "cluster", s.scope.Name(), "configmap", trustPolicyConfigMapName)
+		s.Info("Creating new Trust Policy ConfigMap", "cluster", s.scope.Name(), "configmap", trustPolicyConfigMapName)
 		return remoteClient.Create(ctx, trustPolicyConfigMap)
 	}
 
-	s.Debug("Updating existing Trust Policy ConfigMap", "cluster", s.scope.Name(), "configmap", trustPolicyConfigMapName)
+	s.Info("Updating existing Trust Policy ConfigMap", "cluster", s.scope.Name(), "configmap", trustPolicyConfigMapName)
 	return remoteClient.Update(ctx, trustPolicyConfigMap)
 }
 
