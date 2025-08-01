@@ -52,7 +52,13 @@ runcmd:
 {{- template "mounts" .Mounts}}
 `
 
-	// Shell script part template for AL2023.
+	// Common MIME header and boundary template
+	mimeHeaderTemplate = `MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="{{.Boundary}}"
+
+`
+
+	// Shell script part template for AL2023
 	shellScriptPartTemplate = `--{{.Boundary}}
 Content-Type: text/x-shellscript; charset="us-ascii"
 
@@ -93,7 +99,110 @@ spec:
     - "--node-labels={{if and .KubeletExtraArgs (index .KubeletExtraArgs "node-labels")}}{{index .KubeletExtraArgs "node-labels"}}{{else}}eks.amazonaws.com/nodegroup-image={{if .AMIImageID}}{{.AMIImageID}}{{end}},eks.amazonaws.com/capacityType={{if .CapacityType}}{{.CapacityType}}{{else}}ON_DEMAND{{end}},eks.amazonaws.com/nodegroup={{.NodeGroupName}}{{end}}"
 
 --{{.Boundary}}--`
+
+	// AL2023-specific templates.
+	al2023KubeletExtraArgsTemplate = `{{- define "al2023KubeletExtraArgs" -}}
+{{- if . }}
+    - "--node-labels={{range $k, $v := .}}{{$k}}={{$v}}{{end}}"
+{{- end -}}
+{{- end -}}`
+
+	al2023ContainerRuntimeTemplate = `{{- define "al2023ContainerRuntime" -}}
+{{- if . -}}
+  containerRuntime: {{.}}
+{{- end -}}
+{{- end -}}`
+
+	al2023DockerConfigTemplate = `{{- define "al2023DockerConfig" -}}
+{{- if and . (ne . "''") -}}
+  dockerConfig: {{.}}
+{{- end -}}
+{{- end -}}`
+
+	al2023APIRetryAttemptsTemplate = `{{- define "al2023APIRetryAttempts" -}}
+{{- if . -}}
+  apiRetryAttempts: {{.}}
+{{- end -}}
+{{- end -}}`
+
+	al2023PauseContainerTemplate = `{{- define "al2023PauseContainer" -}}
+{{- if and .AccountNumber .Version -}}
+  pauseContainer:
+    accountNumber: {{.AccountNumber}}
+    version: {{.Version}}
+{{- end -}}
+{{- end -}}`
+
+	al2023FilesTemplate = `{{- define "al2023Files" -}}
+{{- if . -}}
+  files:{{ range . }}
+    - path: {{.Path}}
+      content: |
+{{.Content | Indent 8}}{{ if ne .Owner "" }}
+      owner: {{.Owner}}{{ end }}{{ if ne .Permissions "" }}
+      permissions: '{{.Permissions}}'{{ end }}{{ end }}
+{{- end -}}
+{{- end -}}`
+
+	al2023DiskSetupTemplate = `{{- define "al2023DiskSetup" -}}
+{{- if . -}}
+  diskSetup:{{ if .Partitions }}
+    partitions:{{ range .Partitions }}
+      - device: {{.Device}}
+        layout: {{.Layout}}{{ if .Overwrite }}
+        overwrite: {{.Overwrite}}{{ end }}{{ if .TableType }}
+        tableType: {{.TableType}}{{ end }}{{ end }}{{ end }}{{ if .Filesystems }}
+    filesystems:{{ range .Filesystems }}
+      - device: {{.Device}}
+        filesystem: {{.Filesystem}}
+        label: {{.Label}}{{ if .Partition }}
+        partition: {{.Partition}}{{ end }}{{ if .Overwrite }}
+        overwrite: {{.Overwrite}}{{ end }}{{ if .ExtraOpts }}
+        extraOpts:{{ range .ExtraOpts }}
+          - {{.}}{{ end }}{{ end }}{{ end }}{{ end }}
+{{- end -}}
+{{- end -}}`
+
+	al2023MountsTemplate = `{{- define "al2023Mounts" -}}
+{{- if . -}}
+  mounts:{{ range . }}
+    -{{ range . }}
+      - {{.}}{{ end }}{{ end }}
+{{- end -}}
+{{- end -}}`
+
+	al2023UsersTemplate = `{{- define "al2023Users" -}}
+{{- if . -}}
+  users:{{ range . }}
+    - name: {{.Name}}{{ if .Gecos }}
+      gecos: {{.Gecos}}{{ end }}{{ if .Groups }}
+      groups: {{.Groups}}{{ end }}{{ if .HomeDir }}
+      homeDir: {{.HomeDir}}{{ end }}{{ if .Inactive }}
+      inactive: {{.Inactive}}{{ end }}{{ if .Shell }}
+      shell: {{.Shell}}{{ end }}{{ if .Passwd }}
+      passwd: {{.Passwd}}{{ end }}{{ if .PrimaryGroup }}
+      primaryGroup: {{.PrimaryGroup}}{{ end }}{{ if .LockPassword }}
+      lockPassword: {{.LockPassword}}{{ end }}{{ if .Sudo }}
+      sudo: {{.Sudo}}{{ end }}{{ if .SSHAuthorizedKeys }}
+      sshAuthorizedKeys:{{ range .SSHAuthorizedKeys }}
+        - {{.}}{{ end }}{{ end }}{{ end }}
+{{- end -}}
+{{- end -}}`
+
+	al2023NTPTemplate = `{{- define "al2023NTP" -}}
+{{- if . -}}
+  ntp:{{ if .Enabled }}
+    enabled: true{{ end }}{{ if .Servers }}
+    servers:{{ range .Servers }}
+      - {{.}}{{ end }}{{ end }}
+{{- end -}}
+{{- end -}}`
 )
+
+// NodeUserData is responsible for generating userdata for EKS nodes.
+type NodeUserData struct {
+	input *NodeInput
+}
 
 // NodeInput contains all the information required to generate user data for a node.
 type NodeInput struct {
@@ -231,7 +340,7 @@ func generateAL2023UserData(input *NodeInput) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Write MIME header
-	if _, err := buf.WriteString(fmt.Sprintf("MIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=%q\n\n", input.Boundary)); err != nil {
+	if _, err := buf.WriteString(fmt.Sprintf("MIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"%s\"\n\n", input.Boundary)); err != nil {
 		return nil, fmt.Errorf("failed to write MIME header: %v", err)
 	}
 

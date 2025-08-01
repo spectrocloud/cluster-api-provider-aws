@@ -329,7 +329,7 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 				Namespace: cluster.Namespace,
 				Name:      cluster.Name,
 			}
-			ca, err := extractCAFromSecret(ctx, r.Client, obj)
+			ca, err := r.extractCAFromSecret(ctx, obj)
 			if err != nil {
 				log.Error(err, "Failed to extract CA from kubeconfig secret")
 				conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition,
@@ -568,8 +568,8 @@ func (r *EKSConfigReconciler) updateBootstrapSecret(ctx context.Context, secret 
 	return false, nil
 }
 
-func extractCAFromSecret(ctx context.Context, c client.Client, obj client.ObjectKey) (string, error) {
-	data, err := kubeconfigutil.FromSecret(ctx, c, obj)
+func (r *EKSConfigReconciler) extractCAFromSecret(ctx context.Context, obj client.ObjectKey) (string, error) {
+	data, err := kubeconfigutil.FromSecret(ctx, r.Client, obj)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get kubeconfig secret %s", obj.Name)
 	}
