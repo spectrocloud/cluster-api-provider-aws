@@ -191,8 +191,11 @@ func (r *NodeadmConfigReconciler) joinWorker(ctx context.Context, cluster *clust
 	if err := r.Get(ctx, client.ObjectKey{Name: cluster.Spec.ControlPlaneRef.Name, Namespace: cluster.Namespace}, controlPlane); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to get control plane")
 	}
-	// Check if control plane is ready
-	if !v1beta1conditions.IsTrue(controlPlane, ekscontrolplanev1.EKSControlPlaneReadyCondition) {
+	// Check if control plane is ready.
+	// PCP-5325: use controlPlane.Status.Ready instead of the EKSControlPlaneReadyCondition
+	// so worker-pool reconcile is not blocked in AWS secret regions where the condition
+	// may not be reliably marked on AWSManagedControlPlane.
+	if !controlPlane.Status.Ready {
 		log.Info("Waiting for control plane to be ready")
 		v1beta1conditions.MarkFalse(
 			config,
