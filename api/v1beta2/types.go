@@ -273,6 +273,84 @@ type Instance struct {
 	// If marketType is not specified and spotMarketOptions is provided, the marketType defaults to "Spot".
 	// +optional
 	MarketType MarketType `json:"marketType,omitempty"`
+
+	// HostAffinity specifies the dedicated host affinity setting for the instance.
+	// When hostAffinity is set to host, an instance started onto a specific host always restarts on the same host if stopped.
+	// When hostAffinity is set to default, and you stop and restart the instance, it can be restarted on any available host.
+	// When HostAffinity is defined, HostID is required.
+	// +optional
+	// +kubebuilder:validation:Enum:=default;host
+	HostAffinity *string `json:"hostAffinity,omitempty"`
+
+	// HostID specifies the dedicated host on which the instance should be started.
+	// +optional
+	HostID *string `json:"hostID,omitempty"`
+
+	// HostResourceGroupArn specifies the Dedicated Host Resource Group ARN on which the instance should be started.
+	// Note: The instance's AMI licenses must match the licenses associated with the host resource group.
+	// +optional
+	HostResourceGroupArn *string `json:"hostResourceGroupArn,omitempty"`
+
+	// DynamicHostAllocation enables automatic allocation of dedicated hosts.
+	// This field is mutually exclusive with HostID.
+	// +optional
+	DynamicHostAllocation *DynamicHostAllocationSpec `json:"dynamicHostAllocation,omitempty"`
+
+	// CapacityReservationPreference specifies the preference for use of Capacity Reservations by the instance. Valid values include:
+	// "Open": The instance may make use of open Capacity Reservations that match its AZ and InstanceType
+	// "None": The instance may not make use of any Capacity Reservations. This is to conserve open reservations for desired workloads
+	// "CapacityReservationsOnly": The instance will only run if matched or targeted to a Capacity Reservation. Note that this is incompatible with a MarketType of `Spot`
+	// +kubebuilder:validation:Enum="";None;CapacityReservationsOnly;Open
+	// +optional
+	CapacityReservationPreference CapacityReservationPreference `json:"capacityReservationPreference,omitempty"`
+
+	// CPUOptions defines CPU-related settings for the instance, including the confidential computing policy.
+	// When omitted, this means no opinion and the AWS platform is left to choose a reasonable default.
+	// +optional
+	CPUOptions CPUOptions `json:"cpuOptions,omitempty,omitzero"`
+}
+
+// CapacityReservationPreference describes the preferred use of capacity reservations
+// of an instance
+// +kubebuilder:validation:Enum:="";None;CapacityReservationsOnly;Open
+type CapacityReservationPreference string
+
+const (
+	// CapacityReservationPreferenceNone the instance may not make use of any Capacity Reservations. This is to conserve open reservations for desired workloads
+	CapacityReservationPreferenceNone CapacityReservationPreference = "None"
+
+	// CapacityReservationPreferenceOnly the instance will only run if matched or targeted to a Capacity Reservation. Note that this is incompatible with a MarketType of `Spot`
+	CapacityReservationPreferenceOnly CapacityReservationPreference = "CapacityReservationsOnly"
+
+	// CapacityReservationPreferenceOpen the instance may make use of open Capacity Reservations that match its AZ and InstanceType.
+	CapacityReservationPreferenceOpen CapacityReservationPreference = "Open"
+)
+
+// DedicatedHostInfo contains information about a dedicated host.
+type DedicatedHostInfo struct {
+	// HostID is the ID of the dedicated host.
+	HostID string `json:"hostID"`
+
+	// InstanceFamily is the instance family supported by the host.
+	InstanceFamily string `json:"instanceFamily"`
+
+	// InstanceType is the instance type supported by the host.
+	InstanceType string `json:"instanceType"`
+
+	// AvailabilityZone is the AZ where the host is located.
+	AvailabilityZone string `json:"availabilityZone"`
+
+	// State is the current state of the dedicated host.
+	State string `json:"state"`
+
+	// TotalCapacity is the total number of instances that can be launched on the host.
+	TotalCapacity int32 `json:"totalCapacity"`
+
+	// AvailableCapacity is the number of instances that can still be launched on the host.
+	AvailableCapacity int32 `json:"availableCapacity"`
+
+	// Tags associated with the dedicated host.
+	Tags map[string]string `json:"tags,omitempty"`
 }
 
 // MarketType describes the market type of an Instance

@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
@@ -254,6 +255,31 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 	input.CapacityReservationID = scope.AWSMachine.Spec.CapacityReservationID
 
 	input.MarketType = scope.AWSMachine.Spec.MarketType
+
+	// Handle dynamic host allocation if specified
+	if scope.AWSMachine.Spec.DynamicHostAllocation != nil {
+		hostID, err := s.ensureDedicatedHostAllocation(ctx, scope)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to allocate dedicated host")
+		}
+		input.HostID = aws.String(hostID)
+		input.HostAffinity = aws.String("host")
+
+		if scope.AWSMachine.Status.DedicatedHost == nil {
+			scope.AWSMachine.Status.DedicatedHost = &infrav1.DedicatedHostStatus{}
+		}
+		// Update machine status with allocated host ID
+		scope.AWSMachine.Status.DedicatedHost.ID = &hostID
+	} else {
+		// Use static host allocation if specified
+		input.HostID = scope.AWSMachine.Spec.HostID
+		input.HostResourceGroupArn = scope.AWSMachine.Spec.HostResourceGroupArn
+		input.HostAffinity = scope.AWSMachine.Spec.HostAffinity
+	}
+
+	input.CapacityReservationPreference = scope.AWSMachine.Spec.CapacityReservationPreference
+
+	input.CPUOptions = scope.AWSMachine.Spec.CPUOptions
 
 	s.scope.Debug("Running instance", "machine-role", scope.Role())
 	s.scope.Debug("Running instance with instance metadata options", "metadata options", input.InstanceMetadataOptions)
@@ -675,8 +701,61 @@ func (s *Service) runInstance(role string, i *infrav1.Instance) (*infrav1.Instan
 		}
 	}
 
+	if i.HostID != nil {
+		if i.HostAffinity == nil {
+			i.HostAffinity = aws.String("default")
+		}
+		if len(i.Tenancy) == 0 {
+			i.Tenancy = "host"
+		}
+		s.scope.Debug("Running instance with dedicated host placement",
+			"hostId", i.HostID,
+			"affinity", i.HostAffinity)
+		if input.Placement != nil {
+			s.scope.Warn("Placement already set for instance, overwriting with dedicated host placement",
+				"hostId", i.HostID,
+				"affinity", i.HostAffinity,
+				"placement", input.Placement)
+		}
+
+		input.Placement = &types.Placement{
+			Tenancy:  types.Tenancy(i.Tenancy),
+			Affinity: i.HostAffinity,
+			HostId:   i.HostID,
+		}
+	} else if i.HostResourceGroupArn != nil {
+		if i.HostAffinity == nil {
+			i.HostAffinity = aws.String(string(types.AffinityHost))
+		}
+		if len(i.Tenancy) == 0 {
+			i.Tenancy = string(types.TenancyHost)
+		}
+		s.scope.Debug("Running instance with host resource group placement",
+			"hostResourceGroupArn", i.HostResourceGroupArn,
+			"affinity", i.HostAffinity)
+		if input.Placement != nil {
+			s.scope.Warn("Placement already set for instance, overwriting with host resource group placement",
+				"hostResourceGroupArn", i.HostResourceGroupArn,
+				"affinity", i.HostAffinity,
+				"placement", input.Placement)
+		}
+
+		input.Placement = &types.Placement{
+			Tenancy:              types.Tenancy(i.Tenancy),
+			Affinity:             i.HostAffinity,
+			HostResourceGroupArn: i.HostResourceGroupArn,
+		}
+		// input.LicenseSpecifications = &types.LicenseConfiguration{
+		// 	LicenseConfigurationArn: ,
+		// }
+	}
+
 	out, err := s.EC2Client.RunInstancesWithContext(context.TODO(), input)
 	if err != nil {
+		// Provide more helpful error message for host resource group licensing issues
+		if strings.Contains(err.Error(), "host resource group") && strings.Contains(err.Error(), "licenses") {
+			return nil, errors.Wrap(err, "failed to run instance: AMI licenses must match the licenses associated with the host resource group. Ensure the AMI and host resource group have compatible licensing")
+		}
 		return nil, errors.Wrap(err, "failed to run instance")
 	}
 

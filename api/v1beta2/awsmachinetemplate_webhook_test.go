@@ -80,6 +80,77 @@ func TestAWSMachineTemplateValidateCreate(t *testing.T) {
 			},
 			wantError: false,
 		},
+		{
+			name: "hostID and dynamicHostAllocation are mutually exclusive",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType: "test",
+							HostID:       aws.String("h-1234567890abcdef0"),
+							DynamicHostAllocation: &DynamicHostAllocationSpec{
+								Tags: map[string]string{
+									"Environment": "test",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostResourceGroupArn alone is valid",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType:         "test",
+							HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+						},
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "hostID and hostResourceGroupArn are mutually exclusive",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType:         "test",
+							HostID:               aws.String("h-1234567890abcdef0"),
+							HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostResourceGroupArn and dynamicHostAllocation are mutually exclusive",
+			inputTemplate: &AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: AWSMachineTemplateSpec{
+					Template: AWSMachineTemplateResource{
+						Spec: AWSMachineSpec{
+							InstanceType:         "test",
+							HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+							DynamicHostAllocation: &DynamicHostAllocationSpec{
+								Tags: map[string]string{
+									"Environment": "test",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
