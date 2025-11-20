@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -309,13 +310,22 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 		nodeInput.IPFamily = ptr.To[string]("ipv6")
 	}
 
+	// Transform commercial endpoint to Secret region endpoint if needed (applies to both AL2 and AL2023)
+	transformedEndpoint := transformEndpointForSecretRegion(controlPlane.Spec.ControlPlaneEndpoint.Host, controlPlane.Spec.Region)
+	if transformedEndpoint != controlPlane.Spec.ControlPlaneEndpoint.Host {
+		log.Info("Transformed API Server Endpoint for Secret region",
+			"original", controlPlane.Spec.ControlPlaneEndpoint.Host,
+			"transformed", transformedEndpoint,
+			"region", controlPlane.Spec.Region)
+	}
+
 	// Set AMI family type and AL2023-specific fields if needed
 	if config.Spec.NodeType == NodeTypeAL2023 {
 		log.Info("Processing AL2023 node type")
 		nodeInput.AMIFamilyType = userdata.AMIFamilyAL2023
 
 		// Set AL2023-specific fields
-		nodeInput.APIServerEndpoint = controlPlane.Spec.ControlPlaneEndpoint.Host
+		nodeInput.APIServerEndpoint = transformedEndpoint
 		nodeInput.NodeGroupName = config.Name
 
 		// In test environments, provide a mock CA certificate
@@ -367,8 +377,14 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 			"cluster", controlPlane.Spec.EKSClusterName,
 			"endpoint", nodeInput.APIServerEndpoint)
 	} else {
+		// AL2 and other node types
 		nodeInput.AMIFamilyType = userdata.AMIFamilyAL2
-		log.Info("Generating standard userdata for node type", "type", config.Spec.NodeType)
+		// Set the transformed endpoint for AL2 as well for consistency
+		nodeInput.APIServerEndpoint = transformedEndpoint
+		log.Info("Generating standard AL2 userdata",
+			"type", config.Spec.NodeType,
+			"cluster", controlPlane.Spec.EKSClusterName,
+			"endpoint", nodeInput.APIServerEndpoint)
 	}
 
 	// Generate userdata using unified approach
@@ -586,4 +602,29 @@ func (r *EKSConfigReconciler) extractCAFromSecret(ctx context.Context, obj clien
 	}
 
 	return "", fmt.Errorf("no cluster with CA data found in kubeconfig")
+}
+
+// transformEndpointForSecretRegion transforms commercial AWS endpoint to Secret region endpoint if needed.
+// Example transformation:
+//
+//	Input:  https://XXXXX.gr7.us-east-1.eks.amazonaws.com
+//	Output: https://XXXXX.gr7.us-isob-east-1.eks.sc2s.sgov.gov
+func transformEndpointForSecretRegion(endpoint string, region string) string {
+	// Only transform for Secret region us-isob-east-1
+	if region != "us-isob-east-1" {
+		return endpoint
+	}
+
+	// Transform commercial endpoint suffix to Secret region suffix
+	// Pattern: .gr7.us-east-1.eks.amazonaws.com -> .gr7.us-isob-east-1.eks.sc2s.sgov.gov
+	if strings.Contains(endpoint, ".eks.amazonaws.com") {
+		// Extract the cluster ID and gr7 prefix
+		// Example: https://FA066836E8A2E286295E8617F17AD6D0.gr7.us-east-1.eks.amazonaws.com
+
+		// Replace commercial suffix with Secret region suffix
+		transformed := strings.Replace(endpoint, ".gr7.us-east-1.eks.amazonaws.com", ".gr7.us-isob-east-1.eks.sc2s.sgov.gov", 1)
+		return transformed
+	}
+
+	return endpoint
 }
