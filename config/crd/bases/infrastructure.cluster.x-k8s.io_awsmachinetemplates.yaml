@@ -66,7 +66,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          Map of string keys and values that can be used to organize and categorize
+                          labels is a map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -480,7 +480,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          Map of string keys and values that can be used to organize and categorize
+                          labels is a map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -560,6 +560,24 @@ spec:
                         description: CapacityReservationID specifies the target Capacity
                           Reservation into which the instance should be launched.
                         type: string
+                      capacityReservationPreference:
+                        allOf:
+                        - enum:
+                          - ""
+                          - None
+                          - CapacityReservationsOnly
+                          - Open
+                        - enum:
+                          - ""
+                          - None
+                          - CapacityReservationsOnly
+                          - Open
+                        description: |-
+                          CapacityReservationPreference specifies the preference for use of Capacity Reservations by the instance. Valid values include:
+                          "Open": The instance may make use of open Capacity Reservations that match its AZ and InstanceType
+                          "None": The instance may not make use of any Capacity Reservations. This is to conserve open reservations for desired workloads
+                          "CapacityReservationsOnly": The instance will only run if matched or targeted to a Capacity Reservation. Note that this is incompatible with a MarketType of `Spot`
+                        type: string
                       cloudInit:
                         description: |-
                           CloudInit defines options related to the bootstrapping systems where
@@ -592,6 +610,20 @@ spec:
                             - secrets-manager
                             - ssm-parameter-store
                             type: string
+                        type: object
+                      dynamicHostAllocation:
+                        description: |-
+                          DynamicHostAllocation enables automatic allocation of a single dedicated host.
+                          This field is mutually exclusive with HostID and always allocates exactly one host.
+                          Cost effectiveness of allocating a single instance on a dedicated host may vary
+                          depending on the instance type and the region.
+                        properties:
+                          tags:
+                            additionalProperties:
+                              type: string
+                            description: Tags to apply to the allocated dedicated
+                              host.
+                            type: object
                         type: object
                       elasticIpPool:
                         description: ElasticIPPool is the configuration to allocate

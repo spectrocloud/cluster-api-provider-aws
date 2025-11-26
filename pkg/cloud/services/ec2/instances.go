@@ -258,18 +258,18 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 
 	// Handle dynamic host allocation if specified
 	if scope.AWSMachine.Spec.DynamicHostAllocation != nil {
-		hostID, err := s.ensureDedicatedHostAllocation(ctx, scope)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to allocate dedicated host")
-		}
-		input.HostID = aws.String(hostID)
-		input.HostAffinity = aws.String("host")
+		//hostID, err := s.ensureDedicatedHostAllocation(context.Background(), scope)
+		//if err != nil {
+		//	return nil, errors.Wrap(err, "failed to allocate dedicated host")
+		//}
+		//input.HostID = aws.String(hostID)
+		//input.HostAffinity = aws.String("host")
 
-		if scope.AWSMachine.Status.DedicatedHost == nil {
-			scope.AWSMachine.Status.DedicatedHost = &infrav1.DedicatedHostStatus{}
-		}
-		// Update machine status with allocated host ID
-		scope.AWSMachine.Status.DedicatedHost.ID = &hostID
+		//if scope.AWSMachine.Status.DedicatedHost == nil {
+		//	scope.AWSMachine.Status.DedicatedHost = &infrav1.DedicatedHostStatus{}
+		//}
+		//// Update machine status with allocated host ID
+		//scope.AWSMachine.Status.DedicatedHost.ID = &hostID
 	} else {
 		// Use static host allocation if specified
 		input.HostID = scope.AWSMachine.Spec.HostID
@@ -280,7 +280,7 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 
 	input.CapacityReservationPreference = scope.AWSMachine.Spec.CapacityReservationPreference
 
-	input.CPUOptions = scope.AWSMachine.Spec.CPUOptions
+	//input.CPUOptions = scope.AWSMachine.Spec.CPUOptions
 
 	s.scope.Debug("Running instance", "machine-role", scope.Role())
 	s.scope.Debug("Running instance with instance metadata options", "metadata options", input.InstanceMetadataOptions)
@@ -719,8 +719,8 @@ func (s *Service) runInstance(role string, i *infrav1.Instance) (*infrav1.Instan
 				"placement", input.Placement)
 		}
 
-		input.Placement = &types.Placement{
-			Tenancy:  types.Tenancy(i.Tenancy),
+		input.Placement = &ec2.Placement{
+			Tenancy:  aws.String(i.Tenancy),
 			Affinity: i.HostAffinity,
 			HostId:   i.HostID,
 		}
@@ -741,15 +741,15 @@ func (s *Service) runInstance(role string, i *infrav1.Instance) (*infrav1.Instan
 				"placement", input.Placement)
 		}
 
-		input.Placement = &types.Placement{
-			Tenancy:              types.Tenancy(i.Tenancy),
+		input.Placement = &ec2.Placement{
+			Tenancy:              aws.String(i.Tenancy),
 			Affinity:             i.HostAffinity,
 			HostResourceGroupArn: i.HostResourceGroupArn,
 		}
 		if len(i.LicenseConfigurationArns) > 0 {
-			licenseSpecs := make([]types.LicenseConfigurationRequest, len(i.LicenseConfigurationArns))
+			licenseSpecs := make([]*ec2.LicenseConfigurationRequest, len(i.LicenseConfigurationArns))
 			for idx, arn := range i.LicenseConfigurationArns {
-				licenseSpecs[idx] = types.LicenseConfigurationRequest{
+				licenseSpecs[idx] = &ec2.LicenseConfigurationRequest{
 					LicenseConfigurationArn: aws.String(arn),
 				}
 			}
@@ -1036,7 +1036,7 @@ func (s *Service) SDKToInstance(v *ec2.Instance) (*infrav1.Instance, error) {
 	if len(v.Licenses) > 0 {
 		i.LicenseConfigurationArns = make([]string, len(v.Licenses))
 		for idx, license := range v.Licenses {
-			i.LicenseConfigurationArns[idx] = aws.ToString(license.LicenseConfigurationArn)
+			i.LicenseConfigurationArns[idx] = aws.StringValue(license.LicenseConfigurationArn)
 		}
 	}
 
@@ -1337,3 +1337,58 @@ func getPrivateDNSNameOptionsRequest(privateDNSName *infrav1.PrivateDNSName) *ec
 		HostnameType:                    privateDNSName.HostnameType,
 	}
 }
+
+//// ensureDedicatedHostAllocation ensures a dedicated host is allocated for the machine.
+//func (s *Service) ensureDedicatedHostAllocation(ctx context.Context, scope *scope.MachineScope) (string, error) {
+//	spec := scope.AWSMachine.Spec.DynamicHostAllocation
+//	if spec == nil {
+//		return "", errors.New("dynamic host allocation spec is nil")
+//	}
+//
+//	// Check if a host is already allocated for this machine
+//	// Each machine gets its own dedicated host for complete isolation and resource dedication
+//	if scope.AWSMachine.Status.DedicatedHost != nil && scope.AWSMachine.Status.DedicatedHost.ID != nil {
+//		existingHostID := aws.ToString(scope.AWSMachine.Status.DedicatedHost.ID)
+//		s.scope.Info("Found existing allocated host for machine", "hostID", existingHostID, "machine", scope.Name())
+//		return existingHostID, nil
+//	}
+//
+//	// Determine the availability zone for the host
+//	var availabilityZone *string
+//
+//	// Get AZ from the machine's subnet
+//	if scope.AWSMachine.Spec.Subnet != nil {
+//		subnetID, err := s.findSubnet(scope)
+//		if err != nil {
+//			return "", errors.Wrap(err, "failed to find subnet for host allocation")
+//		}
+//
+//		// Get the full subnet object to extract availability zone
+//		subnets, err := s.getFilteredSubnets(types.Filter{
+//			Name:   aws.String("subnet-id"),
+//			Values: []string{subnetID},
+//		})
+//		if err != nil {
+//			return "", errors.Wrap(err, "failed to get subnet details for host allocation")
+//		}
+//
+//		if len(subnets) > 0 && subnets[0].AvailabilityZone != nil {
+//			availabilityZone = subnets[0].AvailabilityZone
+//		}
+//	}
+//
+//	instanceType := scope.AWSMachine.Spec.InstanceType
+//
+//	if availabilityZone == nil {
+//		return "", errors.New("availability zone could not be determined, please specify a subnet ID or subnet filters")
+//	}
+//
+//	// Allocate the dedicated host
+//	hostID, err := s.AllocateDedicatedHost(ctx, spec, instanceType, *availabilityZone, scope)
+//	if err != nil {
+//		return "", errors.Wrap(err, "failed to allocate dedicated host")
+//	}
+//
+//	s.scope.Info("Successfully allocated dedicated host for machine", "hostID", hostID, "machine", scope.Name())
+//	return hostID, nil
+//}
