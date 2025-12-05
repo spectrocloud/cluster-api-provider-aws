@@ -257,30 +257,26 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 	input.MarketType = scope.AWSMachine.Spec.MarketType
 
 	// Handle dynamic host allocation if specified
-	if scope.AWSMachine.Spec.DynamicHostAllocation != nil {
-		//hostID, err := s.ensureDedicatedHostAllocation(context.Background(), scope)
-		//if err != nil {
-		//	return nil, errors.Wrap(err, "failed to allocate dedicated host")
-		//}
-		//input.HostID = aws.String(hostID)
-		//input.HostAffinity = aws.String("host")
+	//if scope.AWSMachine.Spec.DynamicHostAllocation != nil {
+	//hostID, err := s.ensureDedicatedHostAllocation(context.Background(), scope)
+	//if err != nil {
+	//	return nil, errors.Wrap(err, "failed to allocate dedicated host")
+	//}
+	//input.HostID = aws.String(hostID)
+	//input.HostAffinity = aws.String("host")
 
-		//if scope.AWSMachine.Status.DedicatedHost == nil {
-		//	scope.AWSMachine.Status.DedicatedHost = &infrav1.DedicatedHostStatus{}
-		//}
-		//// Update machine status with allocated host ID
-		//scope.AWSMachine.Status.DedicatedHost.ID = &hostID
-	} else {
-		// Use static host allocation if specified
-		input.HostID = scope.AWSMachine.Spec.HostID
-		input.HostResourceGroupArn = scope.AWSMachine.Spec.HostResourceGroupArn
-		input.LicenseConfigurationArns = scope.AWSMachine.Spec.LicenseConfigurationArns
-		input.HostAffinity = scope.AWSMachine.Spec.HostAffinity
-	}
-
-	input.CapacityReservationPreference = scope.AWSMachine.Spec.CapacityReservationPreference
-
-	//input.CPUOptions = scope.AWSMachine.Spec.CPUOptions
+	//if scope.AWSMachine.Status.DedicatedHost == nil {
+	//	scope.AWSMachine.Status.DedicatedHost = &infrav1.DedicatedHostStatus{}
+	//}
+	//// Update machine status with allocated host ID
+	//scope.AWSMachine.Status.DedicatedHost.ID = &hostID
+	//} else {
+	// Use static host allocation if specified
+	//input.HostID = scope.AWSMachine.Spec.HostID
+	input.HostResourceGroupArn = scope.AWSMachine.Spec.HostResourceGroupArn
+	input.LicenseConfigurationArns = scope.AWSMachine.Spec.LicenseConfigurationArns
+	//input.HostAffinity = scope.AWSMachine.Spec.HostAffinity
+	//}
 
 	s.scope.Debug("Running instance", "machine-role", scope.Role())
 	s.scope.Debug("Running instance with instance metadata options", "metadata options", input.InstanceMetadataOptions)

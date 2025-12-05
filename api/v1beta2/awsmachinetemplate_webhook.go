@@ -178,18 +178,10 @@ func (r *AWSMachineTemplate) validateHostAllocation() field.ErrorList {
 	spec := r.Spec.Template.Spec
 
 	// Check if multiple host allocation options are specified
-	hasHostID := spec.HostID != nil && len(*spec.HostID) > 0
 	hasHostResourceGroupArn := spec.HostResourceGroupArn != nil && len(*spec.HostResourceGroupArn) > 0
-	hasDynamicHostAllocation := spec.DynamicHostAllocation != nil
 
 	count := 0
-	if hasHostID {
-		count++
-	}
 	if hasHostResourceGroupArn {
-		count++
-	}
-	if hasDynamicHostAllocation {
 		count++
 	}
 
