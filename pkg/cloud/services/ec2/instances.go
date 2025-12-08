@@ -269,7 +269,6 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 
 	input.CapacityReservationPreference = scope.AWSMachine.Spec.CapacityReservationPreference
 
-	//input.CPUOptions = scope.AWSMachine.Spec.CPUOptions
 
 	s.scope.Debug("Running instance", "machine-role", scope.Role())
 	s.scope.Debug("Running instance with instance metadata options", "metadata options", input.InstanceMetadataOptions)
