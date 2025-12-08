@@ -178,17 +178,33 @@ func (w *AWSMachineTemplate) validateHostAllocation(r *infrav1.AWSMachineTemplat
 
 	spec := r.Spec.Template.Spec
 
-	// Check if both hostID and dynamicHostAllocation are specified
+	// Check which host allocation options are specified.
 	hasHostID := spec.HostID != nil && len(*spec.HostID) > 0
+	hasHostResourceGroupArn := spec.HostResourceGroupArn != nil && len(*spec.HostResourceGroupArn) > 0
 	hasDynamicHostAllocation := spec.DynamicHostAllocation != nil
 
-	if hasHostID && hasDynamicHostAllocation {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.template.spec.hostID"), "hostID and dynamicHostAllocation are mutually exclusive"), field.Forbidden(field.NewPath("spec.template.spec.dynamicHostAllocation"), "hostID and dynamicHostAllocation are mutually exclusive"))
+	// hostID, hostResourceGroupArn, and dynamicHostAllocation are mutually exclusive.
+	count := 0
+	if hasHostID {
+		count++
+	}
+	if hasHostResourceGroupArn {
+		count++
+	}
+	if hasDynamicHostAllocation {
+		count++
+	}
+	if count > 1 {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.template.spec"), "hostID, hostResourceGroupArn, and dynamicHostAllocation are mutually exclusive"))
 	}
 
-	// HostID, HostAffinity, and DynamicHostAllocation can only be set when Tenancy is "host"
+	// HostID, HostAffinity, HostResourceGroupArn, and DynamicHostAllocation can only be set when Tenancy is "host".
 	if hasHostID && spec.Tenancy != hostTenancy {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.template.spec.hostID"), "hostID can only be set when tenancy is 'host'"))
+	}
+
+	if hasHostResourceGroupArn && spec.Tenancy != hostTenancy {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.template.spec.hostResourceGroupArn"), "hostResourceGroupArn can only be set when tenancy is 'host'"))
 	}
 
 	if spec.HostAffinity != nil && *spec.HostAffinity == hostAffinity && spec.Tenancy != hostTenancy {
@@ -200,13 +216,18 @@ func (w *AWSMachineTemplate) validateHostAllocation(r *infrav1.AWSMachineTemplat
 	}
 
 	// When hostAffinity is "host", either hostID or dynamicHostAllocation must be specified
-	if spec.HostAffinity != nil && *spec.HostAffinity == hostAffinity && !hasHostID && !hasDynamicHostAllocation {
-		allErrs = append(allErrs, field.Required(field.NewPath("spec.template.spec.hostID"), "hostID or dynamicHostAllocation must be set when hostAffinity is 'host'"))
+	if spec.HostAffinity != nil && *spec.HostAffinity == hostAffinity && !hasHostID && !hasDynamicHostAllocation && !hasHostResourceGroupArn {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec.template.spec.hostID"), "hostID, hostResourceGroupArn, or dynamicHostAllocation must be set when hostAffinity is 'host'"))
 	}
 
 	// DHA needs to have hostAffinity set to "host" to make sure it does not drift off its allocated host when the instance is restarted, otherwise there will be a host not in use still allocated.
 	if hasDynamicHostAllocation && (spec.HostAffinity == nil || *spec.HostAffinity != hostAffinity) {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.template.spec.dynamicHostAllocation"), "dynamicHostAllocation can only be set when hostAffinity is 'host'"))
+	}
+
+	// licenseConfigurationArns is required when hostResourceGroupArn is specified.
+	if hasHostResourceGroupArn && len(spec.LicenseConfigurationArns) == 0 {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec", "template", "spec", "licenseConfigurationArns"), "licenseConfigurationArns is required when hostResourceGroupArn is specified"))
 	}
 
 	return allErrs

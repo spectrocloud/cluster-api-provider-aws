@@ -654,6 +654,72 @@ func TestAWSMachineCreate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		// PCP-5519: HostResourceGroupArn coverage — ported from api/v1beta2/awsmachine_webhook_test.go
+		// after upstream relocated the AWSMachine webhook to webhooks/.
+		{
+			name: "hostResourceGroupArn alone is valid",
+			machine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					InstanceType:             "test",
+					Tenancy:                  "host",
+					HostResourceGroupArn:     aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+					LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "hostID and hostResourceGroupArn are mutually exclusive",
+			machine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					InstanceType:             "test",
+					Tenancy:                  "host",
+					HostID:                   aws.String("h-1234567890abcdef0"),
+					HostResourceGroupArn:     aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+					LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "hostResourceGroupArn and dynamicHostAllocation are mutually exclusive",
+			machine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					InstanceType:         "test",
+					Tenancy:              "host",
+					HostAffinity:         ptr.To("host"),
+					HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+					DynamicHostAllocation: &infrav1.DynamicHostAllocationSpec{
+						Tags: map[string]string{"Environment": "test"},
+					},
+					LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "hostResourceGroupArn without licenseConfigurationArns should fail",
+			machine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					InstanceType:         "test",
+					Tenancy:              "host",
+					HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "hostResourceGroupArn without tenancy=host is invalid",
+			machine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					InstanceType:             "test",
+					Tenancy:                  "default",
+					HostResourceGroupArn:     aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+					LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+				},
+			},
+			wantErr: true,
+		},
 		{
 			name: "create with valid BYOIPv4",
 			machine: &infrav1.AWSMachine{

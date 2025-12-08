@@ -495,18 +495,33 @@ func (w *AWSMachine) validateAdditionalSecurityGroups(r *infrav1.AWSMachine) fie
 func (w *AWSMachine) validateHostAllocation(r *infrav1.AWSMachine) field.ErrorList {
 	var allErrs field.ErrorList
 
-	// Check if both hostID and dynamicHostAllocation are specified
+	// Check which host allocation options are specified.
 	hasHostID := r.Spec.HostID != nil && len(*r.Spec.HostID) > 0
+	hasHostResourceGroupArn := r.Spec.HostResourceGroupArn != nil && len(*r.Spec.HostResourceGroupArn) > 0
 	hasDynamicHostAllocation := r.Spec.DynamicHostAllocation != nil
 
-	// If both hostID and dynamicHostAllocation are specified, return an error
-	if hasHostID && hasDynamicHostAllocation {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.hostID"), "hostID and dynamicHostAllocation are mutually exclusive"), field.Forbidden(field.NewPath("spec.dynamicHostAllocation"), "hostID and dynamicHostAllocation are mutually exclusive"))
+	// hostID, hostResourceGroupArn, and dynamicHostAllocation are mutually exclusive.
+	count := 0
+	if hasHostID {
+		count++
+	}
+	if hasHostResourceGroupArn {
+		count++
+	}
+	if hasDynamicHostAllocation {
+		count++
+	}
+	if count > 1 {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "hostID, hostResourceGroupArn, and dynamicHostAllocation are mutually exclusive"))
 	}
 
-	// HostID, HostAffinity, and DynamicHostAllocation can only be set when Tenancy is "host"
+	// HostID, HostAffinity, HostResourceGroupArn, and DynamicHostAllocation can only be set when Tenancy is "host".
 	if hasHostID && r.Spec.Tenancy != hostTenancy {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.hostID"), "hostID can only be set when tenancy is 'host'"))
+	}
+
+	if hasHostResourceGroupArn && r.Spec.Tenancy != hostTenancy {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.hostResourceGroupArn"), "hostResourceGroupArn can only be set when tenancy is 'host'"))
 	}
 
 	if r.Spec.HostAffinity != nil && *r.Spec.HostAffinity == hostAffinity && r.Spec.Tenancy != hostTenancy {
@@ -520,6 +535,11 @@ func (w *AWSMachine) validateHostAllocation(r *infrav1.AWSMachine) field.ErrorLi
 	// DHA needs to have hostAffinity set to "host" to make sure it does not drift off its allocated host when the instance is restarted, otherwise there will be a host not in use still allocated.
 	if hasDynamicHostAllocation && (r.Spec.HostAffinity == nil || *r.Spec.HostAffinity != hostAffinity) {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.dynamicHostAllocation"), "dynamicHostAllocation can only be set when hostAffinity is 'host'"))
+	}
+
+	// licenseConfigurationArns is required when hostResourceGroupArn is specified.
+	if hasHostResourceGroupArn && len(r.Spec.LicenseConfigurationArns) == 0 {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec", "licenseConfigurationArns"), "licenseConfigurationArns is required when hostResourceGroupArn is specified"))
 	}
 
 	return allErrs
@@ -545,18 +565,33 @@ func (w *AWSMachine) validateHostAllocation(r *infrav1.AWSMachine) field.ErrorLi
 func (w *AWSMachine) validateHostAllocationUpdate(oldMachine, newMachine *infrav1.AWSMachine) field.ErrorList {
 	var allErrs field.ErrorList
 
-	// Check if both hostID and dynamicHostAllocation are specified.
+	// Check which host allocation options are specified.
 	hasHostID := newMachine.Spec.HostID != nil && len(*newMachine.Spec.HostID) > 0
+	hasHostResourceGroupArn := newMachine.Spec.HostResourceGroupArn != nil && len(*newMachine.Spec.HostResourceGroupArn) > 0
 	hasDynamicHostAllocation := newMachine.Spec.DynamicHostAllocation != nil
 
-	// If both hostID and dynamicHostAllocation are specified, return an error.
-	if hasHostID && hasDynamicHostAllocation {
-		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.hostID"), "hostID and dynamicHostAllocation are mutually exclusive"), field.Forbidden(field.NewPath("spec.dynamicHostAllocation"), "hostID and dynamicHostAllocation are mutually exclusive"))
+	// hostID, hostResourceGroupArn, and dynamicHostAllocation are mutually exclusive.
+	count := 0
+	if hasHostID {
+		count++
+	}
+	if hasHostResourceGroupArn {
+		count++
+	}
+	if hasDynamicHostAllocation {
+		count++
+	}
+	if count > 1 {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "hostID, hostResourceGroupArn, and dynamicHostAllocation are mutually exclusive"))
 	}
 
-	// HostID, HostAffinity, and DynamicHostAllocation can only be set when Tenancy is "host".
+	// HostID, HostAffinity, HostResourceGroupArn, and DynamicHostAllocation can only be set when Tenancy is "host".
 	if hasHostID && newMachine.Spec.Tenancy != hostTenancy {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.hostID"), "hostID can only be set when tenancy is 'host'"))
+	}
+
+	if hasHostResourceGroupArn && newMachine.Spec.Tenancy != hostTenancy {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.hostResourceGroupArn"), "hostResourceGroupArn can only be set when tenancy is 'host'"))
 	}
 
 	// Grandfather the hostAffinity vs tenancy check: if the old object already carried
@@ -580,6 +615,11 @@ func (w *AWSMachine) validateHostAllocationUpdate(oldMachine, newMachine *infrav
 	// not in use still allocated.
 	if hasDynamicHostAllocation && (newMachine.Spec.HostAffinity == nil || *newMachine.Spec.HostAffinity != hostAffinity) {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec.dynamicHostAllocation"), "dynamicHostAllocation can only be set when hostAffinity is 'host'"))
+	}
+
+	// licenseConfigurationArns is required when hostResourceGroupArn is specified.
+	if hasHostResourceGroupArn && len(newMachine.Spec.LicenseConfigurationArns) == 0 {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec", "licenseConfigurationArns"), "licenseConfigurationArns is required when hostResourceGroupArn is specified"))
 	}
 
 	return allErrs

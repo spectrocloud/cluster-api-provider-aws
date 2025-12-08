@@ -221,6 +221,97 @@ func TestAWSMachineTemplateValidateCreate(t *testing.T) {
 			},
 			wantError: true,
 		},
+		// PCP-5519: HostResourceGroupArn coverage — ported from api/v1beta2/awsmachinetemplate_webhook_test.go
+		// after upstream relocated the AWSMachineTemplate webhook to webhooks/.
+		{
+			name: "hostResourceGroupArn alone is valid",
+			inputTemplate: &infrav1.AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: infrav1.AWSMachineTemplateSpec{
+					Template: infrav1.AWSMachineTemplateResource{
+						Spec: infrav1.AWSMachineSpec{
+							InstanceType:             "test",
+							Tenancy:                  "host",
+							HostResourceGroupArn:     aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+							LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+						},
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "hostID and hostResourceGroupArn are mutually exclusive",
+			inputTemplate: &infrav1.AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: infrav1.AWSMachineTemplateSpec{
+					Template: infrav1.AWSMachineTemplateResource{
+						Spec: infrav1.AWSMachineSpec{
+							InstanceType:             "test",
+							Tenancy:                  "host",
+							HostID:                   aws.String("h-1234567890abcdef0"),
+							HostResourceGroupArn:     aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+							LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostResourceGroupArn and dynamicHostAllocation are mutually exclusive",
+			inputTemplate: &infrav1.AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: infrav1.AWSMachineTemplateSpec{
+					Template: infrav1.AWSMachineTemplateResource{
+						Spec: infrav1.AWSMachineSpec{
+							InstanceType:         "test",
+							Tenancy:              "host",
+							HostAffinity:         ptr.To("host"),
+							HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+							DynamicHostAllocation: &infrav1.DynamicHostAllocationSpec{
+								Tags: map[string]string{"Environment": "test"},
+							},
+							LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostResourceGroupArn without licenseConfigurationArns should fail",
+			inputTemplate: &infrav1.AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: infrav1.AWSMachineTemplateSpec{
+					Template: infrav1.AWSMachineTemplateResource{
+						Spec: infrav1.AWSMachineSpec{
+							InstanceType:         "test",
+							Tenancy:              "host",
+							HostResourceGroupArn: aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "hostResourceGroupArn without tenancy=host is invalid",
+			inputTemplate: &infrav1.AWSMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec: infrav1.AWSMachineTemplateSpec{
+					Template: infrav1.AWSMachineTemplateResource{
+						Spec: infrav1.AWSMachineSpec{
+							InstanceType:             "test",
+							Tenancy:                  "default",
+							HostResourceGroupArn:     aws.String("arn:aws:resource-groups:us-west-2:123456789012:group/test-group"),
+							LicenseConfigurationArns: []string{"arn:aws:license-manager:us-west-2:259732043995:license-configuration:lic-4acd3f7c117b9e314cce36e46084d071"},
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
