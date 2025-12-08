@@ -258,18 +258,7 @@ func (s *Service) CreateInstance(scope *scope.MachineScope, userData []byte, use
 
 	// Handle dynamic host allocation if specified
 	if scope.AWSMachine.Spec.DynamicHostAllocation != nil {
-		//hostID, err := s.ensureDedicatedHostAllocation(context.Background(), scope)
-		//if err != nil {
-		//	return nil, errors.Wrap(err, "failed to allocate dedicated host")
-		//}
-		//input.HostID = aws.String(hostID)
-		//input.HostAffinity = aws.String("host")
-
-		//if scope.AWSMachine.Status.DedicatedHost == nil {
-		//	scope.AWSMachine.Status.DedicatedHost = &infrav1.DedicatedHostStatus{}
-		//}
-		//// Update machine status with allocated host ID
-		//scope.AWSMachine.Status.DedicatedHost.ID = &hostID
+		// Dynamic host allocation is enabled, but implementation is currently not provided.
 	} else {
 		// Use static host allocation if specified
 		input.HostID = scope.AWSMachine.Spec.HostID
