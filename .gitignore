@@ -63,3 +63,4 @@ dist
 _artifacts
 awsiamconfiguration.yaml
 cloudformation.yaml
+vendor/
