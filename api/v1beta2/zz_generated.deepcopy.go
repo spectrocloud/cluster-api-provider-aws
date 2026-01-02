@@ -776,6 +776,16 @@ func (in *AWSMachineSpec) DeepCopyInto(out *AWSMachineSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.HostResourceGroupArn != nil {
+		in, out := &in.HostResourceGroupArn, &out.HostResourceGroupArn
+		*out = new(string)
+		**out = **in
+	}
+	if in.LicenseConfigurationArns != nil {
+		in, out := &in.LicenseConfigurationArns, &out.LicenseConfigurationArns
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.HostAffinity != nil {
 		in, out := &in.HostAffinity, &out.HostAffinity
 		*out = new(string)
@@ -1719,6 +1729,16 @@ func (in *Instance) DeepCopyInto(out *Instance) {
 		in, out := &in.HostID, &out.HostID
 		*out = new(string)
 		**out = **in
+	}
+	if in.HostResourceGroupArn != nil {
+		in, out := &in.HostResourceGroupArn, &out.HostResourceGroupArn
+		*out = new(string)
+		**out = **in
+	}
+	if in.LicenseConfigurationArns != nil {
+		in, out := &in.LicenseConfigurationArns, &out.LicenseConfigurationArns
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 }
 
