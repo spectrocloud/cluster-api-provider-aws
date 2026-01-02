@@ -66,7 +66,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          labels is a map of string keys and values that can be used to organize and categorize
+                          Map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -480,7 +480,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          labels is a map of string keys and values that can be used to organize and categorize
+                          Map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -904,14 +904,6 @@ spec:
                         - OnDemand
                         - Spot
                         - CapacityBlock
-                        type: string
-                      networkInterfaceType:
-                        description: |-
-                          NetworkInterfaceType is the interface type of the primary network Interface.
-                          If not specified, AWS applies a default value.
-                        enum:
-                        - interface
-                        - efa
                         type: string
                       networkInterfaces:
                         description: |-

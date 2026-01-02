@@ -71,7 +71,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          labels is a map of string keys and values that can be used to organize and categorize
+                          Map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -126,13 +126,10 @@ spec:
                           used to communicate with the control plane.
                         properties:
                           host:
-                            description: host is the hostname on which the API server
-                              is serving.
-                            maxLength: 512
+                            description: The hostname on which the API server is serving.
                             type: string
                           port:
-                            description: port is the port on which the API server
-                              is serving.
+                            description: The port on which the API server is serving.
                             format: int32
                             type: integer
                         required:
@@ -502,7 +499,7 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          labels is a map of string keys and values that can be used to organize and categorize
+                          Map of string keys and values that can be used to organize and categorize
                           (scope and select) objects. May match selectors of replication controllers
                           and services.
                           More info: http://kubernetes.io/docs/user-guide/labels
@@ -557,13 +554,10 @@ spec:
                           used to communicate with the control plane.
                         properties:
                           host:
-                            description: host is the hostname on which the API server
-                              is serving.
-                            maxLength: 512
+                            description: The hostname on which the API server is serving.
                             type: string
                           port:
-                            description: port is the port on which the API server
-                              is serving.
+                            description: The port on which the API server is serving.
                             format: int32
                             type: integer
                         required:

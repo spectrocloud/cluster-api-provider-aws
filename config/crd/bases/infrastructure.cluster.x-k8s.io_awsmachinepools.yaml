@@ -392,32 +392,27 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        Last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        message is a human readable message indicating details about the transition.
+                        A human readable message indicating details about the transition.
                         This field may be empty.
-                      maxLength: 10240
-                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        reason is the reason for the condition's last transition in CamelCase.
+                        The reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
-                        This field may be empty.
-                      maxLength: 256
-                      minLength: 1
+                        This field may not be empty.
                       type: string
                     severity:
                       description: |-
                         Severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
-                      maxLength: 32
                       type: string
                     status:
                       description: Status of the condition, one of True, False, Unknown.
@@ -427,8 +422,6 @@ spec:
                         Type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
-                      maxLength: 256
-                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -640,6 +633,10 @@ spec:
                         description: ID of resource
                         type: string
                     type: object
+                  capacityReservationId:
+                    description: CapacityReservationID specifies the target Capacity
+                      Reservation into which the instance should be launched.
+                    type: string
                   iamInstanceProfile:
                     description: |-
                       The name or the Amazon Resource Name (ARN) of the instance profile associated
@@ -741,6 +738,19 @@ spec:
                   instanceType:
                     description: 'InstanceType is the type of instance to create.
                       Example: m4.xlarge'
+                    type: string
+                  marketType:
+                    description: |-
+                      MarketType specifies the type of market for the EC2 instance. Valid values include:
+                      "OnDemand" (default): The instance runs as a standard OnDemand instance.
+                      "Spot": The instance runs as a Spot instance. When SpotMarketOptions is provided, the marketType defaults to "Spot".
+                      "CapacityBlock": The instance utilizes pre-purchased compute capacity (capacity blocks) with AWS Capacity Reservations.
+                       If this value is selected, CapacityReservationID must be specified to identify the target reservation.
+                      If marketType is not specified and spotMarketOptions is provided, the marketType defaults to "Spot".
+                    enum:
+                    - OnDemand
+                    - Spot
+                    - CapacityBlock
                     type: string
                   name:
                     description: The name of the launch template.
@@ -1087,32 +1097,27 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        Last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        message is a human readable message indicating details about the transition.
+                        A human readable message indicating details about the transition.
                         This field may be empty.
-                      maxLength: 10240
-                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        reason is the reason for the condition's last transition in CamelCase.
+                        The reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
-                        This field may be empty.
-                      maxLength: 256
-                      minLength: 1
+                        This field may not be empty.
                       type: string
                     severity:
                       description: |-
                         Severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
-                      maxLength: 32
                       type: string
                     status:
                       description: Status of the condition, one of True, False, Unknown.
@@ -1122,8 +1127,6 @@ spec:
                         Type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
-                      maxLength: 256
-                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime

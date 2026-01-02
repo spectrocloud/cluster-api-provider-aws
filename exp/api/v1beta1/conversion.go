@@ -57,6 +57,14 @@ func (src *AWSMachinePool) ConvertTo(dstRaw conversion.Hub) error {
 		dst.Spec.AWSLaunchTemplate.PrivateDNSName = restored.Spec.AWSLaunchTemplate.PrivateDNSName
 	}
 
+	if restored.Spec.AWSLaunchTemplate.CapacityReservationID != nil {
+		dst.Spec.AWSLaunchTemplate.CapacityReservationID = restored.Spec.AWSLaunchTemplate.CapacityReservationID
+	}
+
+	if restored.Spec.AWSLaunchTemplate.MarketType != "" {
+		dst.Spec.AWSLaunchTemplate.MarketType = restored.Spec.AWSLaunchTemplate.MarketType
+	}
+
 	dst.Spec.DefaultInstanceWarmup = restored.Spec.DefaultInstanceWarmup
 	dst.Spec.AWSLaunchTemplate.NonRootVolumes = restored.Spec.AWSLaunchTemplate.NonRootVolumes
 

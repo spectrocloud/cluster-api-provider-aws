@@ -48,7 +48,6 @@ func (src *AWSMachine) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.LicenseConfigurationArns = restored.Spec.LicenseConfigurationArns
 	dst.Spec.HostAffinity = restored.Spec.HostAffinity
 	dst.Spec.CapacityReservationPreference = restored.Spec.CapacityReservationPreference
-	dst.Spec.NetworkInterfaceType = restored.Spec.NetworkInterfaceType
 	if restored.Spec.ElasticIPPool != nil {
 		if dst.Spec.ElasticIPPool == nil {
 			dst.Spec.ElasticIPPool = &infrav1.ElasticIPPool{}
@@ -117,7 +116,6 @@ func (r *AWSMachineTemplate) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.Template.Spec.LicenseConfigurationArns = restored.Spec.Template.Spec.LicenseConfigurationArns
 	dst.Spec.Template.Spec.HostAffinity = restored.Spec.Template.Spec.HostAffinity
 	dst.Spec.Template.Spec.CapacityReservationPreference = restored.Spec.Template.Spec.CapacityReservationPreference
-	dst.Spec.Template.Spec.NetworkInterfaceType = restored.Spec.Template.Spec.NetworkInterfaceType
 	if restored.Spec.Template.Spec.ElasticIPPool != nil {
 		if dst.Spec.Template.Spec.ElasticIPPool == nil {
 			dst.Spec.Template.Spec.ElasticIPPool = &infrav1.ElasticIPPool{}
