@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+BUILDER_GOLANG_VERSION ?= 1.23
 ROOT_DIR_RELATIVE := .
 
 include $(ROOT_DIR_RELATIVE)/common.mk
@@ -20,7 +21,7 @@ include $(ROOT_DIR_RELATIVE)/common.mk
 # https://suva.sh/posts/well-documented-makefiles
 
 # Go
-GO_VERSION ?=1.23.9
+GO_VERSION ?=1.22.6
 GO_CONTAINER_IMAGE ?= golang:$(GO_VERSION)
 
 # Directories.
@@ -28,6 +29,7 @@ ARTIFACTS ?= $(REPO_ROOT)/_artifacts
 TOOLS_DIR := hack/tools
 TOOLS_DIR_DEPS := $(TOOLS_DIR)/go.sum $(TOOLS_DIR)/go.mod $(TOOLS_DIR)/Makefile
 TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
+GO_INSTALL := ./scripts/go_install.sh
 
 
 API_DIRS := cmd/clusterawsadm/api api exp/api controlplane/eks/api bootstrap/eks/api iam/api controlplane/rosa/api
@@ -63,10 +65,7 @@ GOJQ := $(TOOLS_BIN_DIR)/gojq
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT_VER := $(shell cat .github/workflows/pr-golangci-lint.yaml | grep [[:space:]]version: | sed 's/.*version: //')
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
-GOLANGCI_LINT_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-GOLANGCI_LINT_KAL_BIN := golangci-lint-kube-api-linter
-GOLANGCI_LINT_KAL_VER := $(shell cat ./hack/tools/.custom-gcl.yaml | grep version: | sed 's/version: //')
-GOLANGCI_LINT_KAL := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_KAL_BIN))
+GOLANGCI_LINT_PKG := github.com/golangci/golangci-lint/cmd/golangci-lint
 KIND := $(TOOLS_BIN_DIR)/kind
 KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
 MOCKGEN := $(TOOLS_BIN_DIR)/mockgen
@@ -93,7 +92,7 @@ endif
 
 # Release variables
 
-STAGING_REGISTRY ?= gcr.io/k8s-staging-cluster-api-aws
+STAGING_REGISTRY ?= us-east1-docker.pkg.dev/spectro-images/dev/$(USER)/cluster-api-aws
 STAGING_BUCKET ?= k8s-staging-cluster-api-aws
 BUCKET ?= $(STAGING_BUCKET)
 PROD_REGISTRY := registry.k8s.io/cluster-api-aws
@@ -112,9 +111,22 @@ endif
 # image name used to build the cmd/clusterawsadm
 TOOLCHAIN_IMAGE := toolchain
 
-TAG ?= dev
-ARCH ?= $(shell go env GOARCH)
-ALL_ARCH ?= amd64 arm arm64 ppc64le s390x
+# Fips Flags
+FIPS_ENABLE ?= ""
+BUILD_ARGS = --build-arg CRYPTO_LIB=${FIPS_ENABLE} --build-arg BUILDER_GOLANG_VERSION=${BUILDER_GOLANG_VERSION}
+
+RELEASE_LOC := release
+ifeq ($(FIPS_ENABLE),yes)
+  RELEASE_LOC := release-fips
+endif
+
+SPECTRO_VERSION ?= 4.6.0-dev
+TAG ?= v2.7.1-spectro-${SPECTRO_VERSION}
+ARCH ?= amd64
+# ALL_ARCH = amd64 arm arm64 ppc64le s390x
+ALL_ARCH = amd64 arm64
+
+REGISTRY ?= us-east1-docker.pkg.dev/spectro-images/dev/$(USER)/${RELEASE_LOC}
 
 # main controller
 CORE_IMAGE_NAME ?= cluster-api-aws-controller
@@ -143,12 +155,6 @@ LDFLAGS := $(shell source ./hack/version.sh; version::ldflags)
 # Set USE_EXISTING_CLUSTER to use an existing kubernetes context
 USE_EXISTING_CLUSTER ?= "false"
 
-# GORELEASER_PARALLELISM restricts the number of tasks goreleaser will run
-# concurrently. The primary reason to do this is to ensure its memory usage
-# remains within the resource limits of the
-# cluster-api-provider-aws-build-docker job
-GORELEASER_PARALLELISM ?= 2
-
 # Set E2E_SKIP_EKS_UPGRADE to false to test EKS upgrades.
 # Warning, this takes a long time
 E2E_SKIP_EKS_UPGRADE ?= "false"
@@ -157,8 +163,8 @@ E2E_SKIP_EKS_UPGRADE ?= "false"
 EKS_SOURCE_TEMPLATE ?= eks/cluster-template-eks-control-plane-only.yaml
 
 # set up `setup-envtest` to install kubebuilder dependency
-export KUBEBUILDER_ENVTEST_KUBERNETES_VERSION ?= 1.32.0
-SETUP_ENVTEST_VER := release-0.20
+export KUBEBUILDER_ENVTEST_KUBERNETES_VERSION ?= 1.31.0
+SETUP_ENVTEST_VER := release-0.19
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -304,24 +310,13 @@ generate-go-apis: ## Alias for .build/generate-go-apis
 $(GOLANGCI_LINT): # Build golangci-lint from tools folder.
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) $(GO_INSTALL) $(GOLANGCI_LINT_PKG) $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
-$(GOLANGCI_LINT_KAL): $(GOLANGCI_LINT) # Build golangci-lint-kal from custom configuration.
-	cd $(TOOLS_DIR); $(GOLANGCI_LINT) custom
-
 .PHONY: lint
-lint: $(GOLANGCI_LINT) $(GOLANGCI_LINT_KAL) ## Lint codebase
-	$(GOLANGCI_LINT) run -v $(GOLANGCI_LINT_EXTRA_ARGS)
-	
+lint: $(GOLANGCI_LINT) ## Lint codebase
+	$(GOLANGCI_LINT) run -v --fast=false $(GOLANGCI_LINT_EXTRA_ARGS)
+
 .PHONY: lint-fix
 lint-fix: $(GOLANGCI_LINT) ## Lint the codebase and run auto-fixers if supported by the linter
 	GOLANGCI_LINT_EXTRA_ARGS=--fix $(MAKE) lint
-
-.PHONY: lint-api
-lint-api: $(GOLANGCI_LINT_KAL)
-	$(GOLANGCI_LINT_KAL) run -v --config $(REPO_ROOT)/.golangci-kal.yml $(GOLANGCI_LINT_EXTRA_ARGS)
-
-.PHONY: lint-api-fix
-lint-api-fix: $(GOLANGCI_LINT_KAL)
-	GOLANGCI_LINT_EXTRA_ARGS=--fix $(MAKE) lint-api
 
 modules: ## Runs go mod to ensure proper vendoring.
 	go mod tidy
@@ -392,7 +387,8 @@ clusterawsadm: ## Build clusterawsadm binary
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --build-arg ARCH=$(ARCH) --build-arg builder_image=$(GO_CONTAINER_IMAGE) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker buildx build --load --platform linux/${ARCH} ${BUILD_ARGS} --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
+	@echo $(CORE_CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-build-all ## Build all the architecture docker images
 docker-build-all: $(addprefix docker-build-,$(ALL_ARCH))
@@ -453,6 +449,15 @@ test-e2e: $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) generate-test-flavors e2e-image ## 
 test-e2e-eks: generate-test-flavors $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run eks e2e tests
 	time go run github.com/onsi/ginkgo/v2/ginkgo -tags=e2e $(GINKGO_ARGS) ./test/e2e/suites/managed/... -- -config-path="$(E2E_EKS_CONF_PATH)" --source-template="$(EKS_SOURCE_TEMPLATE)" $(E2E_ARGS) $(EKS_E2E_ARGS)
 
+.PHONY: test-e2e-gc ## Run garbage collection e2e tests using clusterctl
+test-e2e-gc: generate-test-flavors $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run eks e2e tests
+	time go run github.com/onsi/ginkgo/v2/ginkgo -tags=e2e -focus="$(GINKGO_FOCUS)" -skip="$(GINKGO_SKIP)" $(GINKGO_ARGS) -p ./test/e2e/suites/gc_unmanaged/... -- -config-path="$(E2E_CONF_PATH)" $(E2E_ARGS)
+
+.PHONY: test-e2e-eks-gc ## Run EKS garbage collection e2e tests using clusterctl
+test-e2e-eks-gc: generate-test-flavors $(KIND) $(SSM_PLUGIN) $(KUSTOMIZE) e2e-image ## Run eks e2e tests
+	time go run github.com/onsi/ginkgo/v2/ginkgo -tags=e2e -focus="$(GINKGO_FOCUS)" -skip="$(GINKGO_SKIP)" $(GINKGO_ARGS) ./test/e2e/suites/gc_managed/... -- -config-path="$(E2E_EKS_CONF_PATH)" --source-template="$(EKS_SOURCE_TEMPLATE)" $(E2E_ARGS) $(EKS_E2E_ARGS)
+
+
 CONFORMANCE_E2E_ARGS ?= -kubetest.config-file=$(KUBETEST_CONF_PATH)
 CONFORMANCE_E2E_ARGS += $(E2E_ARGS)
 CONFORMANCE_GINKGO_ARGS += $(GINKGO_ARGS)
@@ -475,6 +480,8 @@ compile-e2e: ## Test e2e compilation
 	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/unmanaged
 	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/conformance
 	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/managed
+	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/gc_managed
+	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/gc_unmanaged
 
 
 .PHONY: docker-pull-e2e-preloads
@@ -577,7 +584,7 @@ release: clean-release check-release-tag check-release-branch $(RELEASE_DIR) $(G
 	$(MAKE) release-changelog
 	CORE_CONTROLLER_IMG=$(PROD_REGISTRY)/$(CORE_IMAGE_NAME) $(MAKE) release-manifests
 	$(MAKE) release-policies
-	$(GORELEASER) release --config $(GORELEASER_CONFIG) --release-notes $(RELEASE_DIR)/CHANGELOG.md --clean --parallelism $(GORELEASER_PARALLELISM)
+	$(GORELEASER) release --config $(GORELEASER_CONFIG) --release-notes $(RELEASE_DIR)/CHANGELOG.md --clean
 
 release-policies: $(RELEASE_POLICIES) ## Release policies
 
@@ -612,7 +619,7 @@ promote-images: $(KPROMO) $(YQ)
 
 .PHONY: release-binaries
 release-binaries: $(GORELEASER) ## Builds only the binaries, not a release.
-	$(GORELEASER) build --config $(GORELEASER_CONFIG) --snapshot --clean --parallelism $(GORELEASER_PARALLELISM)
+	$(GORELEASER) build --config $(GORELEASER_CONFIG) --snapshot --clean
 
 .PHONY: release-staging
 release-staging: ## Builds and push container images and manifests to the staging bucket.
