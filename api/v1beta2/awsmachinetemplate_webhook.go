@@ -237,6 +237,7 @@ func (r *AWSMachineTemplateWebhook) ValidateCreate(_ context.Context, raw runtim
 	allErrs = append(allErrs, obj.validateSSHKeyName()...)
 	allErrs = append(allErrs, obj.validateAdditionalSecurityGroups()...)
 	allErrs = append(allErrs, obj.Spec.Template.Spec.AdditionalTags.Validate()...)
+	allErrs = append(allErrs, obj.validateHostAllocation()...)
 
 	return nil, aggregateObjErrors(obj.GroupVersionKind().GroupKind(), obj.Name, allErrs)
 }
