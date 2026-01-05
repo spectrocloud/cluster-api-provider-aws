@@ -753,6 +753,7 @@ func (s *Service) runInstance(role string, i *infrav1.Instance) (*infrav1.Instan
 		if strings.Contains(err.Error(), "host resource group") && strings.Contains(err.Error(), "licenses") {
 			return nil, errors.Wrap(err, "failed to run instance: AMI licenses must match the licenses associated with the host resource group. Ensure the AMI and host resource group have compatible licensing")
 		}
+		return nil, errors.Wrap(err, "failed to run instance")
 	}
 
 	if len(out.Instances) == 0 {
