@@ -75,7 +75,6 @@ func (*awsMachineWebhook) ValidateCreate(_ context.Context, obj runtime.Object) 
 	allErrs = append(allErrs, r.validateNonRootVolumes()...)
 	allErrs = append(allErrs, r.validateSSHKeyName()...)
 	allErrs = append(allErrs, r.validateAdditionalSecurityGroups()...)
-	allErrs = append(allErrs, r.validateHostAffinity()...)
 	allErrs = append(allErrs, r.Spec.AdditionalTags.Validate()...)
 	allErrs = append(allErrs, r.validateNetworkElasticIPPool()...)
 	allErrs = append(allErrs, r.validateInstanceMarketType()...)
@@ -501,17 +500,6 @@ func (r *AWSMachine) validateHostAllocation() field.ErrorList {
 		}
 	}
 
-	return allErrs
-}
-
-func (r *AWSMachine) validateHostAffinity() field.ErrorList {
-	var allErrs field.ErrorList
-
-	if r.Spec.HostAffinity != nil {
-		if r.Spec.HostID == nil || len(*r.Spec.HostID) == 0 {
-			allErrs = append(allErrs, field.Required(field.NewPath("spec.hostID"), "hostID must be set when hostAffinity is configured"))
-		}
-	}
 	return allErrs
 }
 
