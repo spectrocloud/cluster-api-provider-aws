@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 )
@@ -69,6 +70,43 @@ func TestEKSConfigReconcilerReturnEarlyIfClusterControlPlaneNotInitialized(t *te
 		gomega.Expect(err).NotTo(HaveOccurred())
 		gomega.Expect(result.Requeue).To(BeFalse())
 	}).Should(Succeed())
+}
+
+func TestDetermineClusterCIDR(t *testing.T) {
+	g := NewWithT(t)
+
+	cluster := newCluster("service-cidr-cluster")
+	controlPlane := newAMCP("service-cidr-cluster")
+	controlPlane.Spec.NetworkSpec.VPC.CidrBlock = "10.0.0.0/16"
+
+	cluster.Spec.ClusterNetwork = &clusterv1.ClusterNetwork{
+		Services: &clusterv1.NetworkRanges{
+			CIDRBlocks: []string{"192.168.0.0/16"},
+		},
+	}
+
+	g.Expect(determineClusterCIDR(cluster, controlPlane)).To(Equal("192.168.0.0/16"))
+
+	cluster.Spec.ClusterNetwork.Services.CIDRBlocks = nil
+	g.Expect(determineClusterCIDR(cluster, controlPlane)).To(Equal("10.0.0.0/16"))
+
+	controlPlane.Spec.NetworkSpec.VPC.CidrBlock = ""
+	g.Expect(determineClusterCIDR(&clusterv1.Cluster{}, &ekscontrolplanev1.AWSManagedControlPlane{})).To(Equal(""))
+}
+
+func TestDeriveDNSFromCIDR(t *testing.T) {
+	g := NewWithT(t)
+
+	ip, err := deriveDNSFromCIDR("192.168.0.0/16")
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(ip).To(Equal("192.168.0.10"))
+
+	ip, err = deriveDNSFromCIDR("fd00::/112")
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(ip).To(Equal("fd00::a"))
+
+	_, err = deriveDNSFromCIDR("not-a-cidr")
+	g.Expect(err).To(HaveOccurred())
 }
 
 func configOwner(kind string) *bsutil.ConfigOwner {

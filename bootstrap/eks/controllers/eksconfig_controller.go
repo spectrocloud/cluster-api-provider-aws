@@ -21,8 +21,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	"math/big"
+	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -176,6 +180,76 @@ func (r *EKSConfigReconciler) resolveFiles(ctx context.Context, cfg *eksbootstra
 	return collected, nil
 }
 
+// determineClusterCIDR prefers the Cluster's service CIDR (from Spectro pack) and falls back to the VPC CIDR.
+func determineClusterCIDR(cluster *clusterv1.Cluster, controlPlane *ekscontrolplanev1.AWSManagedControlPlane) string {
+	if cluster != nil &&
+		cluster.Spec.ClusterNetwork != nil &&
+		cluster.Spec.ClusterNetwork.Services != nil &&
+		len(cluster.Spec.ClusterNetwork.Services.CIDRBlocks) > 0 {
+		if cidr := strings.TrimSpace(cluster.Spec.ClusterNetwork.Services.CIDRBlocks[0]); cidr != "" {
+			return cidr
+		}
+	}
+
+	if controlPlane != nil && controlPlane.Spec.NetworkSpec.VPC.CidrBlock != "" {
+		return controlPlane.Spec.NetworkSpec.VPC.CidrBlock
+	}
+
+	return ""
+}
+
+// deriveDNSFromCIDR returns the 10th IP inside the provided CIDR.
+func deriveDNSFromCIDR(cidr string) (string, error) {
+	if strings.TrimSpace(cidr) == "" {
+		return "", nil
+	}
+
+	_, network, err := net.ParseCIDR(strings.TrimSpace(cidr))
+	if err != nil {
+		return "", err
+	}
+
+	const dnsOffset = 10
+
+	if baseIPv4 := network.IP.To4(); baseIPv4 != nil {
+		base := binary.BigEndian.Uint32(baseIPv4)
+		dns := base + dnsOffset
+
+		out := make([]byte, 4)
+		binary.BigEndian.PutUint32(out, dns)
+		ip := net.IP(out)
+
+		if !network.Contains(ip) {
+			return "", fmt.Errorf("calculated IPv4 DNS IP %s is outside CIDR %s", ip.String(), cidr)
+		}
+		return ip.String(), nil
+	}
+
+	baseIPv6 := network.IP.To16()
+	if baseIPv6 == nil {
+		return "", fmt.Errorf("invalid CIDR %s", cidr)
+	}
+
+	baseInt := new(big.Int).SetBytes(baseIPv6)
+	dnsInt := new(big.Int).Add(baseInt, big.NewInt(dnsOffset))
+
+	ipBytes := dnsInt.Bytes()
+	if len(ipBytes) > net.IPv6len {
+		return "", fmt.Errorf("calculated IPv6 DNS IP exceeds address space for CIDR %s", cidr)
+	}
+	if len(ipBytes) < net.IPv6len {
+		padded := make([]byte, net.IPv6len)
+		copy(padded[net.IPv6len-len(ipBytes):], ipBytes)
+		ipBytes = padded
+	}
+
+	ip := net.IP(ipBytes)
+	if !network.Contains(ip) {
+		return "", fmt.Errorf("calculated IPv6 DNS IP %s is outside CIDR %s", ip.String(), cidr)
+	}
+	return ip.String(), nil
+}
+
 func (r *EKSConfigReconciler) resolveSecretFileContent(ctx context.Context, ns string, source eksbootstrapv1.File) ([]byte, error) {
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Namespace: ns, Name: source.ContentFrom.Secret.Name}
@@ -271,11 +345,21 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 	}
 
 	// Create unified NodeInput for both AL2 and AL2023
+	clusterCIDR := determineClusterCIDR(cluster, controlPlane)
+	dnsClusterIP := config.Spec.DNSClusterIP
+	if (dnsClusterIP == nil || strings.TrimSpace(*dnsClusterIP) == "") && clusterCIDR != "" {
+		if derivedDNS, err := deriveDNSFromCIDR(clusterCIDR); err != nil {
+			log.Info("failed to derive DNS IP from service CIDR", "cidr", clusterCIDR, "error", err.Error())
+		} else if derivedDNS != "" {
+			dnsClusterIP = ptr.To(derivedDNS)
+		}
+	}
+
 	nodeInput := &userdata.NodeInput{
 		ClusterName:              controlPlane.Spec.EKSClusterName,
 		KubeletExtraArgs:         config.Spec.KubeletExtraArgs,
 		ContainerRuntime:         config.Spec.ContainerRuntime,
-		DNSClusterIP:             config.Spec.DNSClusterIP,
+		DNSClusterIP:             dnsClusterIP,
 		DockerConfigJSON:         config.Spec.DockerConfigJSON,
 		APIRetryAttempts:         config.Spec.APIRetryAttempts,
 		UseMaxPods:               config.Spec.UseMaxPods,
@@ -287,7 +371,7 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 		DiskSetup:                config.Spec.DiskSetup,
 		Mounts:                   config.Spec.Mounts,
 		Files:                    files,
-		ClusterCIDR:              controlPlane.Spec.NetworkSpec.VPC.CidrBlock,
+		ClusterCIDR:              clusterCIDR,
 	}
 
 	if config.Spec.PauseContainer != nil {
