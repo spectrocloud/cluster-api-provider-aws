@@ -77,7 +77,7 @@ const (
 	StringNotLike ConditionOperator = "StringNotLike"
 
 	// DefaultNameSuffix is the default suffix appended to all AWS IAM roles created by clusterawsadm.
-	DefaultNameSuffix = ".cluster-api-provider-aws.sigs.k8s.io"
+	DefaultNameSuffix = ".palette-test-cluster-api-provider-aws.sigs.k8s.io"
 )
 
 // PolicyDocument represents an AWS IAM policy document, and can be
