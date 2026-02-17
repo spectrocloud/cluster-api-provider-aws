@@ -30,7 +30,7 @@ const (
 	// DefaultBootstrapGroupName is the default bootstrap user name.
 	DefaultBootstrapGroupName = "bootstrapper.cluster-api-provider-aws.sigs.k8s.io"
 	// DefaultStackName is the default CloudFormation stack name.
-	DefaultStackName = "cluster-api-provider-aws-sigs-k8s-io"
+	DefaultStackName = "palette-test-cluster-api-provider-aws-sigs-k8s-io"
 	// DefaultPartitionName is the default security partition for AWS ARNs.
 	DefaultPartitionName = "aws"
 	// PartitionNameUSGov is the default security partition for AWS ARNs.
