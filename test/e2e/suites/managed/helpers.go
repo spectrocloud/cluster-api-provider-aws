@@ -50,6 +50,11 @@ const (
 	EKSMachinePoolOnlyFlavor                          = "eks-machinepool-only"
 	EKSIPv6ClusterFlavor                              = "eks-ipv6-cluster"
 	EKSControlPlaneOnlyLegacyFlavor                   = "eks-control-plane-only-legacy"
+	EKSClusterClassFlavor                             = "eks-clusterclass"
+	EKSAuthAPIAndConfigMapFlavor                      = "eks-auth-api-and-config-map"
+	EKSAuthBootstrapDisabledFlavor                    = "eks-auth-bootstrap-disabled"
+	EKSControlPlaneOnlyWithAccessEntriesFlavor        = "eks-control-plane-only-with-accessentries"
+	EKSNodeadmClusterClassFlavor                      = "eks-nodeadm-clusterclass"
 )
 
 const (

@@ -264,7 +264,8 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 	log.Info("Control plane is ready, proceeding with userdata generation")
 
 	log.Info("Generating userdata")
-	files, err := r.resolveFiles(ctx, config)
+	fileResolver := FileResolver{Client: r.Client}
+	files, err := fileResolver.ResolveFiles(ctx, config.Namespace, config.Spec.Files)
 	if err != nil {
 		log.Info("Failed to resolve files for user data")
 		conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
