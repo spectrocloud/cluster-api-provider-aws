@@ -455,15 +455,27 @@ func TestAWSMachineCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "cannot use ignition proxy with version 2.3",
+			name: "cannot use ignition proxy with version 3.0",
 			machine: &infrav1.AWSMachine{
 				Spec: infrav1.AWSMachineSpec{
 					InstanceType: "test",
 					Ignition: &infrav1.Ignition{
-						Version: "2.3.0",
+						Version: "3.0",
 						Proxy: &infrav1.IgnitionProxy{
 							HTTPProxy: ptr.To("http://proxy.example.com:3128"),
 						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "cannot use ignition version 2.3",
+			machine: &infrav1.AWSMachine{
+				Spec: infrav1.AWSMachineSpec{
+					InstanceType: "test",
+					Ignition: &infrav1.Ignition{
+						Version: "2.3",
 					},
 				},
 			},

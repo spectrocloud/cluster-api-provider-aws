@@ -28,7 +28,7 @@ const (
 	MachineFinalizer = "awsmachine.infrastructure.cluster.x-k8s.io"
 
 	// DefaultIgnitionVersion represents default Ignition version generated for machine userdata.
-	DefaultIgnitionVersion = "2.3"
+	DefaultIgnitionVersion = "3.4"
 
 	// DefaultIgnitionStorageType represents the default storage type of Ignition userdata
 	DefaultIgnitionStorageType = IgnitionStorageTypeOptionClusterObjectStore
