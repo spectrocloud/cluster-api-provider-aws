@@ -2,6 +2,8 @@ module sigs.k8s.io/cluster-api-provider-aws/v2
 
 go 1.24.0
 
+toolchain go1.24.6
+
 require (
 	github.com/alessio/shellescape v1.4.2
 	github.com/apparentlymart/go-cidr v1.1.0
@@ -29,6 +31,7 @@ require (
 	github.com/aws/smithy-go v1.24.2
 	github.com/awslabs/goformation/v4 v4.19.5
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/coreos/ignition v0.35.0
 	github.com/coreos/ignition/v2 v2.24.0
 	github.com/go-logr/logr v1.4.3
 	github.com/gofrs/flock v0.8.1
@@ -145,9 +148,6 @@ require (
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
-	github.com/coreos/go-semver v0.3.1 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/coreos/vcontext v0.0.0-20230201181013-d72178a18687 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/danieljoos/wincred v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
