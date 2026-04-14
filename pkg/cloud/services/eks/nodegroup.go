@@ -402,7 +402,7 @@ func (s *NodegroupService) reconcileNodegroupVersion(ng *eks.Nodegroup) error {
 				Id:      statusLaunchTemplateID,
 				Version: statusLaunchTemplateVersion,
 			}
-			updateMsg = fmt.Sprintf("to launch template %s version %s", aws.ToString(statusLaunchTemplateID), aws.ToString(statusLaunchTemplateVersion))
+			updateMsg = fmt.Sprintf("to launch template %s version %s", aws.StringValue(statusLaunchTemplateID), aws.StringValue(statusLaunchTemplateVersion))
 		case specVersion != nil && ngVersion.LessThan(specVersion):
 			// NOTE: you can only upgrade increments of minor versions. If you want to upgrade 1.14 to 1.16 we
 			// need to go 1.14-> 1.15 and then 1.15 -> 1.16.
