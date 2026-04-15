@@ -231,7 +231,9 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 	if managedPool.DiskSize != nil && !useLaunchTemplate {
 		input.DiskSize = aws.Int64(int64(*managedPool.DiskSize))
 	}
-	if managedPool.InstanceType != nil && !useLaunchTemplate {
+	// InstanceTypes may be specified without a launch template, or alongside a BYO launch
+	// template when the launch template itself does not specify an instance type.
+	if managedPool.InstanceType != nil && (!useLaunchTemplate || isBYO) {
 		input.InstanceTypes = []*string{managedPool.InstanceType}
 	}
 	if len(managedPool.Taints) > 0 {
@@ -354,7 +356,7 @@ func (s *NodegroupService) reconcileNodegroupVersion(ng *eks.Nodegroup) error {
 		return fmt.Errorf("nodegroup version is nil")
 	}
 
-	// PCP-3797: Check for nil pointers before dereferencing 
+	// PCP-3797: Check for nil pointers before dereferencing
 	if ng.Version == nil {
 		return fmt.Errorf("nodegroup version is nil, nodegroup status: %v", *ng.Status)
 	}
