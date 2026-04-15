@@ -55,6 +55,9 @@ const (
 	// Amazon's AMI timestamp format.
 	createDateTimestampFormat = "2006-01-02T15:04:05.000Z"
 
+	// Description regex for fetching Ubuntu AMIs for bastion host.
+	ubuntuImageDescription = "Canonical??Ubuntu??24.04??amd64?noble?image*"
+
 	// EKS AMI ID SSM Parameter name.
 	eksAmiSSMParameterFormat = "/aws/service/eks/optimized-ami/%s/amazon-linux-2/recommended/image_id"
 
