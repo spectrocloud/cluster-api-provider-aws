@@ -225,7 +225,9 @@ func (s *NodegroupService) createNodegroup() (*eks.Nodegroup, error) {
 
 	// Palette have all input for nodepool customization as optionsl.
 	// Allow creating AWS launch templates without specifying an AMI ID. CAPA will do lookup for the AMI ID.
-	if managedPool.AMIType != nil && (managedPool.AWSLaunchTemplate == nil /*|| managedPool.AWSLaunchTemplate.AMI.ID == nil*/) {
+	// PCP-4661: Remove the dependency on AWSLaunchTemplate being empty to set the AMIType.
+	// PCP-4661: Whatever value is set in spec.amiType should be used to set the AMI type in the nodegroup.
+	if managedPool.AMIType != nil { // && (managedPool.AWSLaunchTemplate == nil /*|| managedPool.AWSLaunchTemplate.AMI.ID == nil*/) {
 		input.AmiType = aws.String(string(*managedPool.AMIType))
 	}
 	if managedPool.DiskSize != nil {
@@ -346,7 +348,7 @@ func (s *NodegroupService) reconcileNodegroupVersion(ng *eks.Nodegroup) error {
 		return fmt.Errorf("nodegroup version is nil")
 	}
 
-	// PCP-3797: Check for nil pointers before dereferencing 
+	// PCP-3797: Check for nil pointers before dereferencing
 	if ng.Version == nil {
 		return fmt.Errorf("nodegroup version is nil, nodegroup status: %v", *ng.Status)
 	}
