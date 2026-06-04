@@ -236,11 +236,14 @@ func (s *NodegroupService) createNodegroup(ctx context.Context) (*ekstypes.Nodeg
 		input.RemoteAccess = remoteAccess
 	}
 	// AmiType can be passed alongside a launch template as long as the template does not
-	// pin a custom AMI. For CAPA-managed LTs, a custom AMI is indicated by LT.AMI.ID.
-	// For BYO LTs we cannot introspect the referenced template, so the value flows through
-	// and AWS rejects it if the template already specifies a custom AMI.
+	// pin a custom AMI. For CAPA-managed LTs a custom AMI is present via either an explicit
+	// LT.AMI.ID or via EKSOptimizedLookupType, which CAPA resolves to a concrete ImageId in
+	// the EC2 launch template at reconcile time. In both cases the EC2 LT will carry an
+	// explicit ImageId, so amiType must not be sent.
 	if managedPool.AMIType != nil {
-		ltHasCustomAMI := useLaunchTemplate && !isBYO && managedPool.AWSLaunchTemplate.AMI.ID != nil
+		ltHasCustomAMI := useLaunchTemplate && !isBYO &&
+			(managedPool.AWSLaunchTemplate.AMI.ID != nil ||
+				managedPool.AWSLaunchTemplate.AMI.EKSOptimizedLookupType != nil)
 		if !ltHasCustomAMI {
 			input.AmiType = converters.AMITypeToSDK(*managedPool.AMIType)
 		}
