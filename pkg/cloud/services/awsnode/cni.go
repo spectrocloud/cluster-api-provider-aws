@@ -45,17 +45,14 @@ const (
 func (s *Service) ReconcileCNI(ctx context.Context) error {
 	s.scope.Info("Reconciling aws-node DaemonSet in cluster", "cluster", klog.KRef(s.scope.Namespace(), s.scope.Name()))
 
+	if s.scope.DisableVPCCNI() {
+		return nil
+	}
+
 	remoteClient, err := s.scope.RemoteClient()
 	if err != nil {
 		s.scope.Error(err, "getting client for remote cluster")
 		return fmt.Errorf("getting client for remote cluster: %w", err)
-	}
-
-	if s.scope.DisableVPCCNI() {
-		if err := s.deleteCNI(ctx, remoteClient); err != nil {
-			return fmt.Errorf("disabling aws vpc cni: %w", err)
-		}
-		return nil
 	}
 
 	var ds appsv1.DaemonSet
