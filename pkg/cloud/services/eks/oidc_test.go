@@ -119,6 +119,50 @@ func TestOIDCReconcile(t *testing.T) {
 				}).Return(&iam.TagOpenIDConnectProviderOutput{}, nil)
 			},
 		},
+		{
+			name: "cluster with aws-prefixed tags should not tag OIDC provider with reserved tags",
+			cluster: func(url string) eks.Cluster {
+				return eks.Cluster{
+					Name:    aws.String("cluster-test"),
+					Arn:     aws.String("arn:arn"),
+					RoleArn: aws.String("arn:role"),
+					Tags: map[string]*string{
+						"kubernetes.io/cluster/foo":     aws.String("owned"),
+						"aws:cloudformation:stack-name": aws.String("eks-stack"),
+					},
+					Identity: &eks.Identity{
+						Oidc: &eks.OIDC{
+							Issuer: aws.String(url),
+						},
+					},
+				}
+			},
+			expect: func(m *mock_iamauth.MockIAMAPIMockRecorder, url string) {
+				m.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{}).Return(&iam.ListOpenIDConnectProvidersOutput{
+					OpenIDConnectProviderList: []*iam.OpenIDConnectProviderListEntry{
+						{
+							Arn: aws.String("arn::oidc"),
+						},
+					},
+				}, nil)
+				m.GetOpenIDConnectProvider(&iam.GetOpenIDConnectProviderInput{
+					OpenIDConnectProviderArn: aws.String("arn::oidc"),
+				}).Return(&iam.GetOpenIDConnectProviderOutput{
+					ClientIDList:   aws.StringSlice([]string{"sts.amazonaws.com"}),
+					ThumbprintList: aws.StringSlice([]string{testCertThumbprint}),
+					Url:            &url,
+				}, nil)
+				m.TagOpenIDConnectProvider(&iam.TagOpenIDConnectProviderInput{
+					OpenIDConnectProviderArn: aws.String("arn::oidc"),
+					Tags: []*iam.Tag{
+						{
+							Key:   aws.String("kubernetes.io/cluster/foo"),
+							Value: aws.String("owned"),
+						},
+					},
+				}).Return(&iam.TagOpenIDConnectProviderOutput{}, nil)
+			},
+		},
 	}
 
 	for _, tc := range tests {

@@ -38,6 +38,17 @@ const (
 	AwsInternalTagPrefix = "aws:"
 )
 
+// FilterAWSInternalTags returns a copy of tags with AWS internal (aws: prefixed) tags removed.
+func FilterAWSInternalTags(src map[string]string) map[string]string {
+	filtered := make(map[string]string, len(src))
+	for k, v := range src {
+		if !strings.HasPrefix(k, AwsInternalTagPrefix) {
+			filtered[k] = v
+		}
+	}
+	return filtered
+}
+
 var (
 	// ErrBuildParamsRequired defines an error for when no build params are supplied.
 	ErrBuildParamsRequired = errors.New("no build params supplied")
