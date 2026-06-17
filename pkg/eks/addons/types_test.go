@@ -129,10 +129,23 @@ func TestAddOnEqual(t *testing.T) {
 			other: &EKSAddon{
 				Version:               ptr("a"),
 				ServiceAccountRoleARN: ptr("b"),
-				Configuration:         ptr("d"),
+				Configuration:         ptr("c"),
 				ResolveConflict:       ptr("e"),
 			},
-			result: gomega.BeFalseBecause("addon conflict resolution differs"),
+			result: gomega.BeTrueBecause("resolve conflict is not compared against installed state"),
+		},
+		{
+			orig: &EKSAddon{
+				Version:               ptr("a"),
+				ServiceAccountRoleARN: ptr("b"),
+				Configuration:         ptr(""),
+			},
+			other: &EKSAddon{
+				Version:               ptr("a"),
+				ServiceAccountRoleARN: ptr("b"),
+				Configuration:         nil,
+			},
+			result: gomega.BeTrueBecause("empty and nil configuration are equivalent"),
 		},
 		{
 			orig: &EKSAddon{

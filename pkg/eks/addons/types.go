@@ -47,9 +47,11 @@ func (e *EKSAddon) IsEqual(other *EKSAddon, includeTags bool) bool {
 	if !cmp.Equal(e.ServiceAccountRoleARN, other.ServiceAccountRoleARN) {
 		return false
 	}
-	if !cmp.Equal(e.Configuration, other.Configuration) {
+	if !configurationEqual(e.Configuration, other.Configuration) {
 		return false
 	}
+	// ResolveConflict is only used when creating or updating addons and is not
+	// returned by DescribeAddon, so it must not be compared against installed state.
 
 	if includeTags {
 		diffTags := e.Tags.Difference(other.Tags)
@@ -59,4 +61,15 @@ func (e *EKSAddon) IsEqual(other *EKSAddon, includeTags bool) bool {
 	}
 
 	return true
+}
+
+func configurationEqual(a, b *string) bool {
+	return configurationValue(a) == configurationValue(b)
+}
+
+func configurationValue(configuration *string) string {
+	if configuration == nil {
+		return ""
+	}
+	return *configuration
 }
