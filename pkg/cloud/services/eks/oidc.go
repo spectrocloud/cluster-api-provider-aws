@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/converters"
 	iamv1 "sigs.k8s.io/cluster-api-provider-aws/v2/iam/api/v1beta1"
 	tagConverter "sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/converters"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/tags"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 )
 
@@ -77,9 +78,10 @@ func (s *Service) reconcileOIDCProvider(ctx context.Context, cluster *ekstypes.C
 		return errors.Wrap(err, "failed to update control plane with OIDC provider ARN")
 	}
 	// tagging the OIDC provider with the same tags of cluster
+	clusterTags := tags.FilterAWSInternalTags(tagConverter.MapPtrToMap(cluster.Tags))
 	inputForTags := iam.TagOpenIDConnectProviderInput{
 		OpenIDConnectProviderArn: &s.scope.ControlPlane.Status.OIDCProvider.ARN,
-		Tags:                     tagConverter.MapToIAMTags(tagConverter.MapPtrToMap(cluster.Tags)),
+		Tags:                     tagConverter.MapToIAMTags(clusterTags),
 	}
 	if _, err := s.IAMClient.TagOpenIDConnectProvider(ctx, &inputForTags); err != nil {
 		return errors.Wrap(err, "failed to tag OIDC provider")
