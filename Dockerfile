@@ -30,7 +30,7 @@ FROM toolchain as builder
 WORKDIR /workspace
 
 # RUN apk update
-RUN apk add git gcc g++ curl
+# RUN apk add git gcc g++ curl
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
