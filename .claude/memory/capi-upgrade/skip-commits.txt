@@ -1,1 +1,4 @@
 # explicit human skip decisions (SHA per line; # = comment)
+# --- reviewer-applied (Gate-1 plan review, PCP-6871 / v2.11.1) ---
+ebe6855e  # reviewer: go.mod/go.sum-only CVE bump (PCP-6787 #1033). Patch-G CVE gate re-scans+bumps at execute on target's newer dep tree; cherry-pick onto v2.11.1 only creates a dead go.mod conflict.
+dfce8436  # reviewer: go.mod/go.sum-only go-version bump (#1024). Target v2.11.1 pins go 1.24.0; build-vars refresh + Patch-G re-bump own the go directive at execute. No fork CODE dropped.
