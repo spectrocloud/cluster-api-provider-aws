@@ -1,3 +1,4 @@
+# ── INPUT (Gate-1, you edit) — Regression-Watch risk: <sha> <L|M|H> [note]. unset=REVIEW (blocks execute); High=sign-off. '#' = comment. See ../README.md ──
 # Regression-Watch risk ledger (Patch B durability): <sha> <L|M|H> [note]
 # UNSET(REVIEW) and High BLOCK execute (--check-regwatch). Reviewer-assigned at Gate-1 (PCP-6871/v2.11.1).
 # Rationale: PICK-VERIFY = clean apply, verify at test tier (M; L for pure defensive nil-check).

@@ -1,3 +1,4 @@
+# ── INPUT (Gate-1, you edit) — SHAs to force-pick as PICK-RESOLVE (3-way-merged at execute). One per line; '#' = comment. See ../README.md ──
 # force-PICK (PICK-RESOLVE) genuine Spectro fork cloud-service behavior that MUST carry forward.
 # Reviewer-applied at Gate-1 (PCP-6871 / v2.11.1). Each is a Spectro production fix (PCP/BET ticket),
 # absent from target history (git log v2.11.1 --grep "PCP-" -> none), isolated to pkg/cloud|exp|bootstrap
