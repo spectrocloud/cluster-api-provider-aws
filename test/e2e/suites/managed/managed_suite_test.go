@@ -29,11 +29,12 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/e2e/shared"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var (
@@ -87,10 +88,11 @@ func runLegacyTests() bool {
 
 func initScheme() *runtime.Scheme {
 	sc := shared.DefaultScheme()
+	_ = infrav1.AddToScheme(sc)
 	_ = expinfrav1.AddToScheme(sc)
 	_ = clusterv1.AddToScheme(sc)
 	_ = ekscontrolplanev1.AddToScheme(sc)
-	_ = expclusterv1.AddToScheme(sc)
+	_ = eksbootstrapv1.AddToScheme(sc)
 
 	return sc
 }

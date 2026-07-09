@@ -35,9 +35,9 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/eks"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	"sigs.k8s.io/cluster-api/util/predicates"
 )
 
@@ -45,7 +45,6 @@ import (
 type AWSFargateProfileReconciler struct {
 	client.Client
 	Recorder         record.EventRecorder
-	Endpoints        []scope.ServiceEndpoint
 	EnableIAM        bool
 	WatchFilterValue string
 }
@@ -107,19 +106,18 @@ func (r *AWSFargateProfileReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		ControlPlane:   controlPlane,
 		FargateProfile: fargateProfile,
 		EnableIAM:      r.EnableIAM,
-		Endpoints:      r.Endpoints,
 	})
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create scope")
 	}
 
 	defer func() {
-		applicableConditions := []clusterv1.ConditionType{
+		applicableConditions := []clusterv1beta1.ConditionType{
 			expinfrav1.IAMFargateRolesReadyCondition,
 			expinfrav1.EKSFargateProfileReadyCondition,
 		}
 
-		conditions.SetSummary(fargateProfileScope.FargateProfile, conditions.WithConditions(applicableConditions...), conditions.WithStepCounter())
+		v1beta1conditions.SetSummary(fargateProfileScope.FargateProfile, v1beta1conditions.WithConditions(applicableConditions...), v1beta1conditions.WithStepCounter())
 
 		if err := fargateProfileScope.Close(); err != nil && reterr == nil {
 			reterr = err
@@ -128,7 +126,7 @@ func (r *AWSFargateProfileReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	if !controlPlane.Status.Ready {
 		log.Info("Control plane is not ready yet")
-		conditions.MarkFalse(fargateProfile, clusterv1.ReadyCondition, expinfrav1.WaitingForEKSControlPlaneReason, clusterv1.ConditionSeverityInfo, "")
+		v1beta1conditions.MarkFalse(fargateProfile, clusterv1beta1.ReadyCondition, expinfrav1.WaitingForEKSControlPlaneReason, clusterv1beta1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
@@ -140,7 +138,7 @@ func (r *AWSFargateProfileReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 func (r *AWSFargateProfileReconciler) reconcileNormal(
-	_ context.Context,
+	ctx context.Context,
 	fargateProfileScope *scope.FargateProfileScope,
 ) (ctrl.Result, error) {
 	fargateProfileScope.Info("Reconciling AWSFargateProfile")
@@ -153,7 +151,7 @@ func (r *AWSFargateProfileReconciler) reconcileNormal(
 
 	ekssvc := eks.NewFargateService(fargateProfileScope)
 
-	res, err := ekssvc.Reconcile()
+	res, err := ekssvc.Reconcile(ctx)
 	if err != nil {
 		return res, errors.Wrapf(err, "failed to reconcile fargate profile for AWSFargateProfile %s/%s", fargateProfileScope.FargateProfile.Namespace, fargateProfileScope.FargateProfile.Name)
 	}
@@ -162,14 +160,14 @@ func (r *AWSFargateProfileReconciler) reconcileNormal(
 }
 
 func (r *AWSFargateProfileReconciler) reconcileDelete(
-	_ context.Context,
+	ctx context.Context,
 	fargateProfileScope *scope.FargateProfileScope,
 ) (ctrl.Result, error) {
 	fargateProfileScope.Info("Reconciling deletion of AWSFargateProfile")
 
 	ekssvc := eks.NewFargateService(fargateProfileScope)
 
-	res, err := ekssvc.ReconcileDelete()
+	res, err := ekssvc.ReconcileDelete(ctx)
 	if err != nil {
 		return res, errors.Wrapf(err, "failed to reconcile fargate profile deletion for AWSFargateProfile %s/%s", fargateProfileScope.FargateProfile.Namespace, fargateProfileScope.FargateProfile.Name)
 	}
@@ -203,7 +201,7 @@ func managedControlPlaneToFargateProfileMapFunc(c client.Client, log logger.Wrap
 
 		fargateProfileForClusterList := expinfrav1.AWSFargateProfileList{}
 		if err := c.List(
-			ctx, &fargateProfileForClusterList, client.InNamespace(clusterKey.Namespace), client.MatchingLabels{clusterv1.ClusterNameLabel: clusterKey.Name},
+			ctx, &fargateProfileForClusterList, client.InNamespace(clusterKey.Namespace), client.MatchingLabels{clusterv1beta1.ClusterNameLabel: clusterKey.Name},
 		); err != nil {
 			log.Error(err, "couldn't list fargate profiles for cluster")
 			return nil

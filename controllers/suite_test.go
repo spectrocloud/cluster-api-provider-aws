@@ -21,15 +21,21 @@ import (
 	"path"
 	"testing"
 
+	// +kubebuilder:scaffold:imports
+	corev1 "k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	// +kubebuilder:scaffold:imports
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	rosacontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/api/v1beta2"
+	rosawebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/webhooks"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	expwebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/exp/webhooks"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/helpers"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	kubeadmv1beta1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	capawebhooks "sigs.k8s.io/cluster-api-provider-aws/v2/webhooks"
+	kubeadmv1beta1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var (
@@ -47,6 +53,11 @@ func setup() {
 	utilruntime.Must(infrav1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(kubeadmv1beta1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(rosacontrolplanev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(expinfrav1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(corev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+
 	testEnvConfig := helpers.NewTestEnvironmentConfiguration([]string{
 		path.Join("config", "crd", "bases"),
 	},
@@ -56,17 +67,23 @@ func setup() {
 	if err != nil {
 		panic(err)
 	}
-	if err := (&infrav1.AWSCluster{}).SetupWebhookWithManager(testEnv); err != nil {
+	if err := (&capawebhooks.AWSCluster{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSCluster webhook: %v", err))
 	}
-	if err := (&infrav1.AWSMachine{}).SetupWebhookWithManager(testEnv); err != nil {
+	if err := (&capawebhooks.AWSMachine{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSMachine webhook: %v", err))
 	}
-	if err := (&infrav1.AWSMachineTemplateWebhook{}).SetupWebhookWithManager(testEnv); err != nil {
+	if err := (&capawebhooks.AWSMachineTemplate{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSMachineTemplate webhook: %v", err))
 	}
-	if err := (&infrav1.AWSClusterControllerIdentity{}).SetupWebhookWithManager(testEnv); err != nil {
+	if err := (&capawebhooks.AWSClusterControllerIdentity{}).SetupWebhookWithManager(testEnv); err != nil {
 		panic(fmt.Sprintf("Unable to setup AWSClusterControllerIdentity webhook: %v", err))
+	}
+	if err := (&expwebhooks.ROSAMachinePool{}).SetupWebhookWithManager(testEnv); err != nil {
+		panic(fmt.Sprintf("Unable to setup ROSAMachinePool webhook: %v", err))
+	}
+	if err := (&rosawebhooks.ROSAControlPlane{}).SetupWebhookWithManager(testEnv); err != nil {
+		panic(fmt.Sprintf("Unable to setup ROSAControlPlane webhook: %v", err))
 	}
 	go func() {
 		fmt.Println("Starting the manager")

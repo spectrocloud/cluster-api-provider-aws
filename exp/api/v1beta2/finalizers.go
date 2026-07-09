@@ -28,4 +28,10 @@ const (
 
 	// RosaMachinePoolFinalizer allows the controller to clean up resources on delete.
 	RosaMachinePoolFinalizer = "rosamachinepools.infrastructure.cluster.x-k8s.io"
+
+	// RosaRoleConfigFinalizer allows the controller to clean up resources on delete.
+	RosaRoleConfigFinalizer = "rosaroleconfigs.infrastructure.cluster.x-k8s.io"
+
+	// ROSAOCMRoleConfigFinalizer allows the controller to clean up resources on delete.
+	ROSAOCMRoleConfigFinalizer = "rosaocmroleconfigs.infrastructure.cluster.x-k8s.io"
 )

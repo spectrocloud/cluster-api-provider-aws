@@ -138,24 +138,30 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 
 	template.Resources[AWSIAMRoleControlPlane] = &cfn_iam.Role{
 		RoleName:                 t.NewManagedName("control-plane"),
+		Path:                     t.Spec.ControlPlane.Path,
 		AssumeRolePolicyDocument: t.controlPlaneTrustPolicy(),
 		ManagedPolicyArns:        t.Spec.ControlPlane.ExtraPolicyAttachments,
 		Policies:                 t.controlPlanePolicies(),
+		PermissionsBoundary:      t.Spec.ControlPlane.PermissionsBoundary,
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.ControlPlane.Tags),
 	}
 
 	template.Resources[AWSIAMRoleControllers] = &cfn_iam.Role{
 		RoleName:                 t.NewManagedName("controllers"),
-		AssumeRolePolicyDocument: t.controllersTrustPolicy(),
+		Path:                     t.Spec.ControlPlane.Path,
+		AssumeRolePolicyDocument: t.controllersTrustPolicy(!t.Spec.EKS.Disable),
 		Policies:                 t.controllersRolePolicy(),
+		PermissionsBoundary:      t.Spec.ControlPlane.PermissionsBoundary,
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.ClusterAPIControllers.Tags),
 	}
 
 	template.Resources[AWSIAMRoleNodes] = &cfn_iam.Role{
 		RoleName:                 t.NewManagedName("nodes"),
+		Path:                     t.Spec.ControlPlane.Path,
 		AssumeRolePolicyDocument: t.nodeTrustPolicy(),
 		ManagedPolicyArns:        t.nodeManagedPolicies(),
 		Policies:                 t.nodePolicies(),
+		PermissionsBoundary:      t.Spec.ControlPlane.PermissionsBoundary,
 		Tags:                     converters.MapToCloudFormationTags(t.Spec.Nodes.Tags),
 	}
 
@@ -218,8 +224,12 @@ func (t Template) RenderCloudFormation() *cloudformation.Template {
 	return template
 }
 
-func ec2AssumeRolePolicy() *iamv1.PolicyDocument {
-	return AssumeRolePolicy(iamv1.PrincipalService, []string{"ec2.amazonaws.com"})
+func ec2AssumeRolePolicy(eksEnabled bool) *iamv1.PolicyDocument {
+	principalIDs := []string{"ec2.amazonaws.com"}
+	if eksEnabled {
+		principalIDs = append(principalIDs, "pods.eks.amazonaws.com")
+	}
+	return AssumeRolePolicy(iamv1.PrincipalService, principalIDs)
 }
 
 // AWSArnAssumeRolePolicy will assume Policies using PolicyArns.
@@ -234,13 +244,22 @@ func AWSServiceAssumeRolePolicy(identityID string) *iamv1.PolicyDocument {
 
 // AssumeRolePolicy will create a role session and pass session policies programmatically.
 func AssumeRolePolicy(identityType iamv1.PrincipalType, principalIDs []string) *iamv1.PolicyDocument {
+	actions := iamv1.Actions{"sts:AssumeRole"}
+
+	for _, principal := range principalIDs {
+		if principal == "pods.eks.amazonaws.com" {
+			actions = append(actions, "sts:TagSession")
+			break
+		}
+	}
+
 	return &iamv1.PolicyDocument{
 		Version: iamv1.CurrentVersion,
 		Statement: []iamv1.StatementEntry{
 			{
 				Effect:    iamv1.EffectAllow,
 				Principal: iamv1.Principals{identityType: principalIDs},
-				Action:    iamv1.Actions{"sts:AssumeRole"},
+				Action:    actions,
 			},
 		},
 	}

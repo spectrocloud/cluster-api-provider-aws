@@ -28,10 +28,13 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gofrs/flock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -42,6 +45,25 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 )
 
+// diagnosticGoroutines tracks goroutine IDs of background diagnostic dump
+// goroutines so the custom fail handler can intercept their assertion failures
+// without affecting test goroutines.
+var diagnosticGoroutines sync.Map
+
+func currentGoroutineID() int64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	// Format: "goroutine NNN [...]"
+	i := len("goroutine ")
+	for j := i; j < n; j++ {
+		if buf[j] == ' ' {
+			id, _ := strconv.ParseInt(string(buf[i:j]), 10, 64)
+			return id
+		}
+	}
+	return -1
+}
+
 type synchronizedBeforeTestSuiteConfig struct {
 	ArtifactFolder           string               `json:"artifactFolder,omitempty"`
 	ConfigPath               string               `json:"configPath,omitempty"`
@@ -49,7 +71,7 @@ type synchronizedBeforeTestSuiteConfig struct {
 	KubeconfigPath           string               `json:"kubeconfigPath,omitempty"`
 	Region                   string               `json:"region,omitempty"`
 	E2EConfig                clusterctl.E2EConfig `json:"e2eConfig,omitempty"`
-	BootstrapAccessKey       *iam.AccessKey       `json:"bootstrapAccessKey,omitempty"`
+	BootstrapAccessKey       *iamtypes.AccessKey  `json:"bootstrapAccessKey,omitempty"`
 	KubetestConfigFilePath   string               `json:"kubetestConfigFilePath,omitempty"`
 	UseCIArtifacts           bool                 `json:"useCIArtifacts,omitempty"`
 	GinkgoNodes              int                  `json:"ginkgoNodes,omitempty"`
@@ -89,7 +111,7 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 		templateDir := path.Join(e2eCtx.Settings.ArtifactFolder, "templates")
 		newTemplatePath := templateDir + "/" + ciTemplateForUpgradeName
 
-		err = exec.Command("cp", ciTemplateForUpgradePath, newTemplatePath).Run() //nolint:gosec
+		err = exec.CommandContext(context.TODO(), "cp", ciTemplateForUpgradePath, newTemplatePath).Run() //nolint:gosec
 		Expect(err).NotTo(HaveOccurred())
 
 		clusterctlCITemplateForUpgrade := clusterctl.Files{
@@ -142,7 +164,7 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 			count++
 			By(fmt.Sprintf("Trying to create CloudFormation stack... attempt %d", count))
 			success := true
-			if err := createCloudFormationStack(e2eCtx.AWSSession, bootstrapTemplate, bootstrapTags); err != nil {
+			if err := createCloudFormationStack(context.TODO(), e2eCtx.AWSSession, bootstrapTemplate, bootstrapTags); err != nil {
 				By(fmt.Sprintf("Failed to create CloudFormation stack in attempt %d: %s", count, err.Error()))
 				deleteCloudFormationStack(e2eCtx.AWSSession, bootstrapTemplate)
 				success = false
@@ -152,11 +174,14 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 	}
 
 	ensureStackTags(e2eCtx.AWSSession, bootstrapTemplate.Spec.StackName, bootstrapTags)
-	ensureNoServiceLinkedRoles(e2eCtx.AWSSession)
-	ensureSSHKeyPair(e2eCtx.AWSSession, DefaultSSHKeyPairName)
-	e2eCtx.Environment.BootstrapAccessKey = newUserAccessKey(e2eCtx.AWSSession, bootstrapTemplate.Spec.BootstrapUser.UserName)
+	ensureNoServiceLinkedRoles(context.TODO(), e2eCtx.AWSSession)
+	ensureSSHKeyPair(*e2eCtx.AWSSession, DefaultSSHKeyPairName)
+	e2eCtx.Environment.BootstrapAccessKey = newUserAccessKey(context.TODO(), e2eCtx.AWSSession, bootstrapTemplate.Spec.BootstrapUser.UserName)
 	e2eCtx.BootstrapUserAWSSession = NewAWSSessionWithKey(e2eCtx.Environment.BootstrapAccessKey)
-	Expect(ensureTestImageUploaded(e2eCtx)).NotTo(HaveOccurred())
+
+	waitForAccessKeyPropagation(e2eCtx.BootstrapUserAWSSession)
+
+	Expect(ensureTestImageUploaded(context.TODO(), e2eCtx)).NotTo(HaveOccurred())
 
 	// Image ID is needed when using a CI Kubernetes version. This is used in conformance test and upgrade to main test.
 	if !e2eCtx.IsManaged {
@@ -167,7 +192,10 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 	e2eCtx.Environment.ClusterctlConfigPath = createClusterctlLocalRepository(e2eCtx, filepath.Join(e2eCtx.Settings.ArtifactFolder, "repository"))
 
 	By("Setting up the bootstrap cluster")
-	e2eCtx.Environment.BootstrapClusterProvider, e2eCtx.Environment.BootstrapClusterProxy = setupBootstrapCluster(e2eCtx.E2EConfig, e2eCtx.Environment.Scheme, e2eCtx.Settings.UseExistingCluster)
+	e2eCtx.Environment.BootstrapClusterProvider, e2eCtx.Environment.BootstrapClusterProxy = setupBootstrapCluster(
+		e2eCtx.E2EConfig, e2eCtx.Environment.Scheme, e2eCtx.Settings.UseExistingCluster,
+		framework.WithMachineLogCollector(AWSStackLogCollector{E2EContext: e2eCtx}),
+	)
 
 	base64EncodedCredentials := encodeCredentials(e2eCtx.Environment.BootstrapAccessKey, bootstrapTemplate.Spec.Region)
 	SetEnvVar("AWS_B64ENCODED_CREDENTIALS", base64EncodedCredentials, true)
@@ -180,7 +208,7 @@ func Node1BeforeSuite(e2eCtx *E2EContext) []byte {
 		WriteAWSResourceQuotesToFile(path.Join(e2eCtx.Settings.ArtifactFolder, "initial-aws-resource-quotas.yaml"), originalQuotas)
 	}
 
-	e2eCtx.Settings.InstanceVCPU, err = strconv.Atoi(e2eCtx.E2EConfig.GetVariable(InstanceVcpu))
+	e2eCtx.Settings.InstanceVCPU, err = strconv.Atoi(e2eCtx.E2EConfig.MustGetVariable(InstanceVcpu))
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Initializing the bootstrap cluster")
@@ -221,7 +249,9 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 	e2eCtx.Settings.ArtifactFolder = conf.ArtifactFolder
 	e2eCtx.Settings.ConfigPath = conf.ConfigPath
 	e2eCtx.Environment.ClusterctlConfigPath = conf.ClusterctlConfigPath
-	e2eCtx.Environment.BootstrapClusterProxy = framework.NewClusterProxy("bootstrap", conf.KubeconfigPath, e2eCtx.Environment.Scheme)
+	e2eCtx.Environment.BootstrapClusterProxy = framework.NewClusterProxy("bootstrap", conf.KubeconfigPath, e2eCtx.Environment.Scheme,
+		framework.WithMachineLogCollector(AWSStackLogCollector{E2EContext: e2eCtx}),
+	)
 	e2eCtx.E2EConfig = &conf.E2EConfig
 	e2eCtx.BootstrapUserAWSSession = NewAWSSessionWithKey(conf.BootstrapAccessKey)
 	e2eCtx.Settings.FileLock = flock.New(ResourceQuotaFilePath)
@@ -230,12 +260,16 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 	e2eCtx.Settings.GinkgoNodes = conf.GinkgoNodes
 	e2eCtx.Settings.GinkgoSlowSpecThreshold = conf.GinkgoSlowSpecThreshold
 	e2eCtx.AWSSession = NewAWSSession()
-	azs := GetAvailabilityZones(e2eCtx.AWSSession)
+	azs := GetAvailabilityZones(*e2eCtx.AWSSession)
 	SetEnvVar(AwsAvailabilityZone1, *azs[0].ZoneName, false)
 	SetEnvVar(AwsAvailabilityZone2, *azs[1].ZoneName, false)
 	SetEnvVar("AWS_REGION", conf.Region, false)
 	SetEnvVar("AWS_SSH_KEY_NAME", DefaultSSHKeyPairName, false)
 	SetEnvVar("AWS_B64ENCODED_CREDENTIALS", conf.Base64EncodedCredentials, true)
+	stsSvc := sts.NewFromConfig(*e2eCtx.AWSSession)
+	caller, err := stsSvc.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
+	Expect(err).NotTo(HaveOccurred())
+	SetEnvVar(AwsAccountID, *caller.Account, false)
 	e2eCtx.Environment.ResourceTicker = time.NewTicker(time.Second * 5)
 	e2eCtx.Environment.ResourceTickerDone = make(chan bool)
 	// Get EC2 logs every minute
@@ -243,9 +277,26 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 	e2eCtx.Environment.MachineTickerDone = make(chan bool)
 	resourceCtx, resourceCancel := context.WithCancel(context.Background())
 	machineCtx, machineCancel := context.WithCancel(context.Background())
+
+	// Register a goroutine-aware fail handler so diagnostic dump goroutines
+	// don't mark specs as failed when they encounter transient errors
+	// (e.g. cluster not found during deletion). This is goroutine-safe unlike
+	// InterceptGomegaFailure which replaces the global fail handler.
+	RegisterFailHandler(func(message string, callerSkip ...int) {
+		if _, ok := diagnosticGoroutines.Load(currentGoroutineID()); ok {
+			panic("diagnostic dump failure: " + message)
+		}
+		skip := 0
+		if len(callerSkip) > 0 {
+			skip = callerSkip[0]
+		}
+		Fail(message, skip+1)
+	})
+
 	// Dump resources every 5 seconds
 	go func() {
-		defer GinkgoRecover()
+		diagnosticGoroutines.Store(currentGoroutineID(), true)
+		defer diagnosticGoroutines.Delete(currentGoroutineID())
 		for {
 			select {
 			case <-e2eCtx.Environment.ResourceTickerDone:
@@ -253,7 +304,14 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 				return
 			case <-e2eCtx.Environment.ResourceTicker.C:
 				for k := range e2eCtx.Environment.Namespaces {
-					DumpSpecResources(resourceCtx, e2eCtx, k)
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								fmt.Fprintf(GinkgoWriter, "WARNING: periodic DumpSpecResources for namespace %q failed (can occur when a cluster is being deleted): %v\n", k.Name, r)
+							}
+						}()
+						DumpSpecResources(resourceCtx, e2eCtx, k)
+					}()
 				}
 			}
 		}
@@ -261,7 +319,8 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 
 	// Dump machine logs every 60 seconds
 	go func() {
-		defer GinkgoRecover()
+		diagnosticGoroutines.Store(currentGoroutineID(), true)
+		defer diagnosticGoroutines.Delete(currentGoroutineID())
 		for {
 			select {
 			case <-e2eCtx.Environment.MachineTickerDone:
@@ -269,7 +328,14 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 				return
 			case <-e2eCtx.Environment.MachineTicker.C:
 				for k := range e2eCtx.Environment.Namespaces {
-					DumpMachines(machineCtx, e2eCtx, k)
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								fmt.Fprintf(GinkgoWriter, "WARNING: periodic DumpMachines for namespace %q failed (can occur when a cluster is being deleted): %v\n", k.Name, r)
+							}
+						}()
+						DumpMachines(machineCtx, e2eCtx, k)
+					}()
 				}
 			}
 		}

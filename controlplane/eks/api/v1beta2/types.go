@@ -18,8 +18,9 @@ package v1beta2
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/aws/aws-sdk-go/service/eks"
+	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -51,16 +52,16 @@ func (s *ControlPlaneLoggingSpec) IsLogEnabled(logName string) bool {
 		return false
 	}
 
-	switch logName {
-	case eks.LogTypeApi:
+	switch ekstypes.LogType(logName) {
+	case ekstypes.LogTypeApi:
 		return s.APIServer
-	case eks.LogTypeAudit:
+	case ekstypes.LogTypeAudit:
 		return s.Audit
-	case eks.LogTypeAuthenticator:
+	case ekstypes.LogTypeAuthenticator:
 		return s.Authenticator
-	case eks.LogTypeControllerManager:
+	case ekstypes.LogTypeControllerManager:
 		return s.ControllerManager
-	case eks.LogTypeScheduler:
+	case ekstypes.LogTypeScheduler:
 		return s.Scheduler
 	default:
 		return false
@@ -79,12 +80,66 @@ var (
 	EKSTokenMethodAWSCli = EKSTokenMethod("aws-cli")
 )
 
+// EKSAuthenticationMode defines the authentication mode for the cluster
+type EKSAuthenticationMode string
+
+// APIValue returns the corresponding EKS API value for the authentication mode
+func (e EKSAuthenticationMode) APIValue() ekstypes.AuthenticationMode {
+	return ekstypes.AuthenticationMode(strings.ToUpper(string(e)))
+}
+
 var (
-	// DefaultEKSControlPlaneRole is the name of the default IAM role to use for the EKS control plane
-	// if no other role is supplied in the spec and if iam role creation is not enabled. The default
-	// can be created using clusterawsadm or created manually.
-	DefaultEKSControlPlaneRole = fmt.Sprintf("eks-controlplane%s", iamv1.DefaultNameSuffix)
+	// EKSAuthenticationModeConfigMap indicates that only `aws-auth` ConfigMap will be used for authentication
+	EKSAuthenticationModeConfigMap = EKSAuthenticationMode("config_map")
+
+	// EKSAuthenticationModeAPI indicates that only AWS Access Entries will be used for authentication
+	EKSAuthenticationModeAPI = EKSAuthenticationMode("api")
+
+	// EKSAuthenticationModeAPIAndConfigMap indicates that both `aws-auth` ConfigMap and AWS Access Entries will
+	// be used for authentication
+	EKSAuthenticationModeAPIAndConfigMap = EKSAuthenticationMode("api_and_config_map")
 )
+
+// AccessEntryType represents the different types of access entries that can be used in an Amazon EKS cluster
+type AccessEntryType string
+
+// APIValue returns the corresponding EKS API value for the access entry type
+func (a AccessEntryType) APIValue() *string {
+	v := strings.ToUpper(string(a))
+	return &v
+}
+
+var (
+	// AccessEntryTypeStandard represents a standard access entry
+	AccessEntryTypeStandard = AccessEntryType("standard")
+	// AccessEntryTypeEC2Linux represents an EC2 Linux access entry
+	AccessEntryTypeEC2Linux = AccessEntryType("ec2_linux")
+	// AccessEntryTypeEC2Windows represents an EC2 Windows access entry
+	AccessEntryTypeEC2Windows = AccessEntryType("ec2_windows")
+	// AccessEntryTypeFargateLinux represents a Fargate Linux access entry
+	AccessEntryTypeFargateLinux = AccessEntryType("fargate_linux")
+	// AccessEntryTypeEC2 represents a generic EC2 access entry
+	AccessEntryTypeEC2 = AccessEntryType("ec2")
+	// AccessEntryTypeHybridLinux represents a hybrid node access entry
+	AccessEntryTypeHybridLinux = AccessEntryType("hybrid_linux")
+	// AccessEntryTypeHyperpodLinux represents a SageMaker HyperPod access entry
+	AccessEntryTypeHyperpodLinux = AccessEntryType("hyperpod_linux")
+)
+
+// AccessScopeType defines the scope type for an access policy
+type AccessScopeType string
+
+var (
+	// AccessScopeTypeCluster indicates that the access policy applies to the entire cluster
+	AccessScopeTypeCluster = AccessScopeType("cluster")
+	// AccessScopeTypeNamespace indicates that the access policy applies to a specific namespace within the cluster
+	AccessScopeTypeNamespace = AccessScopeType("namespace")
+)
+
+// DefaultEKSControlPlaneRole is the name of the default IAM role to use for the EKS control plane
+// if no other role is supplied in the spec and if iam role creation is not enabled. The default
+// can be created using clusterawsadm or created manually.
+var DefaultEKSControlPlaneRole = fmt.Sprintf("eks-controlplane%s", iamv1.DefaultNameSuffix)
 
 // IAMAuthenticatorConfig represents an aws-iam-authenticator configuration.
 type IAMAuthenticatorConfig struct {
@@ -134,13 +189,17 @@ type Addon struct {
 	// +optional
 	Configuration string `json:"configuration,omitempty"`
 	// ConflictResolution is used to declare what should happen if there
-	// are parameter conflicts. Defaults to none
+	// are parameter conflicts. Defaults to overwrite
 	// +kubebuilder:default=overwrite
-	// +kubebuilder:validation:Enum=overwrite;none
+	// +kubebuilder:validation:Enum=overwrite;none;preserve
 	ConflictResolution *AddonResolution `json:"conflictResolution,omitempty"`
 	// ServiceAccountRoleArn is the ARN of an IAM role to bind to the addons service account
 	// +optional
 	ServiceAccountRoleArn *string `json:"serviceAccountRoleARN,omitempty"`
+	// PreserveOnDelete indicates that the addon resources should be
+	// preserved in the cluster on delete.
+	// +optional
+	PreserveOnDelete bool `json:"preserveOnDelete,omitempty"`
 }
 
 // AddonResolution defines the method for resolving parameter conflicts.
@@ -154,6 +213,10 @@ var (
 	// AddonResolutionNone indicates that if there are parameter conflicts then
 	// resolution will not be done and an error will be reported.
 	AddonResolutionNone = AddonResolution("none")
+
+	// AddonResolutionPreserve indicates that if there are parameter conflicts then
+	// resolution will result in preserving the existing value
+	AddonResolutionPreserve = AddonResolution("preserve")
 )
 
 // AddonStatus defines the status for an addon.
@@ -210,6 +273,24 @@ type AddonIssue struct {
 	Message *string `json:"message,omitempty"`
 	// ResourceIDs is a list of resource ids for the issue
 	ResourceIDs []string `json:"resourceIds,omitempty"`
+}
+
+// UpgradePolicy defines the support policy to use for the cluster.
+type UpgradePolicy string
+
+var (
+	// UpgradePolicyExtended indicates that the cluster will enter into extended support once the Kubernetes version reaches end of standard support.
+	// You will incur extended support charges with this setting.
+	// You can upgrade your cluster to a standard supported Kubernetes version to stop incurring extended support charges.
+	UpgradePolicyExtended = UpgradePolicy("extended")
+
+	// UpgradePolicyStandard indicates that the cluster is eligible for automatic upgrade at the end of standard support.
+	// You will not incur extended support charges with this setting but your EKS cluster will automatically upgrade to the next supported Kubernetes version in standard support.
+	UpgradePolicyStandard = UpgradePolicy("standard")
+)
+
+func (e UpgradePolicy) String() string {
+	return string(e)
 }
 
 const (

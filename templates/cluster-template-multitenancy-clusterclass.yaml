@@ -164,9 +164,6 @@ spec:
     spec:
       kubeadmConfigSpec:
         clusterConfiguration:
-          apiServer:
-            extraArgs:
-              cloud-provider: aws
           controllerManager:
             extraArgs:
               cloud-provider: aws
@@ -247,7 +244,7 @@ spec:
     - name: identityRef
       value:
         kind: AWSClusterRoleIdentity
-        name: ${MULTI_TENANCY_NESTED_IDENTITY_NAME}
+        name: ${MULTI_TENANCY_NESTED_IDENTITY_NAME}-${CLUSTER_NAME}
     version: ${KUBERNETES_VERSION}
     workers:
       machineDeployments:
@@ -277,12 +274,12 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSClusterRoleIdentity
 metadata:
-  name: ${MULTI_TENANCY_JUMP_IDENTITY_NAME}
+  name: ${MULTI_TENANCY_JUMP_IDENTITY_NAME}-${CLUSTER_NAME}
 spec:
   allowedNamespaces: {}
   durationSeconds: 900
   roleARN: ${MULTI_TENANCY_JUMP_ROLE_ARN}
-  sessionName: ${MULTI_TENANCY_JUMP_IDENTITY_NAME}-session
+  sessionName: ${MULTI_TENANCY_JUMP_IDENTITY_NAME}-${CLUSTER_NAME}
   sourceIdentityRef:
     kind: AWSClusterControllerIdentity
     name: default
@@ -290,11 +287,11 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSClusterRoleIdentity
 metadata:
-  name: ${MULTI_TENANCY_NESTED_IDENTITY_NAME}
+  name: ${MULTI_TENANCY_NESTED_IDENTITY_NAME}-${CLUSTER_NAME}
 spec:
   allowedNamespaces: {}
   roleARN: ${MULTI_TENANCY_NESTED_ROLE_ARN}
-  sessionName: ${MULTI_TENANCY_NESTED_IDENTITY_NAME}-session
+  sessionName: ${MULTI_TENANCY_NESTED_IDENTITY_NAME}-${CLUSTER_NAME}
   sourceIdentityRef:
     kind: AWSClusterRoleIdentity
-    name: ${MULTI_TENANCY_JUMP_IDENTITY_NAME}
+    name: ${MULTI_TENANCY_JUMP_IDENTITY_NAME}-${CLUSTER_NAME}

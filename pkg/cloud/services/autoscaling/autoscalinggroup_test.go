@@ -21,12 +21,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	autoscalingtypes "github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,8 +42,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/autoscaling/mock_autoscalingiface"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/mocks"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 func TestServiceGetASGByName(t *testing.T) {
@@ -60,9 +61,9 @@ func TestServiceGetASGByName(t *testing.T) {
 			wantErr:         false,
 			wantASG:         false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeAutoScalingGroupsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: []*string{
-						aws.String("test-asg-is-not-present"),
+				m.DescribeAutoScalingGroups(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{
+						"test-asg-is-not-present",
 					},
 				})).
 					Return(nil, awserrors.NewNotFound("not found"))
@@ -74,9 +75,9 @@ func TestServiceGetASGByName(t *testing.T) {
 			wantErr:         true,
 			wantASG:         false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeAutoScalingGroupsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: []*string{
-						aws.String("dependency-failure-occurred"),
+				m.DescribeAutoScalingGroups(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{
+						"dependency-failure-occurred",
 					},
 				})).
 					Return(nil, awserrors.NewFailedDependency("unknown error occurred"))
@@ -88,21 +89,21 @@ func TestServiceGetASGByName(t *testing.T) {
 			wantErr:         false,
 			wantASG:         true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeAutoScalingGroupsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: []*string{
-						aws.String("test-group-is-present"),
+				m.DescribeAutoScalingGroups(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{
+						"test-group-is-present",
 					},
 				})).
 					Return(&autoscaling.DescribeAutoScalingGroupsOutput{
-						AutoScalingGroups: []*autoscaling.Group{
+						AutoScalingGroups: []autoscalingtypes.AutoScalingGroup{
 							{
 								AutoScalingGroupName: aws.String("test-group-is-present"),
-								MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-									InstancesDistribution: &autoscaling.InstancesDistribution{
+								MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+									InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 										OnDemandAllocationStrategy: aws.String("prioritized"),
 										SpotAllocationStrategy:     aws.String("price-capacity-optimized"),
 									},
-									LaunchTemplate: &autoscaling.LaunchTemplate{},
+									LaunchTemplate: &autoscalingtypes.LaunchTemplate{},
 								},
 							},
 						}}, nil)
@@ -135,28 +136,28 @@ func TestServiceGetASGByName(t *testing.T) {
 func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   *autoscaling.Group
+		input   *autoscalingtypes.AutoScalingGroup
 		want    *expinfrav1.AutoScalingGroup
 		wantErr bool
 	}{
 		{
 			name: "valid input - all required fields filled",
-			input: &autoscaling.Group{
+			input: &autoscalingtypes.AutoScalingGroup{
 				AutoScalingGroupARN:  aws.String("test-id"),
 				AutoScalingGroupName: aws.String("test-name"),
-				DesiredCapacity:      aws.Int64(1234),
-				MaxSize:              aws.Int64(1234),
-				MinSize:              aws.Int64(1234),
+				DesiredCapacity:      aws.Int32(1234),
+				MaxSize:              aws.Int32(1234),
+				MinSize:              aws.Int32(1234),
 				CapacityRebalance:    aws.Bool(true),
-				MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-					InstancesDistribution: &autoscaling.InstancesDistribution{
+				MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+					InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 						OnDemandAllocationStrategy:          aws.String("prioritized"),
-						OnDemandBaseCapacity:                aws.Int64(1234),
-						OnDemandPercentageAboveBaseCapacity: aws.Int64(1234),
+						OnDemandBaseCapacity:                aws.Int32(1234),
+						OnDemandPercentageAboveBaseCapacity: aws.Int32(1234),
 						SpotAllocationStrategy:              aws.String("lowest-price"),
 					},
-					LaunchTemplate: &autoscaling.LaunchTemplate{
-						Overrides: []*autoscaling.LaunchTemplateOverrides{
+					LaunchTemplate: &autoscalingtypes.LaunchTemplate{
+						Overrides: []autoscalingtypes.LaunchTemplateOverrides{
 							{
 								InstanceType:     aws.String("t2.medium"),
 								WeightedCapacity: aws.String("test-weighted-cap"),
@@ -190,11 +191,11 @@ func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 		},
 		{
 			name: "valid input - suspended processes",
-			input: &autoscaling.Group{
-				DesiredCapacity: aws.Int64(1234),
-				MaxSize:         aws.Int64(1234),
-				MinSize:         aws.Int64(1234),
-				SuspendedProcesses: []*autoscaling.SuspendedProcess{
+			input: &autoscalingtypes.AutoScalingGroup{
+				DesiredCapacity: aws.Int32(1234),
+				MaxSize:         aws.Int32(1234),
+				MinSize:         aws.Int32(1234),
+				SuspendedProcesses: []autoscalingtypes.SuspendedProcess{
 					{
 						ProcessName:      aws.String("process1"),
 						SuspensionReason: aws.String("not relevant"),
@@ -211,22 +212,22 @@ func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 		},
 		{
 			name: "valid input - all fields filled",
-			input: &autoscaling.Group{
+			input: &autoscalingtypes.AutoScalingGroup{
 				AutoScalingGroupARN:  aws.String("test-id"),
 				AutoScalingGroupName: aws.String("test-name"),
-				DesiredCapacity:      aws.Int64(1234),
-				MaxSize:              aws.Int64(1234),
-				MinSize:              aws.Int64(1234),
+				DesiredCapacity:      aws.Int32(1234),
+				MaxSize:              aws.Int32(1234),
+				MinSize:              aws.Int32(1234),
 				CapacityRebalance:    aws.Bool(true),
-				MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-					InstancesDistribution: &autoscaling.InstancesDistribution{
+				MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+					InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 						OnDemandAllocationStrategy:          aws.String("prioritized"),
-						OnDemandBaseCapacity:                aws.Int64(1234),
-						OnDemandPercentageAboveBaseCapacity: aws.Int64(1234),
+						OnDemandBaseCapacity:                aws.Int32(1234),
+						OnDemandPercentageAboveBaseCapacity: aws.Int32(1234),
 						SpotAllocationStrategy:              aws.String("lowest-price"),
 					},
-					LaunchTemplate: &autoscaling.LaunchTemplate{
-						Overrides: []*autoscaling.LaunchTemplateOverrides{
+					LaunchTemplate: &autoscalingtypes.LaunchTemplate{
+						Overrides: []autoscalingtypes.LaunchTemplateOverrides{
 							{
 								InstanceType:     aws.String("t2.medium"),
 								WeightedCapacity: aws.String("test-weighted-cap"),
@@ -235,16 +236,16 @@ func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 					},
 				},
 				Status: aws.String("status"),
-				Tags: []*autoscaling.TagDescription{
+				Tags: []autoscalingtypes.TagDescription{
 					{
 						Key:   aws.String("key"),
 						Value: aws.String("value"),
 					},
 				},
-				Instances: []*autoscaling.Instance{
+				Instances: []autoscalingtypes.Instance{
 					{
 						InstanceId:       aws.String("instanceId"),
-						LifecycleState:   aws.String("lifecycleState"),
+						LifecycleState:   "lifecycleState",
 						AvailabilityZone: aws.String("us-east-1a"),
 					},
 				},
@@ -285,12 +286,12 @@ func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 		},
 		{
 			name: "valid input - without mixedInstancesPolicy",
-			input: &autoscaling.Group{
+			input: &autoscalingtypes.AutoScalingGroup{
 				AutoScalingGroupARN:  aws.String("test-id"),
 				AutoScalingGroupName: aws.String("test-name"),
-				DesiredCapacity:      aws.Int64(1234),
-				MaxSize:              aws.Int64(1234),
-				MinSize:              aws.Int64(1234),
+				DesiredCapacity:      aws.Int32(1234),
+				MaxSize:              aws.Int32(1234),
+				MinSize:              aws.Int32(1234),
 				CapacityRebalance:    aws.Bool(true),
 				MixedInstancesPolicy: nil,
 			},
@@ -307,22 +308,22 @@ func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 		},
 		{
 			name: "invalid input - incorrect on-demand allocation strategy",
-			input: &autoscaling.Group{
+			input: &autoscalingtypes.AutoScalingGroup{
 				AutoScalingGroupARN:  aws.String("test-id"),
 				AutoScalingGroupName: aws.String("test-name"),
-				DesiredCapacity:      aws.Int64(1234),
-				MaxSize:              aws.Int64(1234),
-				MinSize:              aws.Int64(1234),
+				DesiredCapacity:      aws.Int32(1234),
+				MaxSize:              aws.Int32(1234),
+				MinSize:              aws.Int32(1234),
 				CapacityRebalance:    aws.Bool(true),
-				MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-					InstancesDistribution: &autoscaling.InstancesDistribution{
+				MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+					InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 						OnDemandAllocationStrategy:          aws.String("prioritized"),
-						OnDemandBaseCapacity:                aws.Int64(1234),
-						OnDemandPercentageAboveBaseCapacity: aws.Int64(1234),
+						OnDemandBaseCapacity:                aws.Int32(1234),
+						OnDemandPercentageAboveBaseCapacity: aws.Int32(1234),
 						SpotAllocationStrategy:              aws.String("INVALIDONDEMANDALLOCATIONSTRATEGY"),
 					},
-					LaunchTemplate: &autoscaling.LaunchTemplate{
-						Overrides: []*autoscaling.LaunchTemplateOverrides{
+					LaunchTemplate: &autoscalingtypes.LaunchTemplate{
+						Overrides: []autoscalingtypes.LaunchTemplateOverrides{
 							{
 								InstanceType:     aws.String("t2.medium"),
 								WeightedCapacity: aws.String("test-weighted-cap"),
@@ -335,22 +336,22 @@ func TestServiceSDKToAutoScalingGroup(t *testing.T) {
 		},
 		{
 			name: "invalid input - incorrect spot allocation strategy",
-			input: &autoscaling.Group{
+			input: &autoscalingtypes.AutoScalingGroup{
 				AutoScalingGroupARN:  aws.String("test-id"),
 				AutoScalingGroupName: aws.String("test-name"),
-				DesiredCapacity:      aws.Int64(1234),
-				MaxSize:              aws.Int64(1234),
-				MinSize:              aws.Int64(1234),
+				DesiredCapacity:      aws.Int32(1234),
+				MaxSize:              aws.Int32(1234),
+				MinSize:              aws.Int32(1234),
 				CapacityRebalance:    aws.Bool(true),
-				MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-					InstancesDistribution: &autoscaling.InstancesDistribution{
+				MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+					InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 						OnDemandAllocationStrategy:          aws.String("prioritized"),
-						OnDemandBaseCapacity:                aws.Int64(1234),
-						OnDemandPercentageAboveBaseCapacity: aws.Int64(1234),
+						OnDemandBaseCapacity:                aws.Int32(1234),
+						OnDemandPercentageAboveBaseCapacity: aws.Int32(1234),
 						SpotAllocationStrategy:              aws.String("INVALIDSPOTALLOCATIONSTRATEGY"),
 					},
-					LaunchTemplate: &autoscaling.LaunchTemplate{
-						Overrides: []*autoscaling.LaunchTemplateOverrides{
+					LaunchTemplate: &autoscalingtypes.LaunchTemplate{
+						Overrides: []autoscalingtypes.LaunchTemplateOverrides{
 							{
 								InstanceType:     aws.String("t2.medium"),
 								WeightedCapacity: aws.String("test-weighted-cap"),
@@ -401,9 +402,9 @@ func TestServiceASGIfExists(t *testing.T) {
 			wantErr: false,
 			wantASG: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeAutoScalingGroupsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: []*string{
-						aws.String("asgName"),
+				m.DescribeAutoScalingGroups(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{
+						"asgName",
 					},
 				})).
 					Return(nil, awserrors.NewNotFound("resource not found"))
@@ -415,9 +416,9 @@ func TestServiceASGIfExists(t *testing.T) {
 			wantErr: true,
 			wantASG: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeAutoScalingGroupsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: []*string{
-						aws.String("asgName"),
+				m.DescribeAutoScalingGroups(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{
+						"asgName",
 					},
 				})).
 					Return(nil, awserrors.NewFailedDependency("unknown error occurred"))
@@ -429,21 +430,21 @@ func TestServiceASGIfExists(t *testing.T) {
 			wantErr: false,
 			wantASG: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeAutoScalingGroupsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: []*string{
-						aws.String("asgName"),
+				m.DescribeAutoScalingGroups(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{
+						"asgName",
 					},
 				})).
 					Return(&autoscaling.DescribeAutoScalingGroupsOutput{
-						AutoScalingGroups: []*autoscaling.Group{
+						AutoScalingGroups: []autoscalingtypes.AutoScalingGroup{
 							{
 								AutoScalingGroupName: aws.String("asgName"),
-								MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-									InstancesDistribution: &autoscaling.InstancesDistribution{
+								MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+									InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 										OnDemandAllocationStrategy: aws.String("prioritized"),
 										SpotAllocationStrategy:     aws.String("price-capacity-optimized"),
 									},
-									LaunchTemplate: &autoscaling.LaunchTemplate{},
+									LaunchTemplate: &autoscalingtypes.LaunchTemplate{},
 								},
 							},
 						}}, nil)
@@ -490,31 +491,31 @@ func TestServiceCreateASG(t *testing.T) {
 				expected := &autoscaling.CreateAutoScalingGroupInput{
 					AutoScalingGroupName:  aws.String("create-asg-success"),
 					CapacityRebalance:     aws.Bool(false),
-					DefaultCooldown:       aws.Int64(0),
-					DefaultInstanceWarmup: aws.Int64(0),
-					MixedInstancesPolicy: &autoscaling.MixedInstancesPolicy{
-						InstancesDistribution: &autoscaling.InstancesDistribution{
+					DefaultCooldown:       aws.Int32(0),
+					DefaultInstanceWarmup: aws.Int32(0),
+					MixedInstancesPolicy: &autoscalingtypes.MixedInstancesPolicy{
+						InstancesDistribution: &autoscalingtypes.InstancesDistribution{
 							OnDemandAllocationStrategy:          aws.String("prioritized"),
-							OnDemandBaseCapacity:                aws.Int64(0),
-							OnDemandPercentageAboveBaseCapacity: aws.Int64(100),
+							OnDemandBaseCapacity:                aws.Int32(0),
+							OnDemandPercentageAboveBaseCapacity: aws.Int32(100),
 							SpotAllocationStrategy:              aws.String(""),
 						},
-						LaunchTemplate: &autoscaling.LaunchTemplate{
-							LaunchTemplateSpecification: &autoscaling.LaunchTemplateSpecification{
+						LaunchTemplate: &autoscalingtypes.LaunchTemplate{
+							LaunchTemplateSpecification: &autoscalingtypes.LaunchTemplateSpecification{
 								LaunchTemplateName: aws.String("create-asg-success"),
 								Version:            aws.String("$Latest"),
 							},
-							Overrides: []*autoscaling.LaunchTemplateOverrides{
+							Overrides: []autoscalingtypes.LaunchTemplateOverrides{
 								{
 									InstanceType: aws.String("t1.large"),
 								},
 							},
 						},
 					},
-					DesiredCapacity: aws.Int64(1),
-					MaxSize:         aws.Int64(2),
-					MinSize:         aws.Int64(1),
-					Tags: []*autoscaling.Tag{
+					DesiredCapacity: aws.Int32(1),
+					MaxSize:         aws.Int32(2),
+					MinSize:         aws.Int32(1),
+					Tags: []autoscalingtypes.Tag{
 						{
 							Key:               aws.String("kubernetes.io/cluster/test"),
 							PropagateAtLaunch: aws.Bool(false),
@@ -547,18 +548,26 @@ func TestServiceCreateASG(t *testing.T) {
 					VPCZoneIdentifier: aws.String("subnet1"),
 				}
 
-				m.CreateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Do(
-					func(ctx context.Context, actual *autoscaling.CreateAutoScalingGroupInput, requestOptions ...request.Option) (*autoscaling.CreateAutoScalingGroupOutput, error) {
-						sortTagsByKey := func(tags []*autoscaling.Tag) {
+				m.CreateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Do(
+					func(ctx context.Context, actual *autoscaling.CreateAutoScalingGroupInput, requestOptions ...autoscaling.Options) (*autoscaling.CreateAutoScalingGroupOutput, error) {
+						sortTagsByKey := func(tags []autoscalingtypes.Tag) {
 							sort.Slice(tags, func(i, j int) bool {
 								return *(tags[i].Key) < *(tags[j].Key)
 							})
 						}
-						// sorting tags to avoid failure due to different ordering of tags
+						// Sort tags to avoid failures due to ordering differences
 						sortTagsByKey(actual.Tags)
 						sortTagsByKey(expected.Tags)
-						if !cmp.Equal(expected, actual) {
-							t.Fatalf("Actual CreateAutoScalingGroupInput did not match expected, Actual : %v, Expected: %v", actual, expected)
+						if !cmp.Equal(expected, actual, cmpopts.IgnoreUnexported(
+							autoscalingtypes.InstancesDistribution{},
+							autoscalingtypes.MixedInstancesPolicy{},
+							autoscalingtypes.LaunchTemplate{},
+							autoscalingtypes.LaunchTemplateSpecification{},
+							autoscalingtypes.LaunchTemplateOverrides{},
+							autoscalingtypes.Tag{},
+							autoscaling.CreateAutoScalingGroupInput{},
+						)) {
+							t.Fatalf("Actual CreateAutoScalingGroupInput did not match expected, Actual: %v, Expected: %v", actual, expected)
 						}
 						return &autoscaling.CreateAutoScalingGroupOutput{}, nil
 					})
@@ -577,8 +586,8 @@ func TestServiceCreateASG(t *testing.T) {
 			},
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.CreateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Do(
-					func(ctx context.Context, actual *autoscaling.CreateAutoScalingGroupInput, requestOptions ...request.Option) (*autoscaling.CreateAutoScalingGroupOutput, error) {
+				m.CreateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Do(
+					func(ctx context.Context, actual *autoscaling.CreateAutoScalingGroupInput, requestOptions ...autoscaling.Options) (*autoscaling.CreateAutoScalingGroupOutput, error) {
 						if actual.DesiredCapacity != nil {
 							t.Fatalf("Actual DesiredCapacity did not match expected, Actual: %d, Expected: <nil>", *actual.DesiredCapacity)
 						}
@@ -599,8 +608,8 @@ func TestServiceCreateASG(t *testing.T) {
 			},
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.CreateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Do(
-					func(ctx context.Context, actual *autoscaling.CreateAutoScalingGroupInput, requestOptions ...request.Option) (*autoscaling.CreateAutoScalingGroupOutput, error) {
+				m.CreateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Do(
+					func(ctx context.Context, actual *autoscaling.CreateAutoScalingGroupInput, requestOptions ...autoscaling.Options) (*autoscaling.CreateAutoScalingGroupOutput, error) {
 						if actual.DesiredCapacity != nil {
 							t.Fatalf("Actual DesiredCapacity did not match expected, Actual: %d, Expected: <nil>", *actual.DesiredCapacity)
 						}
@@ -650,7 +659,7 @@ func TestServiceCreateASG(t *testing.T) {
 			wantErr: true,
 			wantASG: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.CreateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
+				m.CreateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.CreateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
 			},
 		},
 		{
@@ -713,12 +722,12 @@ func TestServiceUpdateASG(t *testing.T) {
 				mps.AWSMachinePool.Spec.MaxSize = 5
 			},
 			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder, g *WithT) {
-				m.UpdateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).DoAndReturn(func(ctx context.Context, input *autoscaling.UpdateAutoScalingGroupInput, options ...request.Option) (*autoscaling.UpdateAutoScalingGroupOutput, error) {
+				m.UpdateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).DoAndReturn(func(ctx context.Context, input *autoscaling.UpdateAutoScalingGroupInput, options ...autoscaling.Options) (*autoscaling.UpdateAutoScalingGroupOutput, error) {
 					// CAPA should set min/max, and because there's no "externally managed" annotation, also the
 					// "desired" number of instances
-					g.Expect(input.MinSize).To(BeComparableTo(ptr.To[int64](2)))
-					g.Expect(input.MaxSize).To(BeComparableTo(ptr.To[int64](5)))
-					g.Expect(input.DesiredCapacity).To(BeComparableTo(ptr.To[int64](3)))
+					g.Expect(input.MinSize).To(BeComparableTo(ptr.To[int32](2)))
+					g.Expect(input.MaxSize).To(BeComparableTo(ptr.To[int32](5)))
+					g.Expect(input.DesiredCapacity).To(BeComparableTo(ptr.To[int32](3)))
 					return &autoscaling.UpdateAutoScalingGroupOutput{}, nil
 				})
 			},
@@ -731,7 +740,7 @@ func TestServiceUpdateASG(t *testing.T) {
 				mps.AWSMachinePool.Spec.MixedInstancesPolicy = nil
 			},
 			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder, g *WithT) {
-				m.UpdateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
+				m.UpdateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
 			},
 		},
 		{
@@ -746,10 +755,10 @@ func TestServiceUpdateASG(t *testing.T) {
 				mps.AWSMachinePool.Spec.MaxSize = 50
 			},
 			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder, g *WithT) {
-				m.UpdateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).DoAndReturn(func(ctx context.Context, input *autoscaling.UpdateAutoScalingGroupInput, options ...request.Option) (*autoscaling.UpdateAutoScalingGroupOutput, error) {
+				m.UpdateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).DoAndReturn(func(ctx context.Context, input *autoscaling.UpdateAutoScalingGroupInput, options ...autoscaling.Options) (*autoscaling.UpdateAutoScalingGroupOutput, error) {
 					// CAPA should set min/max, but not the externally managed "desired" number of instances
-					g.Expect(input.MinSize).To(BeComparableTo(ptr.To[int64](20)))
-					g.Expect(input.MaxSize).To(BeComparableTo(ptr.To[int64](50)))
+					g.Expect(input.MinSize).To(BeComparableTo(ptr.To[int32](20)))
+					g.Expect(input.MaxSize).To(BeComparableTo(ptr.To[int32](50)))
 					g.Expect(input.DesiredCapacity).To(BeNil())
 					return &autoscaling.UpdateAutoScalingGroupOutput{}, nil
 				})
@@ -801,10 +810,10 @@ func TestServiceUpdateASGWithSubnetFilters(t *testing.T) {
 				},
 			},
 			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				e.DescribeSubnetsWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeSubnetsInput{})).Return(&ec2.DescribeSubnetsOutput{
-					Subnets: []*ec2.Subnet{{SubnetId: aws.String("subnet-02")}},
+				e.DescribeSubnets(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeSubnetsInput{})).Return(&ec2.DescribeSubnetsOutput{
+					Subnets: []ec2types.Subnet{{SubnetId: aws.String("subnet-02")}},
 				}, nil)
-				m.UpdateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(&autoscaling.UpdateAutoScalingGroupOutput{}, nil)
+				m.UpdateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(&autoscaling.UpdateAutoScalingGroupOutput{}, nil)
 			},
 		},
 		{
@@ -822,8 +831,8 @@ func TestServiceUpdateASGWithSubnetFilters(t *testing.T) {
 				},
 			},
 			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				e.DescribeSubnetsWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeSubnetsInput{})).Return(&ec2.DescribeSubnetsOutput{
-					Subnets: []*ec2.Subnet{},
+				e.DescribeSubnets(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeSubnetsInput{})).Return(&ec2.DescribeSubnetsOutput{
+					Subnets: []ec2types.Subnet{},
 				}, nil)
 			},
 		},
@@ -837,7 +846,7 @@ func TestServiceUpdateASGWithSubnetFilters(t *testing.T) {
 				},
 			},
 			expect: func(e *mocks.MockEC2APIMockRecorder, m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.UpdateAutoScalingGroupWithContext(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
+				m.UpdateAutoScalingGroup(context.TODO(), gomock.AssignableToTypeOf(&autoscaling.UpdateAutoScalingGroupInput{})).Return(nil, awserrors.NewFailedDependency("dependency failure"))
 			},
 		},
 	}
@@ -903,7 +912,7 @@ func TestServiceUpdateResourceTags(t *testing.T) {
 			},
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.CreateOrUpdateTagsWithContext(context.TODO(), gomock.Eq(&autoscaling.CreateOrUpdateTagsInput{
+				m.CreateOrUpdateTags(context.TODO(), gomock.Eq(&autoscaling.CreateOrUpdateTagsInput{
 					Tags: mapToTags(map[string]string{
 						"key1": "value1",
 					}, aws.String("mock-resource-id")),
@@ -921,7 +930,7 @@ func TestServiceUpdateResourceTags(t *testing.T) {
 			},
 			wantErr: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.CreateOrUpdateTagsWithContext(context.TODO(), gomock.Eq(&autoscaling.CreateOrUpdateTagsInput{
+				m.CreateOrUpdateTags(context.TODO(), gomock.Eq(&autoscaling.CreateOrUpdateTagsInput{
 					Tags: mapToTags(map[string]string{
 						"key1": "value1",
 					}, aws.String("mock-resource-id")),
@@ -939,7 +948,7 @@ func TestServiceUpdateResourceTags(t *testing.T) {
 			},
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteTagsWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteTagsInput{
+				m.DeleteTags(context.TODO(), gomock.Eq(&autoscaling.DeleteTagsInput{
 					Tags: mapToTags(map[string]string{
 						"key1": "value1",
 					}, aws.String("mock-resource-id")),
@@ -957,7 +966,7 @@ func TestServiceUpdateResourceTags(t *testing.T) {
 			},
 			wantErr: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteTagsWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteTagsInput{
+				m.DeleteTags(context.TODO(), gomock.Eq(&autoscaling.DeleteTagsInput{
 					Tags: mapToTags(map[string]string{
 						"key1": "value1",
 					}, aws.String("mock-resource-id")),
@@ -998,7 +1007,7 @@ func TestServiceDeleteASG(t *testing.T) {
 			name:    "Delete ASG successful",
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteAutoScalingGroupWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
+				m.DeleteAutoScalingGroup(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
 					AutoScalingGroupName: aws.String("asgName"),
 					ForceDelete:          aws.Bool(true),
 				})).
@@ -1009,7 +1018,7 @@ func TestServiceDeleteASG(t *testing.T) {
 			name:    "Delete ASG should fail when ASG is not found",
 			wantErr: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteAutoScalingGroupWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
+				m.DeleteAutoScalingGroup(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
 					AutoScalingGroupName: aws.String("asgName"),
 					ForceDelete:          aws.Bool(true),
 				})).
@@ -1049,37 +1058,41 @@ func TestServiceDeleteASGAndWait(t *testing.T) {
 			name:    "Delete ASG with wait passed",
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteAutoScalingGroupWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
+				m.DeleteAutoScalingGroup(gomock.Any(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
 					AutoScalingGroupName: aws.String("asgName"),
 					ForceDelete:          aws.Bool(true),
 				})).
-					Return(nil, nil)
-				m.WaitUntilGroupNotExistsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: aws.StringSlice([]string{"asgName"}),
-				})).
-					Return(nil)
+					Return(&autoscaling.DeleteAutoScalingGroupOutput{}, nil)
+				m.DescribeAutoScalingGroups(gomock.Any(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{"asgName"},
+				}),
+					gomock.Any()).
+					Return(&autoscaling.DescribeAutoScalingGroupsOutput{
+						AutoScalingGroups: []autoscalingtypes.AutoScalingGroup{},
+					}, nil)
 			},
 		},
 		{
 			name:    "should return error if delete ASG failed while waiting",
 			wantErr: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteAutoScalingGroupWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
+				m.DeleteAutoScalingGroup(gomock.Any(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
 					AutoScalingGroupName: aws.String("asgName"),
 					ForceDelete:          aws.Bool(true),
 				})).
-					Return(nil, nil)
-				m.WaitUntilGroupNotExistsWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
-					AutoScalingGroupNames: aws.StringSlice([]string{"asgName"}),
-				})).
-					Return(awserrors.NewFailedDependency("dependency error"))
+					Return(&autoscaling.DeleteAutoScalingGroupOutput{}, nil)
+				m.DescribeAutoScalingGroups(gomock.Any(), gomock.Eq(&autoscaling.DescribeAutoScalingGroupsInput{
+					AutoScalingGroupNames: []string{"asgName"},
+				}),
+					gomock.Any()).
+					Return(nil, awserrors.NewFailedDependency("dependency error"))
 			},
 		},
 		{
 			name:    "should return error if delete ASG failed during ASG deletion",
 			wantErr: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DeleteAutoScalingGroupWithContext(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
+				m.DeleteAutoScalingGroup(context.TODO(), gomock.Eq(&autoscaling.DeleteAutoScalingGroupInput{
 					AutoScalingGroupName: aws.String("asgName"),
 					ForceDelete:          aws.Bool(true),
 				})).
@@ -1111,17 +1124,18 @@ func TestServiceCanStartASGInstanceRefresh(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	tests := []struct {
-		name     string
-		wantErr  bool
-		canStart bool
-		expect   func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder)
+		name                        string
+		wantErr                     bool
+		wantUnfinishedRefreshStatus *string
+		canStart                    bool
+		expect                      func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder)
 	}{
 		{
 			name:     "should return error if describe instance refresh failed",
 			wantErr:  true,
 			canStart: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeInstanceRefreshesWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeInstanceRefreshesInput{
+				m.DescribeInstanceRefreshes(context.TODO(), gomock.Eq(&autoscaling.DescribeInstanceRefreshesInput{
 					AutoScalingGroupName: aws.String("machinePoolName"),
 				})).
 					Return(nil, awserrors.NewConflict("some error"))
@@ -1132,24 +1146,25 @@ func TestServiceCanStartASGInstanceRefresh(t *testing.T) {
 			wantErr:  false,
 			canStart: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeInstanceRefreshesWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeInstanceRefreshesInput{
+				m.DescribeInstanceRefreshes(context.TODO(), gomock.Eq(&autoscaling.DescribeInstanceRefreshesInput{
 					AutoScalingGroupName: aws.String("machinePoolName"),
 				})).
 					Return(&autoscaling.DescribeInstanceRefreshesOutput{}, nil)
 			},
 		},
 		{
-			name:     "should return false if some instances have unfinished refresh",
-			wantErr:  false,
-			canStart: false,
+			name:                        "should return false if some instances have unfinished refresh",
+			wantErr:                     false,
+			wantUnfinishedRefreshStatus: aws.String(string(autoscalingtypes.InstanceRefreshStatusInProgress)),
+			canStart:                    false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.DescribeInstanceRefreshesWithContext(context.TODO(), gomock.Eq(&autoscaling.DescribeInstanceRefreshesInput{
+				m.DescribeInstanceRefreshes(context.TODO(), gomock.Eq(&autoscaling.DescribeInstanceRefreshesInput{
 					AutoScalingGroupName: aws.String("machinePoolName"),
 				})).
 					Return(&autoscaling.DescribeInstanceRefreshesOutput{
-						InstanceRefreshes: []*autoscaling.InstanceRefresh{
+						InstanceRefreshes: []autoscalingtypes.InstanceRefresh{
 							{
-								Status: aws.String(autoscaling.InstanceRefreshStatusInProgress),
+								Status: autoscalingtypes.InstanceRefreshStatusInProgress,
 							},
 						},
 					}, nil)
@@ -1173,13 +1188,14 @@ func TestServiceCanStartASGInstanceRefresh(t *testing.T) {
 			g.Expect(err).ToNot(HaveOccurred())
 			mps.AWSMachinePool.Name = "machinePoolName"
 
-			out, err := s.CanStartASGInstanceRefresh(mps)
+			out, unfinishedRefreshStatus, err := s.CanStartASGInstanceRefresh(mps)
 			checkErr(tt.wantErr, err, g)
 			if tt.canStart {
 				g.Expect(out).To(BeTrue())
-				return
+			} else {
+				g.Expect(out).To(BeFalse())
+				g.Expect(unfinishedRefreshStatus).To(BeEquivalentTo(tt.wantUnfinishedRefreshStatus))
 			}
-			g.Expect(out).To(BeFalse())
 		})
 	}
 }
@@ -1197,13 +1213,13 @@ func TestServiceStartASGInstanceRefresh(t *testing.T) {
 			name:    "should return error if start instance refresh failed",
 			wantErr: true,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.StartInstanceRefreshWithContext(context.TODO(), gomock.Eq(&autoscaling.StartInstanceRefreshInput{
+				m.StartInstanceRefresh(context.TODO(), gomock.Eq(&autoscaling.StartInstanceRefreshInput{
 					AutoScalingGroupName: aws.String("mpn"),
-					Strategy:             aws.String("Rolling"),
-					Preferences: &autoscaling.RefreshPreferences{
-						InstanceWarmup:       aws.Int64(100),
-						MinHealthyPercentage: aws.Int64(80),
-						MaxHealthyPercentage: aws.Int64(100),
+					Strategy:             autoscalingtypes.RefreshStrategyRolling,
+					Preferences: &autoscalingtypes.RefreshPreferences{
+						InstanceWarmup:       aws.Int32(100),
+						MinHealthyPercentage: aws.Int32(80),
+						MaxHealthyPercentage: aws.Int32(100),
 					},
 				})).
 					Return(nil, awserrors.NewNotFound("not found"))
@@ -1213,13 +1229,13 @@ func TestServiceStartASGInstanceRefresh(t *testing.T) {
 			name:    "should return nil if start instance refresh is success",
 			wantErr: false,
 			expect: func(m *mock_autoscalingiface.MockAutoScalingAPIMockRecorder) {
-				m.StartInstanceRefreshWithContext(context.TODO(), gomock.Eq(&autoscaling.StartInstanceRefreshInput{
+				m.StartInstanceRefresh(context.TODO(), gomock.Eq(&autoscaling.StartInstanceRefreshInput{
 					AutoScalingGroupName: aws.String("mpn"),
-					Strategy:             aws.String("Rolling"),
-					Preferences: &autoscaling.RefreshPreferences{
-						InstanceWarmup:       aws.Int64(100),
-						MinHealthyPercentage: aws.Int64(80),
-						MaxHealthyPercentage: aws.Int64(100),
+					Strategy:             autoscalingtypes.RefreshStrategyRolling,
+					Preferences: &autoscalingtypes.RefreshPreferences{
+						InstanceWarmup:       aws.Int32(100),
+						MinHealthyPercentage: aws.Int32(80),
+						MaxHealthyPercentage: aws.Int32(100),
 					},
 				})).
 					Return(&autoscaling.StartInstanceRefreshOutput{}, nil)
@@ -1253,7 +1269,7 @@ func getFakeClient() client.Client {
 	scheme := runtime.NewScheme()
 	_ = infrav1.AddToScheme(scheme)
 	_ = expinfrav1.AddToScheme(scheme)
-	_ = expclusterv1.AddToScheme(scheme)
+	_ = clusterv1.AddToScheme(scheme)
 	return fake.NewClientBuilder().WithScheme(scheme).Build()
 }
 
@@ -1336,7 +1352,7 @@ func getMachinePoolScope(client client.Client, clusterScope *scope.ClusterScope)
 	mps, err := scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
 		Client:         client,
 		Cluster:        clusterScope.Cluster,
-		MachinePool:    &expclusterv1.MachinePool{},
+		MachinePool:    &clusterv1.MachinePool{},
 		InfraCluster:   clusterScope,
 		AWSMachinePool: awsMachinePool,
 	})

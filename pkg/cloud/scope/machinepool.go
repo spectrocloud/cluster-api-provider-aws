@@ -34,11 +34,12 @@ import (
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/remote"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	v1beta1patch "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	"sigs.k8s.io/cluster-api/util/patch"
 )
 
@@ -46,11 +47,11 @@ import (
 type MachinePoolScope struct {
 	logger.Logger
 	client.Client
-	patchHelper                *patch.Helper
+	patchHelper                *v1beta1patch.Helper
 	capiMachinePoolPatchHelper *patch.Helper
 
 	Cluster        *clusterv1.Cluster
-	MachinePool    *expclusterv1.MachinePool
+	MachinePool    *clusterv1.MachinePool
 	InfraCluster   EC2Scope
 	AWSMachinePool *expinfrav1.AWSMachinePool
 }
@@ -61,7 +62,7 @@ type MachinePoolScopeParams struct {
 	Logger *logger.Logger
 
 	Cluster        *clusterv1.Cluster
-	MachinePool    *expclusterv1.MachinePool
+	MachinePool    *clusterv1.MachinePool
 	InfraCluster   EC2Scope
 	AWSMachinePool *expinfrav1.AWSMachinePool
 }
@@ -98,7 +99,7 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 		params.Logger = logger.NewLogger(log)
 	}
 
-	ampHelper, err := patch.NewHelper(params.AWSMachinePool, params.Client)
+	ampHelper, err := v1beta1patch.NewHelper(params.AWSMachinePool, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init AWSMachinePool patch helper")
 	}
@@ -120,6 +121,11 @@ func NewMachinePoolScope(params MachinePoolScopeParams) (*MachinePoolScope, erro
 	}, nil
 }
 
+// Ignition gets the ignition config.
+func (m *MachinePoolScope) Ignition() *infrav1.Ignition {
+	return m.AWSMachinePool.Spec.Ignition
+}
+
 // Name returns the AWSMachinePool name.
 func (m *MachinePoolScope) Name() string {
 	return m.AWSMachinePool.Name
@@ -132,13 +138,7 @@ func (m *MachinePoolScope) Namespace() string {
 
 // GetRawBootstrapData returns the bootstrap data from the secret in the Machine's bootstrap.dataSecretName,
 // including the secret's namespaced name.
-func (m *MachinePoolScope) GetRawBootstrapData() ([]byte, *types.NamespacedName, error) {
-	data, _, bootstrapDataSecretKey, err := m.getBootstrapData()
-
-	return data, bootstrapDataSecretKey, err
-}
-
-func (m *MachinePoolScope) getBootstrapData() ([]byte, string, *types.NamespacedName, error) {
+func (m *MachinePoolScope) GetRawBootstrapData() ([]byte, string, *types.NamespacedName, error) {
 	if m.MachinePool.Spec.Template.Spec.Bootstrap.DataSecretName == nil {
 		return nil, "", nil, errors.New("error retrieving bootstrap data: linked Machine's bootstrap.dataSecretName is nil")
 	}
@@ -176,7 +176,7 @@ func (m *MachinePoolScope) PatchObject() error {
 	return m.patchHelper.Patch(
 		context.TODO(),
 		m.AWSMachinePool,
-		patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+		v1beta1patch.WithOwnedConditions{Conditions: []clusterv1beta1.ConditionType{
 			expinfrav1.ASGReadyCondition,
 			expinfrav1.LaunchTemplateReadyCondition,
 		}})
@@ -239,7 +239,7 @@ func (m *MachinePoolScope) GetObjectMeta() *metav1.ObjectMeta {
 }
 
 // GetSetter returns the AWSMachinePool object setter.
-func (m *MachinePoolScope) GetSetter() conditions.Setter {
+func (m *MachinePoolScope) GetSetter() v1beta1conditions.Setter {
 	return m.AWSMachinePool
 }
 
@@ -381,7 +381,7 @@ func (m *MachinePoolScope) GetLaunchTemplate() *expinfrav1.AWSLaunchTemplate {
 }
 
 // GetMachinePool returns the machine pool object.
-func (m *MachinePoolScope) GetMachinePool() *expclusterv1.MachinePool {
+func (m *MachinePoolScope) GetMachinePool() *clusterv1.MachinePool {
 	return m.MachinePool
 }
 
@@ -393,4 +393,9 @@ func (m *MachinePoolScope) LaunchTemplateName() string {
 // GetRuntimeObject returns the AWSMachinePool object, in runtime.Object form.
 func (m *MachinePoolScope) GetRuntimeObject() runtime.Object {
 	return m.AWSMachinePool
+}
+
+// GetLifecycleHooks returns the desired lifecycle hooks for the ASG.
+func (m *MachinePoolScope) GetLifecycleHooks() []expinfrav1.AWSLifecycleHook {
+	return m.AWSMachinePool.Spec.AWSLifecycleHooks
 }

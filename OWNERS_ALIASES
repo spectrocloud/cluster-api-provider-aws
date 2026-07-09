@@ -10,13 +10,17 @@ aliases:
     - richardcase
   cluster-api-aws-maintainers:
     - richardcase
-    - Ankitasw
     - dlipovetsky
     - nrb
     - AndiDog
+    - damdo
   cluster-api-aws-reviewers:
-    - luthermonson
-    - cnmcavoy
     - faiq
     - fiunchinho
-    - damdo
+  # -----------------------------------------------------------
+  # OWNER_ALIASES for ROSA Work
+  # -----------------------------------------------------------
+  cluster-api-aws-rosa-maintainers:
+    - serngawy
+  cluster-api-aws-rosa-reviewers:
+    - serngawy

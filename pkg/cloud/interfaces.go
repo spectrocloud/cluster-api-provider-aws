@@ -18,20 +18,22 @@ limitations under the License.
 package cloud
 
 import (
-	awsclient "github.com/aws/aws-sdk-go/aws/client"
+	"time"
+
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/throttle"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 )
 
 // Session represents an AWS session.
 type Session interface {
-	Session() awsclient.ConfigProvider
+	Session() awsv2.Config
 	ServiceLimiter(service string) *throttle.ServiceLimiter
 }
 
@@ -43,7 +45,7 @@ type ScopeUsage interface {
 
 // ClusterObject represents a AWS cluster object.
 type ClusterObject interface {
-	conditions.Setter
+	v1beta1conditions.Setter
 }
 
 // ClusterScoper is the interface for a cluster scope.
@@ -68,7 +70,7 @@ type ClusterScoper interface {
 	InfraCluster() ClusterObject
 
 	// Cluster returns the cluster object.
-	ClusterObj() ClusterObject
+	ClusterObj() *clusterv1.Cluster
 	// UnstructuredControlPlane returns the unstructured control plane object.
 	UnstructuredControlPlane() (*unstructured.Unstructured, error)
 
@@ -82,11 +84,14 @@ type ClusterScoper interface {
 	// AdditionalTags returns any tags that you would like to attach to AWS resources. The returned value will never be nil.
 	AdditionalTags() infrav1.Tags
 	// SetFailureDomain sets the infrastructure provider failure domain key to the spec given as input.
-	SetFailureDomain(id string, spec clusterv1.FailureDomainSpec)
+	SetFailureDomain(id string, spec clusterv1.FailureDomain)
 	// PatchObject persists the cluster configuration and status.
 	PatchObject() error
 	// Close closes the current scope persisting the cluster configuration and status.
 	Close() error
+
+	// MaxWaitDuration returns time waiting for operation.
+	MaxWaitDuration() time.Duration
 }
 
 // SessionMetadata knows how to extract the information for managing AWS sessions for a resource.
@@ -99,4 +104,6 @@ type SessionMetadata interface {
 	InfraCluster() ClusterObject
 	// IdentityRef returns the AWS infrastructure cluster identityRef.
 	IdentityRef() *infrav1.AWSIdentityReference
+	// ControllerName returns the controller name
+	ControllerName() string
 }

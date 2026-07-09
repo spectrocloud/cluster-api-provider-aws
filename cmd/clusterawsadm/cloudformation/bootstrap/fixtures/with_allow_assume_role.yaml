@@ -208,9 +208,11 @@ Resources:
           - ec2:ModifyNetworkInterfaceAttribute
           - ec2:ModifySubnetAttribute
           - ec2:ReleaseAddress
+          - ec2:RevokeSecurityGroupEgress
           - ec2:RevokeSecurityGroupIngress
           - ec2:RunInstances
           - ec2:TerminateInstances
+          - ec2:GetSecurityGroupsForVpc
           - tag:GetResources
           - elasticloadbalancing:AddTags
           - elasticloadbalancing:CreateLoadBalancer
@@ -234,9 +236,13 @@ Resources:
           - elasticloadbalancing:CreateListener
           - elasticloadbalancing:DescribeTargetHealth
           - elasticloadbalancing:RegisterTargets
+          - elasticloadbalancing:DeregisterTargets
           - elasticloadbalancing:DeleteListener
           - autoscaling:DescribeAutoScalingGroups
           - autoscaling:DescribeInstanceRefreshes
+          - autoscaling:DeleteLifecycleHook
+          - autoscaling:DescribeLifecycleHooks
+          - autoscaling:PutLifecycleHook
           - ec2:CreateLaunchTemplate
           - ec2:CreateLaunchTemplateVersion
           - ec2:DescribeLaunchTemplates
@@ -245,10 +251,19 @@ Resources:
           - ec2:DeleteLaunchTemplateVersions
           - ec2:DescribeKeyPairs
           - ec2:ModifyInstanceMetadataOptions
+          - eks:CreateAccessEntry
+          - eks:DeleteAccessEntry
+          - eks:DescribeAccessEntry
+          - eks:UpdateAccessEntry
+          - eks:ListAccessEntries
+          - eks:AssociateAccessPolicy
+          - eks:DisassociateAccessPolicy
+          - eks:ListAssociatedAccessPolicies
           Effect: Allow
           Resource:
           - '*'
         - Action:
+          - autoscaling:CancelInstanceRefresh
           - autoscaling:CreateAutoScalingGroup
           - autoscaling:UpdateAutoScalingGroup
           - autoscaling:CreateOrUpdateTags
@@ -430,10 +445,12 @@ Resources:
         Statement:
         - Action:
           - sts:AssumeRole
+          - sts:TagSession
           Effect: Allow
           Principal:
             Service:
             - ec2.amazonaws.com
+            - pods.eks.amazonaws.com
         Version: 2012-10-17
       RoleName: controllers.cluster-api-provider-aws.sigs.k8s.io
     Type: AWS::IAM::Role

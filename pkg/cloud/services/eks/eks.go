@@ -27,8 +27,8 @@ import (
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/awserrors"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 )
 
 // ReconcileControlPlane reconciles a EKS control plane.
@@ -36,53 +36,53 @@ func (s *Service) ReconcileControlPlane(ctx context.Context) error {
 	s.scope.Debug("Reconciling EKS control plane", "cluster", klog.KRef(s.scope.Cluster.Namespace, s.scope.Cluster.Name))
 
 	// Control Plane IAM Role
-	if err := s.reconcileControlPlaneIAMRole(); err != nil {
-		conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.IAMControlPlaneRolesReadyCondition, ekscontrolplanev1.IAMControlPlaneRolesReconciliationFailedReason, clusterv1.ConditionSeverityError, "%s", err.Error())
+	if err := s.reconcileControlPlaneIAMRole(ctx); err != nil {
+		v1beta1conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.IAMControlPlaneRolesReadyCondition, ekscontrolplanev1.IAMControlPlaneRolesReconciliationFailedReason, clusterv1beta1.ConditionSeverityError, "%s", err.Error())
 		return err
 	}
-	conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.IAMControlPlaneRolesReadyCondition)
+	v1beta1conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.IAMControlPlaneRolesReadyCondition)
 
 	// EKS Cluster
 	if err := s.reconcileCluster(ctx); err != nil {
-		conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneReadyCondition, ekscontrolplanev1.EKSControlPlaneReconciliationFailedReason, clusterv1.ConditionSeverityError, "%s", err.Error())
+		v1beta1conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneReadyCondition, ekscontrolplanev1.EKSControlPlaneReconciliationFailedReason, clusterv1beta1.ConditionSeverityError, "%s", err.Error())
 		return err
 	}
-	conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneReadyCondition)
+	v1beta1conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSControlPlaneReadyCondition)
 
 	// EKS Addons
 	if err := s.reconcileAddons(ctx); err != nil {
-		conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSAddonsConfiguredCondition, ekscontrolplanev1.EKSAddonsConfiguredFailedReason, clusterv1.ConditionSeverityError, "%s", err.Error())
+		v1beta1conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSAddonsConfiguredCondition, ekscontrolplanev1.EKSAddonsConfiguredFailedReason, clusterv1beta1.ConditionSeverityError, "%s", err.Error())
 		return errors.Wrap(err, "failed reconciling eks addons")
 	}
-	conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSAddonsConfiguredCondition)
+	v1beta1conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSAddonsConfiguredCondition)
 
 	// EKS Identity Provider
 	if err := s.reconcileIdentityProvider(ctx); err != nil {
-		conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSIdentityProviderConfiguredCondition, ekscontrolplanev1.EKSIdentityProviderConfiguredFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		v1beta1conditions.MarkFalse(s.scope.ControlPlane, ekscontrolplanev1.EKSIdentityProviderConfiguredCondition, ekscontrolplanev1.EKSIdentityProviderConfiguredFailedReason, clusterv1beta1.ConditionSeverityWarning, "%s", err.Error())
 		return errors.Wrap(err, "failed reconciling eks identity provider")
 	}
-	conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSIdentityProviderConfiguredCondition)
+	v1beta1conditions.MarkTrue(s.scope.ControlPlane, ekscontrolplanev1.EKSIdentityProviderConfiguredCondition)
 
 	s.scope.Debug("Reconcile EKS control plane completed successfully")
 	return nil
 }
 
 // DeleteControlPlane deletes the EKS control plane.
-func (s *Service) DeleteControlPlane() (err error) {
+func (s *Service) DeleteControlPlane(ctx context.Context) (err error) {
 	s.scope.Debug("Deleting EKS control plane")
 
 	// EKS Cluster
-	if err := s.deleteCluster(); err != nil {
+	if err := s.deleteCluster(ctx); err != nil {
 		return err
 	}
 
 	// Control Plane IAM role
-	if err := s.deleteControlPlaneIAMRole(); err != nil {
+	if err := s.deleteControlPlaneIAMRole(ctx); err != nil {
 		return err
 	}
 
 	// OIDC Provider
-	if err := s.deleteOIDCProvider(); err != nil {
+	if err := s.deleteOIDCProvider(ctx); err != nil {
 		return err
 	}
 
@@ -94,43 +94,43 @@ func (s *Service) DeleteControlPlane() (err error) {
 func (s *NodegroupService) ReconcilePool(ctx context.Context) error {
 	s.scope.Debug("Reconciling EKS nodegroup")
 
-	if err := s.reconcileNodegroupIAMRole(); err != nil {
-		conditions.MarkFalse(
+	if err := s.reconcileNodegroupIAMRole(ctx); err != nil {
+		v1beta1conditions.MarkFalse(
 			s.scope.ManagedMachinePool,
 			expinfrav1.IAMNodegroupRolesReadyCondition,
 			expinfrav1.IAMNodegroupRolesReconciliationFailedReason,
-			clusterv1.ConditionSeverityError,
+			clusterv1beta1.ConditionSeverityError,
 			"%s",
 			err.Error(),
 		)
 		return err
 	}
-	conditions.MarkTrue(s.scope.ManagedMachinePool, expinfrav1.IAMNodegroupRolesReadyCondition)
+	v1beta1conditions.MarkTrue(s.scope.ManagedMachinePool, expinfrav1.IAMNodegroupRolesReadyCondition)
 
 	if err := s.reconcileNodegroup(ctx); err != nil {
-		conditions.MarkFalse(
+		v1beta1conditions.MarkFalse(
 			s.scope.ManagedMachinePool,
 			expinfrav1.EKSNodegroupReadyCondition,
 			expinfrav1.EKSNodegroupReconciliationFailedReason,
-			clusterv1.ConditionSeverityError,
+			clusterv1beta1.ConditionSeverityError,
 			"%s",
 			err.Error(),
 		)
 		return err
 	}
-	conditions.MarkTrue(s.scope.ManagedMachinePool, expinfrav1.EKSNodegroupReadyCondition)
+	v1beta1conditions.MarkTrue(s.scope.ManagedMachinePool, expinfrav1.EKSNodegroupReadyCondition)
 
 	return nil
 }
 
 // ReconcilePoolDelete is the entrypoint for ManagedMachinePool deletion
 // reconciliation.
-func (s *NodegroupService) ReconcilePoolDelete() error {
+func (s *NodegroupService) ReconcilePoolDelete(ctx context.Context) error {
 	s.scope.Debug("Reconciling deletion of EKS nodegroup")
 
 	eksNodegroupName := s.scope.NodegroupName()
 
-	ng, err := s.describeNodegroup()
+	ng, err := s.describeNodegroup(ctx)
 	if err != nil {
 		if awserrors.IsNotFound(err) {
 			s.scope.Trace("EKS nodegroup does not exist")
@@ -142,11 +142,11 @@ func (s *NodegroupService) ReconcilePoolDelete() error {
 		return nil
 	}
 
-	if err := s.deleteNodegroupAndWait(); err != nil {
+	if err := s.deleteNodegroupAndWait(ctx); err != nil {
 		return errors.Wrap(err, "failed to delete nodegroup")
 	}
 
-	if err := s.deleteNodegroupIAMRole(); err != nil {
+	if err := s.deleteNodegroupIAMRole(ctx); err != nil {
 		return errors.Wrap(err, "failed to delete nodegroup IAM role")
 	}
 

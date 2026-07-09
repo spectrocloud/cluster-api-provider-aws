@@ -21,11 +21,9 @@ package managed
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"strings"
 
-	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -41,7 +39,7 @@ type MachinePoolSpecInput struct {
 	E2EConfig             *clusterctl.E2EConfig
 	ConfigClusterFn       DefaultConfigClusterFn
 	BootstrapClusterProxy framework.ClusterProxy
-	AWSSession            client.ConfigProvider
+	AWSSession            *aws.Config
 	Namespace             *corev1.Namespace
 	ClusterName           string
 	IncludeScaling        bool
@@ -75,16 +73,6 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 	configCluster.Flavor = input.Flavor
 	configCluster.WorkerMachineCount = ptr.To[int64](1)
 	workloadClusterTemplate := shared.GetTemplate(ctx, configCluster)
-	if input.UsesLaunchTemplate {
-		userDataTemplate := `#!/bin/bash
-/etc/eks/bootstrap.sh %s \
-  --container-runtime containerd
-`
-		eksClusterName := getEKSClusterName(input.Namespace.Name, input.ClusterName)
-		userData := fmt.Sprintf(userDataTemplate, eksClusterName)
-		userDataEncoded := base64.StdEncoding.EncodeToString([]byte(userData))
-		workloadClusterTemplate = []byte(strings.ReplaceAll(string(workloadClusterTemplate), "USER_DATA", userDataEncoded))
-	}
 	ginkgo.By(string(workloadClusterTemplate))
 	ginkgo.By(fmt.Sprintf("Applying the %s cluster template yaml to the cluster", configCluster.Flavor))
 	err := input.BootstrapClusterProxy.CreateOrUpdate(ctx, workloadClusterTemplate)
@@ -107,7 +95,7 @@ func MachinePoolSpec(ctx context.Context, inputGetter func() MachinePoolSpecInpu
 		} else {
 			nodeGroupName = getEKSNodegroupName(input.Namespace.Name, input.ClusterName)
 		}
-		verifyManagedNodeGroup(eksClusterName, nodeGroupName, true, input.AWSSession)
+		verifyManagedNodeGroup(ctx, eksClusterName, nodeGroupName, true, input.AWSSession)
 	} else {
 		asgName := getASGName(input.ClusterName)
 		verifyASG(eksClusterName, asgName, true, input.AWSSession)

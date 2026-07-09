@@ -19,20 +19,18 @@ package ec2
 import (
 	"sort"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 func setupClusterScope(cl client.Client) (*scope.ClusterScope, error) {
@@ -61,47 +59,8 @@ func setupMachinePoolScope(cl client.Client, ec2Scope scope.EC2Scope) (*scope.Ma
 	})
 }
 
-func setupCapacityBlocksMachinePoolScope(cl client.Client, ec2Scope scope.EC2Scope) (*scope.MachinePoolScope, error) {
-	return scope.NewMachinePoolScope(scope.MachinePoolScopeParams{
-		Client:         cl,
-		InfraCluster:   ec2Scope,
-		Cluster:        newCluster(),
-		MachinePool:    newMachinePool(),
-		AWSMachinePool: newAWSCapacityBlockMachinePool(),
-	})
-}
-
-func newAWSCapacityBlockMachinePool() *expinfrav1.AWSMachinePool {
-	return &expinfrav1.AWSMachinePool{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AWSMachinePool",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "aws-mp-name",
-			Namespace: "aws-mp-ns",
-		},
-		Spec: expinfrav1.AWSMachinePoolSpec{
-			AvailabilityZones: []string{"us-east-1"},
-			AdditionalTags:    infrav1.Tags{},
-			AWSLaunchTemplate: expinfrav1.AWSLaunchTemplate{
-				Name:                  "aws-launch-template",
-				IamInstanceProfile:    "instance-profile",
-				AMI:                   infrav1.AMIReference{},
-				InstanceType:          "t3.large",
-				SSHKeyName:            aws.String("default"),
-				MarketType:            infrav1.MarketTypeCapacityBlock,
-				CapacityReservationID: aws.String("cr-12345678901234567"),
-			},
-		},
-		Status: expinfrav1.AWSMachinePoolStatus{
-			LaunchTemplateID: "launch-template-id",
-		},
-	}
-}
-
-func defaultEC2Tags(name, clusterName string) []*ec2.Tag {
-	return []*ec2.Tag{
+func defaultEC2Tags(name, clusterName string) []types.Tag {
+	return []types.Tag{
 		{
 			Key:   aws.String("Name"),
 			Value: aws.String(name),
@@ -203,8 +162,8 @@ func newAWSManagedControlPlane() *ekscontrolplanev1.AWSManagedControlPlane {
 	}
 }
 
-func newMachinePool() *v1beta1.MachinePool {
-	return &v1beta1.MachinePool{
+func newMachinePool() *clusterv1.MachinePool {
+	return &clusterv1.MachinePool{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachinePool",
 			APIVersion: "v1",
@@ -212,17 +171,17 @@ func newMachinePool() *v1beta1.MachinePool {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "mp",
 		},
-		Spec: v1beta1.MachinePoolSpec{
+		Spec: clusterv1.MachinePoolSpec{
 			Template: clusterv1.MachineTemplateSpec{
 				Spec: clusterv1.MachineSpec{
-					Version: ptr.To[string]("v1.23.3"),
+					Version: "v1.23.3",
 				},
 			},
 		},
 	}
 }
 
-func sortTags(a []*ec2.Tag) {
+func sortTags(a []types.Tag) {
 	sort.Slice(a, func(i, j int) bool {
 		return *(a[i].Key) < *(a[j].Key)
 	})
@@ -245,7 +204,7 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := ekscontrolplanev1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
-	if err := v1beta1.AddToScheme(scheme); err != nil {
+	if err := clusterv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil

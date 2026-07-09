@@ -5,21 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/sts/stsiface"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/blang/semver"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"github.com/openshift/rosa/pkg/ocm"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -33,15 +28,17 @@ import (
 
 	rosacontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/rosa/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
-	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/exp/utils"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/rosa"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/util/paused"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 )
 
@@ -50,8 +47,6 @@ type ROSAMachinePoolReconciler struct {
 	client.Client
 	Recorder         record.EventRecorder
 	WatchFilterValue string
-	Endpoints        []scope.ServiceEndpoint
-	NewStsClient     func(cloud.ScopeUsage, cloud.Session, logger.Wrapper, runtime.Object) stsiface.STSAPI
 	NewOCMClient     func(ctx context.Context, rosaScope *scope.ROSAControlPlaneScope) (rosa.OCMClient, error)
 }
 
@@ -59,7 +54,6 @@ type ROSAMachinePoolReconciler struct {
 func (r *ROSAMachinePoolReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	log := logger.FromContext(ctx)
 	r.NewOCMClient = rosa.NewWrappedOCMClient
-	r.NewStsClient = scope.NewSTSClient
 
 	gvk, err := apiutil.GVKForObject(new(expinfrav1.ROSAMachinePool), mgr.GetScheme())
 	if err != nil {
@@ -69,9 +63,9 @@ func (r *ROSAMachinePoolReconciler) SetupWithManager(ctx context.Context, mgr ct
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&expinfrav1.ROSAMachinePool{}).
 		WithOptions(options).
-		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(mgr.GetScheme(), log.GetLogger(), r.WatchFilterValue)).
+		WithEventFilter(predicates.ResourceHasFilterLabel(mgr.GetScheme(), log.GetLogger(), r.WatchFilterValue)).
 		Watches(
-			&expclusterv1.MachinePool{},
+			&clusterv1.MachinePool{},
 			handler.EnqueueRequestsFromMapFunc(machinePoolToInfrastructureMapFunc(gvk)),
 		).
 		Watches(
@@ -118,9 +112,8 @@ func (r *ROSAMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	if annotations.IsPaused(cluster, rosaMachinePool) {
-		log.Info("Reconciliation is paused for this object")
-		return ctrl.Result{}, nil
+	if isPaused, conditionChanged, err := paused.EnsurePausedCondition(ctx, r.Client, cluster, rosaMachinePool); err != nil || isPaused || conditionChanged {
+		return ctrl.Result{}, err
 	}
 
 	log = log.WithValues("cluster", klog.KObj(cluster))
@@ -131,6 +124,26 @@ func (r *ROSAMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	controlPlane := &rosacontrolplanev1.ROSAControlPlane{}
 	if err := r.Client.Get(ctx, controlPlaneKey, controlPlane); err != nil {
+		if apierrors.IsNotFound(err) && !rosaMachinePool.DeletionTimestamp.IsZero() {
+			// When the ROSAControlPlane is not found and the ROSAMachinePool CR is marked for deletion,
+			// it indicates that the ROSAControlPlane (and its associated NodePools) has already been deleted,
+			// while the ROSAMachinePool remains pending — since a ROSA-HCP cluster cannot exist without a NodePool.
+			// To handle this scenario, we trigger deletion of the ROSAControlPlane CR to initiate cleanup of the ROSA-HCP,
+			// relying on OCM to cascade-delete the related NodePools.
+			// Note: This state should rarely occur. However, during smoke tests, the ROSAMachinePool reconcile cycle
+			// may occasionally lag behind the deletion of the NodePools and ROSAControlPlane.
+			log.Info("RosaControlPlane not found, RosaMachinePool is deleted")
+			patchHelper, err := patch.NewHelper(rosaMachinePool, r.Client)
+			if err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to init RosaMachinePool patch helper")
+			}
+
+			controllerutil.RemoveFinalizer(rosaMachinePool, expinfrav1.RosaMachinePoolFinalizer)
+			return ctrl.Result{}, patchHelper.Patch(ctx, rosaMachinePool, patch.WithOwnedConditions{Conditions: []clusterv1beta1.ConditionType{
+				expinfrav1.RosaMachinePoolReadyCondition,
+			}})
+		}
+
 		log.Info("Failed to retrieve ControlPlane from MachinePool")
 		return ctrl.Result{}, err
 	}
@@ -143,7 +156,6 @@ func (r *ROSAMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		MachinePool:     machinePool,
 		RosaMachinePool: rosaMachinePool,
 		Logger:          log,
-		Endpoints:       r.Endpoints,
 	})
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create rosaMachinePool scope")
@@ -154,8 +166,6 @@ func (r *ROSAMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		Cluster:        cluster,
 		ControlPlane:   controlPlane,
 		ControllerName: "rosaControlPlane",
-		Endpoints:      r.Endpoints,
-		NewStsClient:   r.NewStsClient,
 	})
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to create rosaControlPlane scope")
@@ -168,7 +178,7 @@ func (r *ROSAMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	defer func() {
-		conditions.SetSummary(machinePoolScope.RosaMachinePool, conditions.WithConditions(expinfrav1.RosaMachinePoolReadyCondition), conditions.WithStepCounter())
+		v1beta1conditions.SetSummary(machinePoolScope.RosaMachinePool, v1beta1conditions.WithConditions(expinfrav1.RosaMachinePoolReadyCondition), v1beta1conditions.WithStepCounter())
 
 		if err := machinePoolScope.Close(); err != nil && reterr == nil {
 			reterr = err
@@ -260,7 +270,7 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 
 		rosaMachinePool.Status.Replicas = currentReplicas
 		if rosa.IsNodePoolReady(nodePool) {
-			conditions.MarkTrue(rosaMachinePool, expinfrav1.RosaMachinePoolReadyCondition)
+			v1beta1conditions.MarkTrue(rosaMachinePool, expinfrav1.RosaMachinePoolReadyCondition)
 			rosaMachinePool.Status.Ready = true
 
 			if err := r.reconcileMachinePoolVersion(machinePoolScope, ocmClient, nodePool); err != nil {
@@ -270,10 +280,10 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 			return ctrl.Result{}, nil
 		}
 
-		conditions.MarkFalse(rosaMachinePool,
+		v1beta1conditions.MarkFalse(rosaMachinePool,
 			expinfrav1.RosaMachinePoolReadyCondition,
 			nodePool.Status().Message(),
-			clusterv1.ConditionSeverityInfo,
+			clusterv1beta1.ConditionSeverityInfo,
 			"")
 
 		machinePoolScope.Info("waiting for NodePool to become ready", "state", nodePool.Status().Message())
@@ -281,7 +291,7 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 		return ctrl.Result{RequeueAfter: time.Second * 60}, nil
 	}
 
-	npBuilder := nodePoolBuilder(rosaMachinePool.Spec, machinePool.Spec, machinePoolScope.ControlPlane.Spec.ChannelGroup)
+	npBuilder := nodePoolBuilder(rosaMachinePool.Spec, machinePool.Spec, machinePoolScope.ControlPlane.Spec.ChannelGroup, machinePoolScope.ControlPlane.Spec.Channel)
 	nodePoolSpec, err := npBuilder.Build()
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to build rosa nodepool: %w", err)
@@ -289,10 +299,10 @@ func (r *ROSAMachinePoolReconciler) reconcileNormal(ctx context.Context,
 
 	nodePool, err = ocmClient.CreateNodePool(machinePoolScope.ControlPlane.Status.ID, nodePoolSpec)
 	if err != nil {
-		conditions.MarkFalse(rosaMachinePool,
+		v1beta1conditions.MarkFalse(rosaMachinePool,
 			expinfrav1.RosaMachinePoolReadyCondition,
 			expinfrav1.RosaMachinePoolReconciliationFailedReason,
-			clusterv1.ConditionSeverityError,
+			clusterv1beta1.ConditionSeverityError,
 			"failed to create ROSAMachinePool: %s", err.Error())
 		return ctrl.Result{}, fmt.Errorf("failed to create nodepool: %w", err)
 	}
@@ -333,7 +343,7 @@ func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope
 	version := machinePoolScope.RosaMachinePool.Spec.Version
 	if version == "" || version == rosa.RawVersionID(nodePool.Version()) {
 		machinePoolScope.RosaMachinePool.Status.AvailableUpgrades = nodePool.Version().AvailableUpgrades()
-		conditions.MarkFalse(machinePoolScope.RosaMachinePool, expinfrav1.RosaMachinePoolUpgradingCondition, "upgraded", clusterv1.ConditionSeverityInfo, "")
+		v1beta1conditions.MarkFalse(machinePoolScope.RosaMachinePool, expinfrav1.RosaMachinePoolUpgradingCondition, "upgraded", clusterv1beta1.ConditionSeverityInfo, "")
 		return nil
 	}
 
@@ -350,13 +360,13 @@ func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope
 		}
 	}
 
-	condition := &clusterv1.Condition{
+	condition := &clusterv1beta1.Condition{
 		Type:    expinfrav1.RosaMachinePoolUpgradingCondition,
 		Status:  corev1.ConditionTrue,
 		Reason:  string(scheduledUpgrade.State().Value()),
 		Message: fmt.Sprintf("Upgrading to version %s", scheduledUpgrade.Version()),
 	}
-	conditions.Set(machinePoolScope.RosaMachinePool, condition)
+	v1beta1conditions.Set(machinePoolScope.RosaMachinePool, condition)
 
 	// if nodePool is already upgrading to another version we need to wait until the current upgrade is finished, return an error to requeue and try later.
 	if scheduledUpgrade.Version() != version {
@@ -366,6 +376,14 @@ func (r *ROSAMachinePoolReconciler) reconcileMachinePoolVersion(machinePoolScope
 	return nil
 }
 
+func (r *ROSAMachinePoolReconciler) shouldUpdateRosaReplicas(machinePoolScope *scope.RosaMachinePoolScope, nodePool *cmv1.NodePool) bool {
+	if machinePoolScope.MachinePool.Spec.Replicas == nil || machinePoolScope.RosaMachinePool.Spec.Autoscaling != nil || annotations.ReplicasManagedByExternalAutoscaler(machinePoolScope.MachinePool) {
+		return false
+	}
+
+	return nodePool.Replicas() != int(*machinePoolScope.MachinePool.Spec.Replicas)
+}
+
 func (r *ROSAMachinePoolReconciler) updateNodePool(machinePoolScope *scope.RosaMachinePoolScope, ocmClient rosa.OCMClient, nodePool *cmv1.NodePool) (*cmv1.NodePool, error) {
 	machinePool := machinePoolScope.RosaMachinePool.DeepCopy()
 	// default all fields before comparing, so that nil/unset fields don't cause an unnecessary update call.
@@ -373,7 +391,8 @@ func (r *ROSAMachinePoolReconciler) updateNodePool(machinePoolScope *scope.RosaM
 	desiredSpec := machinePool.Spec
 
 	specDiff := computeSpecDiff(desiredSpec, nodePool)
-	if specDiff == "" {
+	// Replicas are not part of RosaMachinePoolSpec
+	if specDiff == "" && !r.shouldUpdateRosaReplicas(machinePoolScope, nodePool) {
 		// no changes detected.
 		return nodePool, nil
 	}
@@ -383,8 +402,9 @@ func (r *ROSAMachinePoolReconciler) updateNodePool(machinePoolScope *scope.RosaM
 	desiredSpec.Version = ""
 	desiredSpec.AdditionalSecurityGroups = nil
 	desiredSpec.AdditionalTags = nil
+	desiredSpec.VolumeSize = 0
 
-	npBuilder := nodePoolBuilder(desiredSpec, machinePoolScope.MachinePool.Spec, machinePoolScope.ControlPlane.Spec.ChannelGroup)
+	npBuilder := nodePoolBuilder(desiredSpec, machinePoolScope.MachinePool.Spec, machinePoolScope.ControlPlane.Spec.ChannelGroup, machinePoolScope.ControlPlane.Spec.Channel)
 	nodePoolSpec, err := npBuilder.Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build nodePool spec: %w", err)
@@ -392,10 +412,10 @@ func (r *ROSAMachinePoolReconciler) updateNodePool(machinePoolScope *scope.RosaM
 
 	updatedNodePool, err := ocmClient.UpdateNodePool(machinePoolScope.ControlPlane.Status.ID, nodePoolSpec)
 	if err != nil {
-		conditions.MarkFalse(machinePoolScope.RosaMachinePool,
+		v1beta1conditions.MarkFalse(machinePoolScope.RosaMachinePool,
 			expinfrav1.RosaMachinePoolReadyCondition,
 			expinfrav1.RosaMachinePoolReconciliationFailedReason,
-			clusterv1.ConditionSeverityError,
+			clusterv1beta1.ConditionSeverityError,
 			"failed to update ROSAMachinePool: %s", err.Error())
 		return nil, fmt.Errorf("failed to update nodePool: %w", err)
 	}
@@ -404,13 +424,14 @@ func (r *ROSAMachinePoolReconciler) updateNodePool(machinePoolScope *scope.RosaM
 }
 
 func computeSpecDiff(desiredSpec expinfrav1.RosaMachinePoolSpec, nodePool *cmv1.NodePool) string {
-	currentSpec := nodePoolToRosaMachinePoolSpec(nodePool)
+	currentSpec := utils.NodePoolToRosaMachinePoolSpec(nodePool)
 
 	ignoredFields := []string{
 		"ProviderIDList",           // providerIDList is set by the controller.
 		"Version",                  // Version changes are reconciled separately.
 		"AdditionalTags",           // AdditionalTags day2 changes not supported.
 		"AdditionalSecurityGroups", // AdditionalSecurityGroups day2 changes not supported.
+		"VolumeSize",               // VolumeSize is immutable after creation.
 	}
 
 	return cmp.Diff(desiredSpec, currentSpec,
@@ -441,7 +462,7 @@ func validateMachinePoolSpec(machinePoolScope *scope.RosaMachinePoolScope) (*str
 	return nil, nil
 }
 
-func nodePoolBuilder(rosaMachinePoolSpec expinfrav1.RosaMachinePoolSpec, machinePoolSpec expclusterv1.MachinePoolSpec, controlPlaneChannelGroup rosacontrolplanev1.ChannelGroupType) *cmv1.NodePoolBuilder {
+func nodePoolBuilder(rosaMachinePoolSpec expinfrav1.RosaMachinePoolSpec, machinePoolSpec clusterv1.MachinePoolSpec, controlPlaneChannelGroup rosacontrolplanev1.ChannelGroupType, controlPlaneChannel string) *cmv1.NodePoolBuilder {
 	npBuilder := cmv1.NewNodePool().ID(rosaMachinePoolSpec.NodePoolName).
 		Labels(rosaMachinePoolSpec.Labels).
 		AutoRepair(rosaMachinePoolSpec.AutoRepair)
@@ -486,10 +507,14 @@ func nodePoolBuilder(rosaMachinePoolSpec expinfrav1.RosaMachinePoolSpec, machine
 	if rosaMachinePoolSpec.VolumeSize > 75 {
 		awsNodePool = awsNodePool.RootVolume(cmv1.NewAWSVolume().Size(rosaMachinePoolSpec.VolumeSize))
 	}
+	if rosaMachinePoolSpec.CapacityReservationID != "" {
+		capacityReservation := cmv1.NewAWSCapacityReservation().Id(rosaMachinePoolSpec.CapacityReservationID)
+		awsNodePool = awsNodePool.CapacityReservation(capacityReservation)
+	}
 	npBuilder.AWSNodePool(awsNodePool)
 
 	if rosaMachinePoolSpec.Version != "" {
-		npBuilder.Version(cmv1.NewVersion().ID(ocm.CreateVersionID(rosaMachinePoolSpec.Version, string(controlPlaneChannelGroup))))
+		npBuilder.Version(cmv1.NewVersion().ID(rosa.CreateVersionID(rosaMachinePoolSpec.Version, string(controlPlaneChannelGroup), controlPlaneChannel)))
 	}
 
 	if rosaMachinePoolSpec.NodeDrainGracePeriod != nil {
@@ -512,61 +537,13 @@ func nodePoolBuilder(rosaMachinePoolSpec expinfrav1.RosaMachinePoolSpec, machine
 		npBuilder = npBuilder.ManagementUpgrade(configMgmtBuilder)
 	}
 
+	if rosaMachinePoolSpec.ImageType == string(cmv1.ImageTypeWindows) {
+		npBuilder = npBuilder.ImageType(cmv1.ImageTypeWindows)
+	} else if rosaMachinePoolSpec.ImageType == string(cmv1.ImageTypeDefault) {
+		npBuilder = npBuilder.ImageType(cmv1.ImageTypeDefault)
+	}
+
 	return npBuilder
-}
-
-func nodePoolToRosaMachinePoolSpec(nodePool *cmv1.NodePool) expinfrav1.RosaMachinePoolSpec {
-	spec := expinfrav1.RosaMachinePoolSpec{
-		NodePoolName:             nodePool.ID(),
-		Version:                  rosa.RawVersionID(nodePool.Version()),
-		AvailabilityZone:         nodePool.AvailabilityZone(),
-		Subnet:                   nodePool.Subnet(),
-		Labels:                   nodePool.Labels(),
-		AutoRepair:               nodePool.AutoRepair(),
-		InstanceType:             nodePool.AWSNodePool().InstanceType(),
-		TuningConfigs:            nodePool.TuningConfigs(),
-		AdditionalSecurityGroups: nodePool.AWSNodePool().AdditionalSecurityGroupIds(),
-		VolumeSize:               nodePool.AWSNodePool().RootVolume().Size(),
-		// nodePool.AWSNodePool().Tags() returns all tags including "system" tags if "fetchUserTagsOnly" parameter is not specified.
-		// TODO: enable when AdditionalTags day2 changes is supported.
-		// AdditionalTags:           nodePool.AWSNodePool().Tags(),
-	}
-
-	if nodePool.Autoscaling() != nil {
-		spec.Autoscaling = &expinfrav1.RosaMachinePoolAutoScaling{
-			MinReplicas: nodePool.Autoscaling().MinReplica(),
-			MaxReplicas: nodePool.Autoscaling().MaxReplica(),
-		}
-	}
-	if nodePool.Taints() != nil {
-		rosaTaints := make([]expinfrav1.RosaTaint, 0, len(nodePool.Taints()))
-		for _, taint := range nodePool.Taints() {
-			rosaTaints = append(rosaTaints, expinfrav1.RosaTaint{
-				Key:    taint.Key(),
-				Value:  taint.Value(),
-				Effect: corev1.TaintEffect(taint.Effect()),
-			})
-		}
-		spec.Taints = rosaTaints
-	}
-	if nodePool.NodeDrainGracePeriod() != nil {
-		spec.NodeDrainGracePeriod = &metav1.Duration{
-			Duration: time.Minute * time.Duration(nodePool.NodeDrainGracePeriod().Value()),
-		}
-	}
-	if nodePool.ManagementUpgrade() != nil {
-		spec.UpdateConfig = &expinfrav1.RosaUpdateConfig{
-			RollingUpdate: &expinfrav1.RollingUpdate{},
-		}
-		if nodePool.ManagementUpgrade().MaxSurge() != "" {
-			spec.UpdateConfig.RollingUpdate.MaxSurge = ptr.To(intstr.Parse(nodePool.ManagementUpgrade().MaxSurge()))
-		}
-		if nodePool.ManagementUpgrade().MaxUnavailable() != "" {
-			spec.UpdateConfig.RollingUpdate.MaxUnavailable = ptr.To(intstr.Parse(nodePool.ManagementUpgrade().MaxUnavailable()))
-		}
-	}
-
-	return spec
 }
 
 func (r *ROSAMachinePoolReconciler) reconcileProviderIDList(ctx context.Context, machinePoolScope *scope.RosaMachinePoolScope, nodePool *cmv1.NodePool) error {
@@ -577,7 +554,7 @@ func (r *ROSAMachinePoolReconciler) reconcileProviderIDList(ctx context.Context,
 	}
 
 	ec2Svc := scope.NewEC2Client(machinePoolScope, machinePoolScope, &machinePoolScope.Logger, machinePoolScope.InfraCluster())
-	response, err := ec2Svc.DescribeInstancesWithContext(ctx, &ec2.DescribeInstancesInput{
+	response, err := ec2Svc.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: buildEC2FiltersFromTags(tags),
 	})
 	if err != nil {
@@ -596,23 +573,23 @@ func (r *ROSAMachinePoolReconciler) reconcileProviderIDList(ctx context.Context,
 	return nil
 }
 
-func buildEC2FiltersFromTags(tags map[string]string) []*ec2.Filter {
-	filters := make([]*ec2.Filter, len(tags)+1)
+func buildEC2FiltersFromTags(tags map[string]string) []ec2types.Filter {
+	filters := make([]ec2types.Filter, len(tags)+1)
 	for key, value := range tags {
-		filters = append(filters, &ec2.Filter{
+		filters = append(filters, ec2types.Filter{
 			Name: ptr.To(fmt.Sprintf("tag:%s", key)),
-			Values: aws.StringSlice([]string{
+			Values: []string{
 				value,
-			}),
+			},
 		})
 	}
 
 	// only list instances that are running or just started
-	filters = append(filters, &ec2.Filter{
+	filters = append(filters, ec2types.Filter{
 		Name: ptr.To("instance-state-name"),
-		Values: aws.StringSlice([]string{
+		Values: []string{
 			"running", "pending",
-		}),
+		},
 	})
 
 	return filters
@@ -638,7 +615,7 @@ func rosaControlPlaneToRosaMachinePoolMapFunc(c client.Client, gvk schema.GroupV
 			return nil
 		}
 
-		managedPoolForClusterList := expclusterv1.MachinePoolList{}
+		managedPoolForClusterList := clusterv1.MachinePoolList{}
 		if err := c.List(
 			ctx, &managedPoolForClusterList, client.InNamespace(clusterKey.Namespace), client.MatchingLabels{clusterv1.ClusterNameLabel: clusterKey.Name},
 		); err != nil {

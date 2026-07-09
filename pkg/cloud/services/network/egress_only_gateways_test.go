@@ -20,8 +20,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +32,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/test/mocks"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
@@ -39,9 +40,10 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	testCases := []struct {
-		name   string
-		input  *infrav1.NetworkSpec
-		expect func(m *mocks.MockEC2APIMockRecorder)
+		name              string
+		input             *infrav1.NetworkSpec
+		expect            func(m *mocks.MockEC2APIMockRecorder)
+		wantErrContaining *string
 	}{
 		{
 			name: "has eigw",
@@ -55,14 +57,14 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 				},
 			},
 			expect: func(m *mocks.MockEC2APIMockRecorder) {
-				m.DescribeEgressOnlyInternetGatewaysWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
+				m.DescribeEgressOnlyInternetGateways(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
 					Return(&ec2.DescribeEgressOnlyInternetGatewaysOutput{
-						EgressOnlyInternetGateways: []*ec2.EgressOnlyInternetGateway{
+						EgressOnlyInternetGateways: []types.EgressOnlyInternetGateway{
 							{
 								EgressOnlyInternetGatewayId: aws.String("eigw-0"),
-								Attachments: []*ec2.InternetGatewayAttachment{
+								Attachments: []types.InternetGatewayAttachment{
 									{
-										State: aws.String(ec2.AttachmentStatusAttached),
+										State: types.AttachmentStatusAttached,
 										VpcId: aws.String("vpc-egress-only-gateways"),
 									},
 								},
@@ -70,8 +72,46 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 						},
 					}, nil)
 
-				m.CreateTagsWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.CreateTagsInput{})).
+				m.CreateTags(context.TODO(), gomock.AssignableToTypeOf(&ec2.CreateTagsInput{})).
 					Return(nil, nil)
+			},
+		},
+		{
+			name: "has more than 1 eigw, should return error",
+			input: &infrav1.NetworkSpec{
+				VPC: infrav1.VPCSpec{
+					ID:   "vpc-egress-only-gateways",
+					IPv6: &infrav1.IPv6{},
+					Tags: infrav1.Tags{
+						infrav1.ClusterTagKey("test-cluster"): "owned",
+					},
+				},
+			},
+			wantErrContaining: aws.String("expected 1 egress only internet gateway in vpc \"vpc-egress-only-gateways\", but found 2: [eigw-0 eigw-1]"),
+			expect: func(m *mocks.MockEC2APIMockRecorder) {
+				m.DescribeEgressOnlyInternetGateways(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
+					Return(&ec2.DescribeEgressOnlyInternetGatewaysOutput{
+						EgressOnlyInternetGateways: []types.EgressOnlyInternetGateway{
+							{
+								EgressOnlyInternetGatewayId: aws.String("eigw-0"),
+								Attachments: []types.InternetGatewayAttachment{
+									{
+										State: types.AttachmentStatusAttached,
+										VpcId: aws.String("vpc-egress-only-gateways"),
+									},
+								},
+							},
+							{
+								EgressOnlyInternetGatewayId: aws.String("eigw-1"),
+								Attachments: []types.InternetGatewayAttachment{
+									{
+										State: types.AttachmentStatusAttached,
+										VpcId: aws.String("vpc-egress-only-gateways"),
+									},
+								},
+							},
+						},
+					}, nil)
 			},
 		},
 		{
@@ -86,14 +126,14 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 				},
 			},
 			expect: func(m *mocks.MockEC2APIMockRecorder) {
-				m.DescribeEgressOnlyInternetGatewaysWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
+				m.DescribeEgressOnlyInternetGateways(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
 					Return(&ec2.DescribeEgressOnlyInternetGatewaysOutput{}, nil)
 
-				m.CreateEgressOnlyInternetGatewayWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.CreateEgressOnlyInternetGatewayInput{})).
+				m.CreateEgressOnlyInternetGateway(context.TODO(), gomock.AssignableToTypeOf(&ec2.CreateEgressOnlyInternetGatewayInput{})).
 					Return(&ec2.CreateEgressOnlyInternetGatewayOutput{
-						EgressOnlyInternetGateway: &ec2.EgressOnlyInternetGateway{
+						EgressOnlyInternetGateway: &types.EgressOnlyInternetGateway{
 							EgressOnlyInternetGatewayId: aws.String("igw-1"),
-							Tags: []*ec2.Tag{
+							Tags: []types.Tag{
 								{
 									Key:   aws.String(infrav1.ClusterTagKey("test-cluster")),
 									Value: aws.String("owned"),
@@ -107,9 +147,9 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 									Value: aws.String("test-cluster-eigw"),
 								},
 							},
-							Attachments: []*ec2.InternetGatewayAttachment{
+							Attachments: []types.InternetGatewayAttachment{
 								{
-									State: aws.String(ec2.AttachmentStatusAttached),
+									State: types.AttachmentStatusAttached,
 									VpcId: aws.String("vpc-egress-only-gateways"),
 								},
 							},
@@ -121,10 +161,13 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
 			ec2Mock := mocks.NewMockEC2API(mockCtrl)
 
 			scheme := runtime.NewScheme()
-			_ = infrav1.AddToScheme(scheme)
+			err := infrav1.AddToScheme(scheme)
+			g.Expect(err).NotTo(HaveOccurred())
+
 			client := fake.NewClientBuilder().WithScheme(scheme).Build()
 			scope, err := scope.NewClusterScope(scope.ClusterScopeParams{
 				Client: client,
@@ -138,18 +181,20 @@ func TestReconcileEgressOnlyInternetGateways(t *testing.T) {
 					},
 				},
 			})
-			if err != nil {
-				t.Fatalf("Failed to create test context: %v", err)
-			}
+			g.Expect(err).NotTo(HaveOccurred())
 
 			tc.expect(ec2Mock.EXPECT())
 
 			s := NewService(scope)
 			s.EC2Client = ec2Mock
 
-			if err := s.reconcileEgressOnlyInternetGateways(); err != nil {
-				t.Fatalf("got an unexpected error: %v", err)
+			err = s.reconcileEgressOnlyInternetGateways()
+			if tc.wantErrContaining != nil {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(*tc.wantErrContaining))
+				return
 			}
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
@@ -195,11 +240,11 @@ func TestDeleteEgressOnlyInternetGateways(t *testing.T) {
 				},
 			},
 			expect: func(m *mocks.MockEC2APIMockRecorder) {
-				m.DescribeEgressOnlyInternetGatewaysWithContext(context.TODO(), gomock.Eq(&ec2.DescribeEgressOnlyInternetGatewaysInput{
-					Filters: []*ec2.Filter{
+				m.DescribeEgressOnlyInternetGateways(context.TODO(), gomock.Eq(&ec2.DescribeEgressOnlyInternetGatewaysInput{
+					Filters: []types.Filter{
 						{
-							Name:   aws.String("attachment.vpc-id"),
-							Values: aws.StringSlice([]string{"vpc-gateways"}),
+							Name:   aws.String("tag-key"),
+							Values: []string{infrav1.ClusterTagKey("test-cluster")},
 						},
 					},
 				})).Return(&ec2.DescribeEgressOnlyInternetGatewaysOutput{}, nil)
@@ -217,21 +262,21 @@ func TestDeleteEgressOnlyInternetGateways(t *testing.T) {
 				},
 			},
 			expect: func(m *mocks.MockEC2APIMockRecorder) {
-				m.DescribeEgressOnlyInternetGatewaysWithContext(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
+				m.DescribeEgressOnlyInternetGateways(context.TODO(), gomock.AssignableToTypeOf(&ec2.DescribeEgressOnlyInternetGatewaysInput{})).
 					Return(&ec2.DescribeEgressOnlyInternetGatewaysOutput{
-						EgressOnlyInternetGateways: []*ec2.EgressOnlyInternetGateway{
+						EgressOnlyInternetGateways: []types.EgressOnlyInternetGateway{
 							{
 								EgressOnlyInternetGatewayId: aws.String("eigw-0"),
-								Attachments: []*ec2.InternetGatewayAttachment{
+								Attachments: []types.InternetGatewayAttachment{
 									{
-										State: aws.String(ec2.AttachmentStatusAttached),
+										State: types.AttachmentStatusAttached,
 										VpcId: aws.String("vpc-gateways"),
 									},
 								},
 							},
 						},
 					}, nil)
-				m.DeleteEgressOnlyInternetGatewayWithContext(context.TODO(), &ec2.DeleteEgressOnlyInternetGatewayInput{
+				m.DeleteEgressOnlyInternetGateway(context.TODO(), &ec2.DeleteEgressOnlyInternetGatewayInput{
 					EgressOnlyInternetGatewayId: aws.String("eigw-0"),
 				}).Return(&ec2.DeleteEgressOnlyInternetGatewayOutput{}, nil)
 			},

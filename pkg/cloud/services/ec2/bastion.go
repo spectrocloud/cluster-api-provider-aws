@@ -22,8 +22,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/pkg/errors"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -31,8 +32,8 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/filter"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/userdata"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/record"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 )
 
 const (
@@ -71,8 +72,8 @@ func (s *Service) ReconcileBastion() error {
 	// Describe bastion instance, if any.
 	instance, err := s.describeBastionInstance()
 	if awserrors.IsNotFound(err) { //nolint:nestif
-		if !conditions.Has(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition) {
-			conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, infrav1.BastionCreationStartedReason, clusterv1.ConditionSeverityInfo, "")
+		if !v1beta1conditions.Has(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition) {
+			v1beta1conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, infrav1.BastionCreationStartedReason, clusterv1beta1.ConditionSeverityInfo, "")
 			if err := s.scope.PatchObject(); err != nil {
 				return errors.Wrap(err, "failed to patch conditions")
 			}
@@ -97,7 +98,7 @@ func (s *Service) ReconcileBastion() error {
 	// TODO(vincepri): check for possible changes between the default spec and the instance.
 
 	s.scope.SetBastionInstance(instance.DeepCopy())
-	conditions.MarkTrue(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition)
+	v1beta1conditions.MarkTrue(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition)
 	s.scope.Debug("Reconcile bastion completed successfully")
 
 	return nil
@@ -114,20 +115,20 @@ func (s *Service) DeleteBastion() error {
 		return errors.Wrap(err, "unable to describe bastion instance")
 	}
 
-	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
+	v1beta1conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, clusterv1beta1.DeletingReason, clusterv1beta1.ConditionSeverityInfo, "")
 	if err := s.scope.PatchObject(); err != nil {
 		return err
 	}
 
 	if err := s.TerminateInstanceAndWait(instance.ID); err != nil {
-		conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, "DeletingFailed", clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		v1beta1conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, "DeletingFailed", clusterv1beta1.ConditionSeverityWarning, "%s", err.Error())
 		record.Warnf(s.scope.InfraCluster(), "FailedTerminateBastion", "Failed to terminate bastion instance %q: %v", instance.ID, err)
 		return errors.Wrap(err, "unable to delete bastion instance")
 	}
 
 	s.scope.SetBastionInstance(nil)
 
-	conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, clusterv1.DeletedReason, clusterv1.ConditionSeverityInfo, "")
+	v1beta1conditions.MarkFalse(s.scope.InfraCluster(), infrav1.BastionHostReadyCondition, clusterv1beta1.DeletedReason, clusterv1beta1.ConditionSeverityInfo, "")
 	record.Eventf(s.scope.InfraCluster(), "SuccessfulTerminateBastion", "Terminated bastion instance %q", instance.ID)
 	s.scope.Info("Deleted bastion host", "id", instance.ID)
 
@@ -136,19 +137,19 @@ func (s *Service) DeleteBastion() error {
 
 func (s *Service) describeBastionInstance() (*infrav1.Instance, error) {
 	input := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
+		Filters: []types.Filter{
 			filter.EC2.ProviderRole(infrav1.BastionRoleTagValue),
 			filter.EC2.Cluster(s.scope.Name()),
 			filter.EC2.InstanceStates(
-				ec2.InstanceStateNamePending,
-				ec2.InstanceStateNameRunning,
-				ec2.InstanceStateNameStopping,
-				ec2.InstanceStateNameStopped,
+				types.InstanceStateNamePending,
+				types.InstanceStateNameRunning,
+				types.InstanceStateNameStopping,
+				types.InstanceStateNameStopped,
 			),
 		},
 	}
 
-	out, err := s.EC2Client.DescribeInstancesWithContext(context.TODO(), input)
+	out, err := s.EC2Client.DescribeInstances(context.TODO(), input)
 	if err != nil {
 		record.Eventf(s.scope.InfraCluster(), "FailedDescribeBastionHost", "Failed to describe bastion host: %v", err)
 		return nil, errors.Wrap(err, "failed to describe bastion host")
@@ -158,7 +159,7 @@ func (s *Service) describeBastionInstance() (*infrav1.Instance, error) {
 	// the first non-terminated.
 	for _, res := range out.Reservations {
 		for _, instance := range res.Instances {
-			if aws.StringValue(instance.State.Name) != ec2.InstanceStateNameTerminated {
+			if instance.State.Name != types.InstanceStateNameTerminated {
 				return s.SDKToInstance(instance)
 			}
 		}

@@ -20,18 +20,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // ReconcileIAMAuthenticator is used to create the aws-iam-authenticator in a cluster.
@@ -54,9 +52,9 @@ func (s *Service) ReconcileIAMAuthenticator(ctx context.Context) error {
 		return fmt.Errorf("getting roles for remote workers: %w", err)
 	}
 	for roleName := range nodeRoles {
-		roleARN, err := s.getARNForRole(roleName)
+		roleARN, err := s.getARNForRole(ctx, roleName)
 		if err != nil {
-			return fmt.Errorf("failed to get ARN for role %s: %w", roleARN, err)
+			return fmt.Errorf("failed to get ARN for role %s: %w", roleName, err)
 		}
 		nodesRoleMapping := ekscontrolplanev1.RoleMapping{
 			RoleARN: roleARN,
@@ -92,15 +90,18 @@ func (s *Service) ReconcileIAMAuthenticator(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) getARNForRole(role string) (string, error) {
+func (s *Service) getARNForRole(ctx context.Context, role string) (string, error) {
 	input := &iam.GetRoleInput{
 		RoleName: aws.String(role),
 	}
-	out, err := s.IAMClient.GetRole(input)
+	out, err := s.IAMClient.GetRole(ctx, input)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to get role")
 	}
-	return aws.StringValue(out.Role.Arn), nil
+	if out.Role == nil || out.Role.Arn == nil {
+		return "", fmt.Errorf("role %s not found or ARN is missing", role)
+	}
+	return *out.Role.Arn, nil
 }
 
 func (s *Service) getRolesForWorkers(ctx context.Context) (map[string]struct{}, error) {
@@ -138,7 +139,7 @@ func (s *Service) getRolesForMachineDeployments(ctx context.Context, allRoles ma
 			Namespace: s.scope.Namespace(),
 		}, awsMachineTemplate)
 		if err != nil {
-			return fmt.Errorf("failed to get AWSMachine %s/%s: %w", ref.Namespace, ref.Name, err)
+			return fmt.Errorf("failed to get AWSMachine %s/%s: %w", s.scope.Namespace(), ref.Name, err)
 		}
 		instanceProfile := awsMachineTemplate.Spec.Template.Spec.IAMInstanceProfile
 		if _, ok := allRoles[instanceProfile]; !ok && instanceProfile != "" {
@@ -149,7 +150,7 @@ func (s *Service) getRolesForMachineDeployments(ctx context.Context, allRoles ma
 }
 
 func (s *Service) getRolesForMachinePools(ctx context.Context, allRoles map[string]struct{}) error {
-	machinePoolList := &expclusterv1.MachinePoolList{}
+	machinePoolList := &clusterv1.MachinePoolList{}
 	selectors := []client.ListOption{
 		client.InNamespace(s.scope.Namespace()),
 		client.MatchingLabels{
@@ -177,14 +178,14 @@ func (s *Service) getRolesForMachinePools(ctx context.Context, allRoles map[stri
 	return nil
 }
 
-func (s *Service) getRolesForAWSMachinePool(ctx context.Context, ref corev1.ObjectReference, allRoles map[string]struct{}) error {
+func (s *Service) getRolesForAWSMachinePool(ctx context.Context, ref clusterv1.ContractVersionedObjectReference, allRoles map[string]struct{}) error {
 	awsMachinePool := &expinfrav1.AWSMachinePool{}
 	err := s.client.Get(ctx, client.ObjectKey{
 		Name:      ref.Name,
 		Namespace: s.scope.Namespace(),
 	}, awsMachinePool)
 	if err != nil {
-		return fmt.Errorf("failed to get AWSMachine %s/%s: %w", ref.Namespace, ref.Name, err)
+		return fmt.Errorf("failed to get AWSMachine %s/%s: %w", s.scope.Namespace(), ref.Name, err)
 	}
 	instanceProfile := awsMachinePool.Spec.AWSLaunchTemplate.IamInstanceProfile
 	if _, ok := allRoles[instanceProfile]; !ok && instanceProfile != "" {
@@ -193,14 +194,14 @@ func (s *Service) getRolesForAWSMachinePool(ctx context.Context, ref corev1.Obje
 	return nil
 }
 
-func (s *Service) getRolesForAWSManagedMachinePool(ctx context.Context, ref corev1.ObjectReference, allRoles map[string]struct{}) error {
+func (s *Service) getRolesForAWSManagedMachinePool(ctx context.Context, ref clusterv1.ContractVersionedObjectReference, allRoles map[string]struct{}) error {
 	awsManagedMachinePool := &expinfrav1.AWSManagedMachinePool{}
 	err := s.client.Get(ctx, client.ObjectKey{
 		Name:      ref.Name,
 		Namespace: s.scope.Namespace(),
 	}, awsManagedMachinePool)
 	if err != nil {
-		return fmt.Errorf("failed to get AWSMachine %s/%s: %w", ref.Namespace, ref.Name, err)
+		return fmt.Errorf("failed to get AWSMachine %s/%s: %w", s.scope.Namespace(), ref.Name, err)
 	}
 	instanceProfile := awsManagedMachinePool.Spec.RoleName
 	if _, ok := allRoles[instanceProfile]; !ok && instanceProfile != "" {

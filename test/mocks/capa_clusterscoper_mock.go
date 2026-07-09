@@ -22,8 +22,10 @@ package mocks
 
 import (
 	reflect "reflect"
+	time "time"
 
-	client "github.com/aws/aws-sdk-go/aws/client"
+	aws "github.com/aws/aws-sdk-go-v2/aws"
+	logging "github.com/aws/smithy-go/logging"
 	logr "github.com/go-logr/logr"
 	gomock "github.com/golang/mock/gomock"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -31,8 +33,8 @@ import (
 	cloud "sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud"
 	throttle "sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/throttle"
 	logger "sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
-	v1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	client0 "sigs.k8s.io/controller-runtime/pkg/client"
+	v1beta20 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // MockClusterScoper is a mock of ClusterScoper interface.
@@ -101,10 +103,10 @@ func (mr *MockClusterScoperMockRecorder) Close() *gomock.Call {
 }
 
 // ClusterObj mocks base method.
-func (m *MockClusterScoper) ClusterObj() cloud.ClusterObject {
+func (m *MockClusterScoper) ClusterObj() *v1beta20.Cluster {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ClusterObj")
-	ret0, _ := ret[0].(cloud.ClusterObject)
+	ret0, _ := ret[0].(*v1beta20.Cluster)
 	return ret0
 }
 
@@ -160,6 +162,20 @@ func (mr *MockClusterScoperMockRecorder) Error(arg0, arg1 interface{}, arg2 ...i
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Error", reflect.TypeOf((*MockClusterScoper)(nil).Error), varargs...)
+}
+
+// GetAWSLogger mocks base method.
+func (m *MockClusterScoper) GetAWSLogger() logging.Logger {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAWSLogger")
+	ret0, _ := ret[0].(logging.Logger)
+	return ret0
+}
+
+// GetAWSLogger indicates an expected call of GetAWSLogger.
+func (mr *MockClusterScoperMockRecorder) GetAWSLogger() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAWSLogger", reflect.TypeOf((*MockClusterScoper)(nil).GetAWSLogger))
 }
 
 // GetLogger mocks base method.
@@ -250,10 +266,10 @@ func (mr *MockClusterScoperMockRecorder) KubernetesClusterName() *gomock.Call {
 }
 
 // ListOptionsLabelSelector mocks base method.
-func (m *MockClusterScoper) ListOptionsLabelSelector() client0.ListOption {
+func (m *MockClusterScoper) ListOptionsLabelSelector() client.ListOption {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListOptionsLabelSelector")
-	ret0, _ := ret[0].(client0.ListOption)
+	ret0, _ := ret[0].(client.ListOption)
 	return ret0
 }
 
@@ -261,6 +277,20 @@ func (m *MockClusterScoper) ListOptionsLabelSelector() client0.ListOption {
 func (mr *MockClusterScoperMockRecorder) ListOptionsLabelSelector() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOptionsLabelSelector", reflect.TypeOf((*MockClusterScoper)(nil).ListOptionsLabelSelector))
+}
+
+// MaxWaitDuration mocks base method.
+func (m *MockClusterScoper) MaxWaitDuration() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaxWaitDuration")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// MaxWaitDuration indicates an expected call of MaxWaitDuration.
+func (mr *MockClusterScoperMockRecorder) MaxWaitDuration() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxWaitDuration", reflect.TypeOf((*MockClusterScoper)(nil).MaxWaitDuration))
 }
 
 // Name mocks base method.
@@ -334,10 +364,10 @@ func (mr *MockClusterScoperMockRecorder) ServiceLimiter(arg0 interface{}) *gomoc
 }
 
 // Session mocks base method.
-func (m *MockClusterScoper) Session() client.ConfigProvider {
+func (m *MockClusterScoper) Session() aws.Config {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Session")
-	ret0, _ := ret[0].(client.ConfigProvider)
+	ret0, _ := ret[0].(aws.Config)
 	return ret0
 }
 
@@ -348,7 +378,7 @@ func (mr *MockClusterScoperMockRecorder) Session() *gomock.Call {
 }
 
 // SetFailureDomain mocks base method.
-func (m *MockClusterScoper) SetFailureDomain(arg0 string, arg1 v1beta1.FailureDomainSpec) {
+func (m *MockClusterScoper) SetFailureDomain(arg0 string, arg1 v1beta20.FailureDomain) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetFailureDomain", arg0, arg1)
 }

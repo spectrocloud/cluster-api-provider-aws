@@ -51,8 +51,8 @@ func (t Template) controllersPolicyRoleAttachments() []string {
 	return attachments
 }
 
-func (t Template) controllersTrustPolicy() *iamv1.PolicyDocument {
-	policyDocument := ec2AssumeRolePolicy()
+func (t Template) controllersTrustPolicy(eksEnabled bool) *iamv1.PolicyDocument {
+	policyDocument := ec2AssumeRolePolicy(eksEnabled)
 	policyDocument.Statement = append(policyDocument.Statement, t.Spec.ClusterAPIControllers.TrustStatements...)
 	return policyDocument
 }
@@ -148,9 +148,11 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"ec2:ModifyNetworkInterfaceAttribute",
 				"ec2:ModifySubnetAttribute",
 				"ec2:ReleaseAddress",
+				"ec2:RevokeSecurityGroupEgress",
 				"ec2:RevokeSecurityGroupIngress",
 				"ec2:RunInstances",
 				"ec2:TerminateInstances",
+				"ec2:GetSecurityGroupsForVpc",
 				"tag:GetResources",
 				"elasticloadbalancing:AddTags",
 				"elasticloadbalancing:CreateLoadBalancer",
@@ -174,9 +176,13 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"elasticloadbalancing:CreateListener",
 				"elasticloadbalancing:DescribeTargetHealth",
 				"elasticloadbalancing:RegisterTargets",
+				"elasticloadbalancing:DeregisterTargets",
 				"elasticloadbalancing:DeleteListener",
 				"autoscaling:DescribeAutoScalingGroups",
 				"autoscaling:DescribeInstanceRefreshes",
+				"autoscaling:DeleteLifecycleHook",
+				"autoscaling:DescribeLifecycleHooks",
+				"autoscaling:PutLifecycleHook",
 				"ec2:CreateLaunchTemplate",
 				"ec2:CreateLaunchTemplateVersion",
 				"ec2:DescribeLaunchTemplates",
@@ -185,6 +191,14 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"ec2:DeleteLaunchTemplateVersions",
 				"ec2:DescribeKeyPairs",
 				"ec2:ModifyInstanceMetadataOptions",
+				"eks:CreateAccessEntry",
+				"eks:DeleteAccessEntry",
+				"eks:DescribeAccessEntry",
+				"eks:UpdateAccessEntry",
+				"eks:ListAccessEntries",
+				"eks:AssociateAccessPolicy",
+				"eks:DisassociateAccessPolicy",
+				"eks:ListAssociatedAccessPolicies",
 			},
 		},
 		{
@@ -193,6 +207,7 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 				"arn:*:autoscaling:*:*:autoScalingGroup:*:autoScalingGroupName/*",
 			},
 			Action: iamv1.Actions{
+				"autoscaling:CancelInstanceRefresh",
 				"autoscaling:CreateAutoScalingGroup",
 				"autoscaling:UpdateAutoScalingGroup",
 				"autoscaling:CreateOrUpdateTags",
@@ -291,11 +306,13 @@ func (t Template) ControllersPolicy() *iamv1.PolicyDocument {
 			Action: iamv1.Actions{
 				"s3:CreateBucket",
 				"s3:DeleteBucket",
-				"s3:GetObject",
-				"s3:PutObject",
 				"s3:DeleteObject",
+				"s3:GetObject",
+				"s3:ListBucket",
 				"s3:PutBucketPolicy",
 				"s3:PutBucketTagging",
+				"s3:PutLifecycleConfiguration",
+				"s3:PutObject",
 			},
 		})
 	}

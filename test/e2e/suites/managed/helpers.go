@@ -22,20 +22,21 @@ package managed
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/aws/aws-sdk-go/service/eks"
-	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
+	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 )
 
@@ -49,7 +50,13 @@ const (
 	EKSManagedMachinePoolWithLaunchTemplateOnlyFlavor = "eks-managed-machinepool-with-launch-template-only"
 	EKSMachinePoolOnlyFlavor                          = "eks-machinepool-only"
 	EKSIPv6ClusterFlavor                              = "eks-ipv6-cluster"
+	EKSUpgradePolicyFlavor                            = "eks-upgrade-policy"
 	EKSControlPlaneOnlyLegacyFlavor                   = "eks-control-plane-only-legacy"
+	EKSClusterClassFlavor                             = "eks-clusterclass"
+	EKSAuthAPIAndConfigMapFlavor                      = "eks-auth-api-and-config-map"
+	EKSAuthBootstrapDisabledFlavor                    = "eks-auth-bootstrap-disabled"
+	EKSControlPlaneOnlyWithAccessEntriesFlavor        = "eks-control-plane-only-with-accessentries"
+	EKSNitroEnclaveManagedMachinePoolFlavor           = "eks-nitro-enclave-managedmachinepool"
 )
 
 const (
@@ -79,42 +86,60 @@ func getASGName(clusterName string) string {
 	return fmt.Sprintf("%s-mp-0", clusterName)
 }
 
-func verifyClusterActiveAndOwned(eksClusterName string, sess client.ConfigProvider) {
+func verifyClusterActiveAndOwned(ctx context.Context, eksClusterName string, sess *aws.Config) {
 	var (
-		cluster *eks.Cluster
+		cluster *ekstypes.Cluster
 		err     error
 	)
 	Eventually(func() error {
-		cluster, err = getEKSCluster(eksClusterName, sess)
+		cluster, err = getEKSCluster(ctx, eksClusterName, sess)
 		return err
 	}, clientRequestTimeout, clientRequestCheckInterval).Should(Succeed(), fmt.Sprintf("eventually failed trying to get EKS Cluster %q", eksClusterName))
 
 	tagName := infrav1.ClusterTagKey(eksClusterName)
 	tagValue, ok := cluster.Tags[tagName]
 	Expect(ok).To(BeTrue(), "expecting the cluster owned tag to exist")
-	Expect(*tagValue).To(BeEquivalentTo(string(infrav1.ResourceLifecycleOwned)))
-	Expect(*cluster.Status).To(BeEquivalentTo(eks.ClusterStatusActive))
+	Expect(tagValue).To(BeEquivalentTo(string(infrav1.ResourceLifecycleOwned)))
+	Expect(cluster.Status).To(BeEquivalentTo(ekstypes.ClusterStatusActive))
 }
 
-func getEKSCluster(eksClusterName string, sess client.ConfigProvider) (*eks.Cluster, error) {
-	eksClient := eks.New(sess)
+func getEKSCluster(ctx context.Context, eksClusterName string, sess *aws.Config) (*ekstypes.Cluster, error) {
+	eksClient := eks.NewFromConfig(*sess)
 	input := &eks.DescribeClusterInput{
 		Name: aws.String(eksClusterName),
 	}
-	result, err := eksClient.DescribeCluster(input)
+	result, err := eksClient.DescribeCluster(ctx, input)
+	if err != nil {
+		return nil, err
+	}
 
 	return result.Cluster, err
 }
 
-func getEKSClusterAddon(eksClusterName, addonName string, sess client.ConfigProvider) (*eks.Addon, error) {
-	eksClient := eks.New(sess)
+func verifyClusterAuthenticationMode(ctx context.Context, eksClusterName string, expectedAuthMode ekstypes.AuthenticationMode, sess *aws.Config) {
+	var (
+		cluster *ekstypes.Cluster
+		err     error
+	)
+	Eventually(func() error {
+		cluster, err = getEKSCluster(ctx, eksClusterName, sess)
+		return err
+	}, clientRequestTimeout, clientRequestCheckInterval).Should(Succeed(), fmt.Sprintf("eventually failed trying to get EKS Cluster %q", eksClusterName))
+
+	Expect(cluster.AccessConfig).ToNot(BeNil(), "expecting AccessConfig to be set on the cluster")
+	Expect(cluster.AccessConfig.AuthenticationMode).To(BeEquivalentTo(expectedAuthMode),
+		fmt.Sprintf("expecting authentication mode to be %s, got %s", expectedAuthMode, cluster.AccessConfig.AuthenticationMode))
+}
+
+func getEKSClusterAddon(ctx context.Context, eksClusterName, addonName string, sess *aws.Config) (*ekstypes.Addon, error) {
+	eksClient := eks.NewFromConfig(*sess)
 
 	describeInput := &eks.DescribeAddonInput{
 		AddonName:   &addonName,
 		ClusterName: &eksClusterName,
 	}
 
-	describeOutput, err := eksClient.DescribeAddon(describeInput)
+	describeOutput, err := eksClient.DescribeAddon(ctx, describeInput)
 	if err != nil {
 		return nil, fmt.Errorf("describing eks addon %s: %w", addonName, err)
 	}
@@ -136,8 +161,8 @@ func verifyConfigMapExists(ctx context.Context, name, namespace string, k8sclien
 	}, clientRequestTimeout, clientRequestCheckInterval).Should(Succeed(), fmt.Sprintf("eventually failed trying to verify ConfigMap %q exists", name))
 }
 
-func VerifyRoleExistsAndOwned(roleName string, eksClusterName string, checkOwned bool, sess client.ConfigProvider) {
-	iamClient := iam.New(sess)
+func VerifyRoleExistsAndOwned(ctx context.Context, roleName string, eksClusterName string, checkOwned bool, sess *aws.Config) {
+	iamClient := iam.NewFromConfig(*sess)
 	input := &iam.GetRoleInput{
 		RoleName: aws.String(roleName),
 	}
@@ -148,7 +173,7 @@ func VerifyRoleExistsAndOwned(roleName string, eksClusterName string, checkOwned
 	)
 
 	Eventually(func() error {
-		output, err = iamClient.GetRole(input)
+		output, err = iamClient.GetRole(ctx, input)
 		return err
 	}, clientRequestTimeout, clientRequestCheckInterval).Should(Succeed(), fmt.Sprintf("eventually failed trying to get IAM Role %q", roleName))
 
@@ -165,8 +190,8 @@ func VerifyRoleExistsAndOwned(roleName string, eksClusterName string, checkOwned
 	}
 }
 
-func verifyManagedNodeGroup(eksClusterName, nodeGroupName string, checkOwned bool, sess client.ConfigProvider) {
-	eksClient := eks.New(sess)
+func verifyManagedNodeGroup(ctx context.Context, eksClusterName, nodeGroupName string, checkOwned bool, sess *aws.Config) {
+	eksClient := eks.NewFromConfig(*sess)
 	input := &eks.DescribeNodegroupInput{
 		ClusterName:   aws.String(eksClusterName),
 		NodegroupName: aws.String(nodeGroupName),
@@ -177,14 +202,14 @@ func verifyManagedNodeGroup(eksClusterName, nodeGroupName string, checkOwned boo
 	)
 
 	Eventually(func() error {
-		result, err = eksClient.DescribeNodegroup(input)
+		result, err = eksClient.DescribeNodegroup(ctx, input)
 		if err != nil {
 			return fmt.Errorf("error describing nodegroup: %w", err)
 		}
 
-		nodeGroupStatus := ptr.Deref(result.Nodegroup.Status, "")
-		if nodeGroupStatus != eks.NodegroupStatusActive {
-			return fmt.Errorf("expected nodegroup.Status to be %q, was %q instead", eks.NodegroupStatusActive, nodeGroupStatus)
+		nodeGroupStatus := result.Nodegroup.Status
+		if nodeGroupStatus != ekstypes.NodegroupStatusActive {
+			return fmt.Errorf("expected nodegroup.Status to be %q, was %q instead", ekstypes.NodegroupStatusActive, nodeGroupStatus)
 		}
 
 		return nil
@@ -194,30 +219,30 @@ func verifyManagedNodeGroup(eksClusterName, nodeGroupName string, checkOwned boo
 		tagName := infrav1.ClusterAWSCloudProviderTagKey(eksClusterName)
 		tagValue, ok := result.Nodegroup.Tags[tagName]
 		Expect(ok).To(BeTrue(), "expecting the cluster owned tag to exist")
-		Expect(*tagValue).To(BeEquivalentTo(string(infrav1.ResourceLifecycleOwned)))
+		Expect(tagValue).To(BeEquivalentTo(string(infrav1.ResourceLifecycleOwned)))
 	}
 }
 
-func verifyASG(eksClusterName, asgName string, checkOwned bool, sess client.ConfigProvider) {
-	asgClient := autoscaling.New(sess)
+func verifyASG(eksClusterName, asgName string, checkOwned bool, cfg *aws.Config) {
+	asgClient := autoscaling.NewFromConfig(*cfg)
+
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: []*string{
-			aws.String(asgName),
+		AutoScalingGroupNames: []string{
+			asgName,
 		},
 	}
-
 	var (
 		result *autoscaling.DescribeAutoScalingGroupsOutput
 		err    error
 	)
 
 	Eventually(func() error {
-		result, err = asgClient.DescribeAutoScalingGroups(input)
+		result, err = asgClient.DescribeAutoScalingGroups(context.TODO(), input)
 		return err
 	}, clientRequestTimeout, clientRequestCheckInterval).Should(Succeed())
 
 	for _, instance := range result.AutoScalingGroups[0].Instances {
-		Expect(*instance.LifecycleState).To(Equal("InService"), "expecting the instance in service")
+		Expect(string(instance.LifecycleState)).To(Equal("InService"), "expecting the instance in service")
 	}
 
 	if checkOwned {
@@ -230,5 +255,80 @@ func verifyASG(eksClusterName, asgName string, checkOwned bool, sess client.Conf
 			}
 		}
 		Expect(found).To(BeTrue(), "expecting the cluster owned tag to exist")
+	}
+}
+
+func verifyAccessEntries(ctx context.Context, eksClusterName string, expectedEntries []ekscontrolplanev1.AccessEntry, cfg *aws.Config) {
+	eksClient := eks.NewFromConfig(*cfg)
+
+	Eventually(func() error {
+		listOutput, err := eksClient.ListAccessEntries(ctx, &eks.ListAccessEntriesInput{
+			ClusterName: &eksClusterName,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list access entries: %w", err)
+		}
+
+		existingEntries := make(map[string]bool, len(listOutput.AccessEntries))
+		for _, arn := range listOutput.AccessEntries {
+			existingEntries[arn] = true
+		}
+
+		for _, expectedEntry := range expectedEntries {
+			if _, exists := existingEntries[expectedEntry.PrincipalARN]; !exists {
+				return fmt.Errorf("expected access entry not found: %s", expectedEntry.PrincipalARN)
+			}
+		}
+		return nil
+	}, clientRequestTimeout, clientRequestCheckInterval).Should(Succeed(), "eventually failed waiting for access entries to exist")
+
+	for _, expectedEntry := range expectedEntries {
+		principalARN := expectedEntry.PrincipalARN
+
+		describeOutput, err := eksClient.DescribeAccessEntry(ctx, &eks.DescribeAccessEntryInput{
+			ClusterName:  &eksClusterName,
+			PrincipalArn: &principalARN,
+		})
+		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to describe access entry: %s", principalARN))
+
+		Expect(describeOutput.AccessEntry.Type).To(HaveValue(BeEquivalentTo(expectedEntry.Type)), "access entry type does not match")
+		if expectedEntry.Username != "" {
+			Expect(describeOutput.AccessEntry.Username).To(HaveValue(BeEquivalentTo(expectedEntry.Username)), "access entry username does not match")
+		}
+
+		if len(expectedEntry.KubernetesGroups) > 0 {
+			slices.Sort(expectedEntry.KubernetesGroups)
+			slices.Sort(describeOutput.AccessEntry.KubernetesGroups)
+			Expect(describeOutput.AccessEntry.KubernetesGroups).To(Equal(expectedEntry.KubernetesGroups), "access entry kubernetes groups do not match")
+		}
+
+		if len(expectedEntry.AccessPolicies) > 0 {
+			listOutput, err := eksClient.ListAssociatedAccessPolicies(ctx, &eks.ListAssociatedAccessPoliciesInput{
+				ClusterName:  &eksClusterName,
+				PrincipalArn: &principalARN,
+			})
+			Expect(err).ToNot(HaveOccurred(), "failed to list access policies")
+
+			expectedPolicies := make(map[string]ekscontrolplanev1.AccessPolicyReference, len(expectedEntry.AccessPolicies))
+			for _, policy := range expectedEntry.AccessPolicies {
+				expectedPolicies[policy.PolicyARN] = policy
+			}
+
+			for _, policy := range listOutput.AssociatedAccessPolicies {
+				expectedPolicy, exists := expectedPolicies[*policy.PolicyArn]
+				Expect(exists).To(BeTrue(), fmt.Sprintf("unexpected access policy: %s", *policy.PolicyArn))
+
+				Expect(policy.AccessScope.Type).To(BeEquivalentTo(expectedPolicy.AccessScope.Type), "access policy scope type does not match")
+
+				if expectedPolicy.AccessScope.Type == "namespace" {
+					slices.Sort(expectedPolicy.AccessScope.Namespaces)
+					slices.Sort(policy.AccessScope.Namespaces)
+					Expect(policy.AccessScope.Namespaces).To(Equal(expectedPolicy.AccessScope.Namespaces), "access policy scope namespaces do not match")
+				}
+
+				delete(expectedPolicies, *policy.PolicyArn)
+			}
+			Expect(expectedPolicies).To(BeEmpty(), "not all expected access policies were found")
+		}
 	}
 }

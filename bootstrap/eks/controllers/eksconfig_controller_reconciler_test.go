@@ -24,16 +24,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/internal/userdata"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	kubeconfigutil "sigs.k8s.io/cluster-api/util/kubeconfig"
 )
 
 func TestEKSConfigReconciler(t *testing.T) {
@@ -85,7 +86,7 @@ func TestEKSConfigReconciler(t *testing.T) {
 		config.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
 			{
 				Kind:       "MachinePool",
-				APIVersion: v1beta1.GroupVersion.String(),
+				APIVersion: clusterv1.GroupVersion.String(),
 				Name:       mp.Name,
 				UID:        types.UID(fmt.Sprintf("%s uid", mp.Name)),
 			},
@@ -284,17 +285,19 @@ func newCluster(name string) *clusterv1.Cluster {
 			Name:      name,
 		},
 		Spec: clusterv1.ClusterSpec{
-			ControlPlaneRef: &corev1.ObjectReference{
-				Name:      name,
-				Kind:      "AWSManagedControlPlane",
-				Namespace: "default",
+			ControlPlaneRef: clusterv1.ContractVersionedObjectReference{
+				Name:     name,
+				Kind:     "AWSManagedControlPlane",
+				APIGroup: ekscontrolplanev1.GroupVersion.Group,
 			},
 		},
 		Status: clusterv1.ClusterStatus{
-			InfrastructureReady: true,
+			Initialization: clusterv1.ClusterInitializationStatus{
+				InfrastructureProvisioned: ptr.To(true),
+				ControlPlaneInitialized:   ptr.To(true),
+			},
 		},
 	}
-	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 	return cluster
 }
 
@@ -317,9 +320,9 @@ func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
 		},
 		Spec: clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
-				ConfigRef: &corev1.ObjectReference{
-					Kind:       "EKSConfig",
-					APIVersion: eksbootstrapv1.GroupVersion.String(),
+				ConfigRef: clusterv1.ContractVersionedObjectReference{
+					Kind:     "EKSConfig",
+					APIGroup: eksbootstrapv1.GroupVersion.Group,
 				},
 			},
 		},
@@ -334,24 +337,24 @@ func newMachine(cluster *clusterv1.Cluster, name string) *clusterv1.Machine {
 }
 
 // newMachinePool returns a CAPI machine object; if cluster is not nil, the MachinePool  is linked to the cluster as well.
-func newMachinePool(cluster *clusterv1.Cluster, name string) *v1beta1.MachinePool {
+func newMachinePool(cluster *clusterv1.Cluster, name string) *clusterv1.MachinePool {
 	generatedName := fmt.Sprintf("%s-%s", name, util.RandomString(5))
-	mp := &v1beta1.MachinePool{
+	mp := &clusterv1.MachinePool{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachinePool",
-			APIVersion: v1beta1.GroupVersion.String(),
+			APIVersion: clusterv1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      generatedName,
 		},
-		Spec: v1beta1.MachinePoolSpec{
+		Spec: clusterv1.MachinePoolSpec{
 			Template: clusterv1.MachineTemplateSpec{
 				Spec: clusterv1.MachineSpec{
 					Bootstrap: clusterv1.Bootstrap{
-						ConfigRef: &corev1.ObjectReference{
-							Kind:       "EKSConfig",
-							APIVersion: eksbootstrapv1.GroupVersion.String(),
+						ConfigRef: clusterv1.ContractVersionedObjectReference{
+							Kind:     "EKSConfig",
+							APIGroup: eksbootstrapv1.GroupVersion.Group,
 						},
 					},
 				},
@@ -397,7 +400,7 @@ func newEKSConfig(machine *clusterv1.Machine) *eksbootstrapv1.EKSConfig {
 		}
 		config.Status.DataSecretName = &machine.Name
 		machine.Spec.Bootstrap.ConfigRef.Name = config.Name
-		machine.Spec.Bootstrap.ConfigRef.Namespace = config.Namespace
+		machine.Namespace = config.Namespace
 	}
 	return config
 }
@@ -413,7 +416,7 @@ func newUserData(clusterName string, kubeletExtraArgs map[string]string) ([]byte
 // newAMCP returns an EKS AWSManagedControlPlane object.
 func newAMCP(name string) *ekscontrolplanev1.AWSManagedControlPlane {
 	generatedName := fmt.Sprintf("%s-%s", name, util.RandomString(5))
-	return &ekscontrolplanev1.AWSManagedControlPlane{
+	amcp := &ekscontrolplanev1.AWSManagedControlPlane{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AWSManagedControlPlane",
 			APIVersion: ekscontrolplanev1.GroupVersion.String(),
@@ -426,4 +429,40 @@ func newAMCP(name string) *ekscontrolplanev1.AWSManagedControlPlane {
 			EKSClusterName: generatedName,
 		},
 	}
+	v1beta1conditions.MarkTrue(amcp, ekscontrolplanev1.EKSControlPlaneReadyCondition)
+	return amcp
+}
+
+const dummyKubeconfigTemplate = `
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCkV5QXV0aG9yIElzc3VlciBJc3N1ZXI6IGV4YW1wbGUuY29tIC0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+    server: %s
+  name: %s
+contexts:
+- context:
+    cluster: %s
+    user: my-user
+  name: my-context
+current-context: my-context
+kind: Config
+users:
+- name: my-user
+  user:
+    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+`
+
+func newKubeconfigSecret(apiEndpoint string, cluster *clusterv1.Cluster) *corev1.Secret {
+	data := fmt.Sprintf(dummyKubeconfigTemplate, apiEndpoint, cluster.Name, cluster.Name)
+	return kubeconfigutil.GenerateSecretWithOwner(
+		client.ObjectKeyFromObject(cluster),
+		[]byte(data),
+		metav1.OwnerReference{
+			Kind:       "Cluster",
+			APIVersion: clusterv1.GroupVersion.String(),
+			Name:       cluster.Name,
+			UID:        cluster.UID,
+		},
+	)
 }

@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // Constants block.
@@ -100,6 +100,14 @@ type AWSMachinePoolSpec struct {
 	// SuspendProcesses defines a list of processes to suspend for the given ASG. This is constantly reconciled.
 	// If a process is removed from this list it will automatically be resumed.
 	SuspendProcesses *SuspendProcessesTypes `json:"suspendProcesses,omitempty"`
+
+	// Ignition defined options related to the bootstrapping systems where Ignition is used.
+	// +optional
+	Ignition *infrav1.Ignition `json:"ignition,omitempty"`
+
+	// AWSLifecycleHooks specifies lifecycle hooks for the autoscaling group.
+	// +optional
+	AWSLifecycleHooks []AWSLifecycleHook `json:"lifecycleHooks,omitempty"`
 }
 
 // SuspendProcessesTypes contains user friendly auto-completable values for suspended process names.
@@ -196,7 +204,7 @@ type AWSMachinePoolStatus struct {
 
 	// Conditions defines current service state of the AWSMachinePool.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions clusterv1beta1.Conditions `json:"conditions,omitempty"`
 
 	// Instances contains the status for each instance in the pool
 	// +optional
@@ -208,6 +216,10 @@ type AWSMachinePoolStatus struct {
 	// The version of the launch template
 	// +optional
 	LaunchTemplateVersion *string `json:"launchTemplateVersion,omitempty"`
+
+	// InfrastructureMachineKind is the kind of the infrastructure resources behind MachinePool Machines.
+	// +optional
+	InfrastructureMachineKind string `json:"infrastructureMachineKind,omitempty"`
 
 	// FailureReason will be set in the event that there is a terminal problem
 	// reconciling the Machine and will contain a succinct value suitable
@@ -294,12 +306,12 @@ func init() {
 }
 
 // GetConditions returns the observations of the operational state of the AWSMachinePool resource.
-func (r *AWSMachinePool) GetConditions() clusterv1.Conditions {
+func (r *AWSMachinePool) GetConditions() clusterv1beta1.Conditions {
 	return r.Status.Conditions
 }
 
-// SetConditions sets the underlying service state of the AWSMachinePool to the predescribed clusterv1.Conditions.
-func (r *AWSMachinePool) SetConditions(conditions clusterv1.Conditions) {
+// SetConditions sets the underlying service state of the AWSMachinePool to the predescribed clusterv1beta1.Conditions.
+func (r *AWSMachinePool) SetConditions(conditions clusterv1beta1.Conditions) {
 	r.Status.Conditions = conditions
 }
 

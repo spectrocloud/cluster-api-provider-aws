@@ -16,30 +16,32 @@ images:
   - name: gcr.io/k8s-staging-cluster-api/capa-manager:e2e
     loadBehavior: mustLoad
 
-## PLEASE KEEP THESE UP TO DATE WITH THE COMPONENTS
-  - name: quay.io/jetstack/cert-manager-cainjector:v1.16.1
+  ## PLEASE KEEP THESE UP TO DATE WITH THE COMPONENTS
+
+  # Cluster API v1beta1 Preloads
+  - name: quay.io/jetstack/cert-manager-cainjector:v1.17.2
     loadBehavior: tryLoad
-  - name: quay.io/jetstack/cert-manager-webhook:v1.16.1
+  - name: quay.io/jetstack/cert-manager-webhook:v1.17.2
     loadBehavior: tryLoad
-  - name: quay.io/jetstack/cert-manager-controller:v1.16.1
+  - name: quay.io/jetstack/cert-manager-controller:v1.17.2
     loadBehavior: tryLoad
-  - name: registry.k8s.io/cluster-api/cluster-api-controller:v1.9.4
+  - name: registry.k8s.io/cluster-api/cluster-api-controller:v1.12.8
     loadBehavior: tryLoad
-  - name: registry.k8s.io/cluster-api/kubeadm-bootstrap-controller:v1.9.4
+  - name: registry.k8s.io/cluster-api/kubeadm-bootstrap-controller:v1.12.8
     loadBehavior: tryLoad
-  - name: registry.k8s.io/cluster-api/kubeadm-control-plane-controller:v1.9.4
+  - name: registry.k8s.io/cluster-api/kubeadm-control-plane-controller:v1.12.8
     loadBehavior: tryLoad
 
 providers:
   - name: cluster-api
     type: CoreProvider
     versions:
-      - name: v1.9.4
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/core-components.yaml"
+      - name: v1.12.8
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.8/core-components.yaml"
         type: "url"
-        contract: v1beta1
+        contract: v1beta2
         files:
-          - sourcePath: "./shared/v1beta1/metadata.yaml"
+          - sourcePath: "./shared/capi/v1.11/metadata.yaml"
         replacements:
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
@@ -48,14 +50,14 @@ providers:
   - name: kubeadm
     type: BootstrapProvider
     files:
-      - sourcePath: "./shared/v1beta1/metadata.yaml"
+      - sourcePath: "./shared/capi/v1.2/metadata.yaml"
     versions:
-      - name: v1.9.4
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/bootstrap-components.yaml"
+      - name: v1.12.8
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.8/bootstrap-components.yaml"
         type: "url"
-        contract: v1beta1
+        contract: v1beta2
         files:
-          - sourcePath: "./shared/v1beta1/metadata.yaml"
+          - sourcePath: "./shared/capi/v1.11/metadata.yaml"
         replacements:
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
@@ -64,14 +66,14 @@ providers:
   - name: kubeadm
     type: ControlPlaneProvider
     files:
-      - sourcePath: "./shared/v1beta1/metadata.yaml"
+      - sourcePath: "./shared/capi/v1.11/metadata.yaml"
     versions:
-      - name: v1.9.4
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/control-plane-components.yaml"
+      - name: v1.12.8
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.8/control-plane-components.yaml"
         type: "url"
-        contract: v1beta1
+        contract: v1beta2
         files:
-          - sourcePath: "./shared/v1beta1/metadata.yaml"
+          - sourcePath: "./shared/capi/v1.11/metadata.yaml"
         replacements:
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
@@ -80,7 +82,7 @@ providers:
   - name: aws
     type: InfrastructureProvider
     versions:
-      - name: v2.0.99
+      - name: v9.9.99
         # Use manifest from source files
         value: ../../../config/default
         contract: v1beta1
@@ -100,6 +102,8 @@ providers:
         targetName: "cluster-template-eks-control-plane-only.yaml"
       - sourcePath: "./eks/cluster-template-eks-control-plane-only-withaddon.yaml"
         targetName: "cluster-template-eks-control-plane-only-withaddon.yaml"
+      - sourcePath: "./eks/cluster-template-eks-control-plane-only-with-accessentries.yaml"
+        targetName: "cluster-template-eks-control-plane-only-with-accessentries.yaml"
       - sourcePath: "./eks/cluster-template-eks-machine-deployment-only.yaml"
         targetName: "cluster-template-eks-machine-deployment-only.yaml"
       - sourcePath: "./eks/cluster-template-eks-managed-machinepool-only.yaml"
@@ -112,28 +116,41 @@ providers:
         targetName: "cluster-template-eks-managedmachinepool.yaml"
       - sourcePath: "./eks/cluster-template-eks-ipv6-cluster.yaml"
         targetName: "cluster-template-eks-ipv6-cluster.yaml"
+      - sourcePath: "./eks/cluster-template-eks-upgrade-policy.yaml"
+        targetName: "cluster-template-eks-upgrade-policy.yaml"
       - sourcePath: "./eks/cluster-template-eks-control-plane-only-legacy.yaml"
         targetName: "cluster-template-eks-control-plane-only-legacy.yaml"
+      - sourcePath: "./eks/cluster-template-eks-control-plane-bare-eks.yaml"
+        targetName: "cluster-template-eks-control-plane-bare-eks.yaml"
+      - sourcePath: "./eks/cluster-template-eks-auth-api-and-config-map.yaml"
+        targetName: "cluster-template-eks-auth-api-and-config-map.yaml"
+      - sourcePath: "./eks/cluster-template-eks-auth-bootstrap-disabled.yaml"
+        targetName: "cluster-template-eks-auth-bootstrap-disabled.yaml"
+      - sourcePath: "./infrastructure-aws/withclusterclass/kustomize_sources/eks-clusterclass/clusterclass-eks-e2e.yaml"
+      - sourcePath: "./infrastructure-aws/withclusterclass/generated/cluster-template-eks-clusterclass.yaml"
+      - sourcePath: "./eks/cluster-template-eks-nitro-enclave-managedmachinepool.yaml"
+        targetName: "cluster-template-eks-nitro-enclave-managedmachinepool.yaml"
 
 variables:
-  KUBERNETES_VERSION: "v1.31.0"
-  KUBERNETES_VERSION_MANAGEMENT: "v1.31.0" # Kind bootstrap
-  UPGRADE_TO_VERSION: "v1.31.0"
-  UPGRADE_FROM_VERSION: "v1.30.8"
+  KUBERNETES_VERSION: "v1.34.8"
+  KUBERNETES_VERSION_MANAGEMENT: "v1.34.3" # Kind bootstrap
+  UPGRADE_TO_VERSION: "v1.34.8"
+  UPGRADE_FROM_VERSION: "v1.33.4"
   EXP_MACHINE_POOL: "true"
+  EXP_MACHINE_POOL_MACHINES: "true"
   EXP_CLUSTER_RESOURCE_SET: "true"
+  CLUSTER_TOPOLOGY: "true"
   EVENT_BRIDGE_INSTANCE_STATE: "true"
   AWS_NODE_MACHINE_TYPE: t3.large
   AWS_MACHINE_TYPE_VCPU_USAGE: 2
   AWS_SSH_KEY_NAME: "cluster-api-provider-aws-sigs-k8s-io"
   EXP_EKS_IAM: "false"
   EXP_EKS_ADD_ROLES: "false"
-  VPC_ADDON_VERSION: "v1.18.3-eksbuild.2"
-  KUBE_PROXY_ADDON_VERSION: "v1.31.0-eksbuild.5"
-  CONFORMANCE_CI_ARTIFACTS_KUBERNETES_VERSION: "v1.31.5"
+  VPC_ADDON_VERSION: "v1.21.1-eksbuild.7"
+  KUBE_PROXY_ADDON_VERSION: "v1.34.6-eksbuild.2"
+  CONFORMANCE_CI_ARTIFACTS_KUBERNETES_VERSION: "v1.34.8"
   IP_FAMILY: "IPv4"
   CAPA_LOGLEVEL: "4"
-  EXP_EXTERNAL_RESOURCE_GC: "true"
   GC_WORKLOAD: "../../data/gcworkload.yaml"
 
 intervals:

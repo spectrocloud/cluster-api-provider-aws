@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: awsmachines.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -80,6 +80,7 @@ spec:
                     arn:
                       description: |-
                         ARN of resource.
+
                         Deprecated: This field has no function and is going to be removed in the next release.
                       type: string
                     filters:
@@ -344,6 +345,7 @@ spec:
                   arn:
                     description: |-
                       ARN of resource.
+
                       Deprecated: This field has no function and is going to be removed in the next release.
                     type: string
                   filters:
@@ -399,11 +401,19 @@ spec:
                     address.
                   properties:
                     address:
-                      description: The machine address.
+                      description: address is the machine address.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     type:
-                      description: Machine address type, one of Hostname, ExternalIP,
-                        InternalIP, ExternalDNS or InternalDNS.
+                      description: type is the machine address type, one of Hostname,
+                        ExternalIP, InternalIP, ExternalDNS or InternalDNS.
+                      enum:
+                      - Hostname
+                      - ExternalIP
+                      - InternalIP
+                      - ExternalDNS
+                      - InternalDNS
                       type: string
                   required:
                   - address
@@ -418,27 +428,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -448,6 +463,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -615,14 +632,47 @@ spec:
                     enum:
                     - AmazonLinux
                     - AmazonLinuxGPU
+                    - AmazonLinux2023
+                    - AmazonLinux2023GPU
                     type: string
                   id:
                     description: ID of resource
                     type: string
                 type: object
+              assignPrimaryIPv6:
+                description: |-
+                  AssignPrimaryIPv6 specifies whether to enable assigning a primary IPv6 address to the primary network Interface.
+                  When set to enabled, the instance will be assigned a primary IPv6 address from the subnet's IPv6 CIDR block.
+                  This is required when registering instances by ID to IPv6 target groups of dual-stack load balancers.
+
+                  When not specified, the default value varies based on the subnet that the instance is launched in:
+                  - disabled if subnet is ipv4 only
+                  - enabled if subnet is ipv6 only or dual-stack
+                enum:
+                - enabled
+                - disabled
+                type: string
               capacityReservationId:
                 description: CapacityReservationID specifies the target Capacity Reservation
                   into which the instance should be launched.
+                type: string
+              capacityReservationPreference:
+                allOf:
+                - enum:
+                  - ""
+                  - None
+                  - CapacityReservationsOnly
+                  - Open
+                - enum:
+                  - ""
+                  - None
+                  - CapacityReservationsOnly
+                  - Open
+                description: |-
+                  CapacityReservationPreference specifies the preference for use of Capacity Reservations by the instance. Valid values include:
+                  "Open": The instance may make use of open Capacity Reservations that match its AZ and InstanceType
+                  "None": The instance may not make use of any Capacity Reservations. This is to conserve open reservations for desired workloads
+                  "CapacityReservationsOnly": The instance will only run if matched or targeted to a Capacity Reservation. Note that this is incompatible with a MarketType of `Spot`
                 type: string
               cloudInit:
                 description: |-
@@ -657,6 +707,53 @@ spec:
                     - ssm-parameter-store
                     type: string
                 type: object
+              cpuOptions:
+                description: |-
+                  CPUOptions defines CPU-related settings for the instance, including the confidential computing policy.
+                  When omitted, this means no opinion and the AWS platform is left to choose a reasonable default.
+                minProperties: 1
+                properties:
+                  confidentialCompute:
+                    description: |-
+                      ConfidentialCompute specifies whether confidential computing should be enabled for the instance,
+                      and, if so, which confidential computing technology to use.
+                      Valid values are: Disabled, AMDEncryptedVirtualizationNestedPaging
+                      When set to Disabled, confidential computing will be disabled for the instance.
+                      When set to AMDEncryptedVirtualizationNestedPaging, AMD SEV-SNP will be used as the confidential computing technology for the instance.
+                      In this case, ensure the following conditions are met:
+                      1) The selected instance type supports AMD SEV-SNP.
+                      2) The selected AWS region supports AMD SEV-SNP.
+                      3) The selected AMI supports AMD SEV-SNP.
+                      More details can be checked at https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/sev-snp.html
+                      When omitted, this means no opinion and the AWS platform is left to choose a reasonable default,
+                      which is subject to change without notice. The current default is Disabled.
+                    enum:
+                    - Disabled
+                    - AMDEncryptedVirtualizationNestedPaging
+                    type: string
+                  nestedVirtualization:
+                    description: |-
+                      NestedVirtualization specifies whether to enable nested virtualization on the instance.
+                      Nested virtualization is supported on C8i, M8i, and R8i instance types.
+                      Valid values are: enabled, disabled
+                    enum:
+                    - enabled
+                    - disabled
+                    type: string
+                type: object
+              dynamicHostAllocation:
+                description: |-
+                  DynamicHostAllocation enables automatic allocation of a single dedicated host.
+                  Cost effectiveness of allocating a single instance on a dedicated host may vary
+                  depending on the instance type and the region.
+                  This field is mutually exclusive with HostID and always allocates exactly one host.
+                properties:
+                  tags:
+                    additionalProperties:
+                      type: string
+                    description: Tags to apply to the allocated dedicated host.
+                    type: object
+                type: object
               elasticIpPool:
                 description: ElasticIPPool is the configuration to allocate Public
                   IPv4 address (Elastic IP/EIP) from user-defined pool.
@@ -686,6 +783,28 @@ spec:
                     - message: allowed values are 'none' and 'amazon-pool'
                       rule: self in ['none','amazon-pool']
                 type: object
+              hostAffinity:
+                default: default
+                description: |-
+                  HostAffinity specifies the dedicated host affinity setting for the instance.
+                  When HostAffinity is set to "host", an instance started onto a specific host always restarts on the same host if stopped:
+                  - If HostID is set, the instance launches on the specific host and must return to that same host after any stop/start (Targeted & Pinned).
+                  - If HostID is not set, the instance gets launched on any available and must returns to the same host after any stop/start (Auto-placed & Pinned).
+                  When HostAffinity is set to "default" (the default value), the instance (when restarted) can return on any available host:
+                  - If HostID is set, the instance launches on the specified host now, but (when restarted) can return to any available hosts (Targeted & Flexible).
+                  - If HostID is not set, the instance launches on any available host now, and (when restarted) can return to any available hosts (Auto-placed & Flexible).
+                  If HostAffinity is not specified, it defaults to "default".
+                enum:
+                - default
+                - host
+                type: string
+              hostID:
+                description: |-
+                  HostID specifies the Dedicated Host on which the instance must be started.
+                  This field is mutually exclusive with DynamicHostAllocation.
+                maxLength: 19
+                pattern: ^h-[0-9a-f]{17}$
+                type: string
               iamInstanceProfile:
                 description: IAMInstanceProfile is a name of an IAM instance profile
                   to assign to the instance
@@ -773,9 +892,10 @@ spec:
                         type: array
                     type: object
                   version:
-                    default: "2.3"
-                    description: Version defines which version of Ignition will be
-                      used to generate bootstrap data.
+                    description: |-
+                      Version defines which version of Ignition will be used to generate bootstrap data.
+                      Defaults to `2.3` if storageType is set to `ClusterObjectStore`.
+                      It will be ignored if storageType is set to `UnencryptedUserData`, as the userdata defines its own version.
                     enum:
                     - "2.3"
                     - "3.0"
@@ -823,6 +943,17 @@ spec:
                       If you specify a value of disabled, you cannot access your instance metadata.
 
                       Default: enabled
+                    enum:
+                    - enabled
+                    - disabled
+                    type: string
+                  httpProtocolIpv6:
+                    default: disabled
+                    description: |-
+                      Enables or disables the IPv6 endpoint for the instance metadata service.
+                      This applies only if you enabled the HTTP metadata endpoint.
+
+                      Default: disabled
                     enum:
                     - enabled
                     - disabled
@@ -1088,8 +1219,12 @@ spec:
                     type: string
                 type: object
               tenancy:
-                description: Tenancy indicates if instance should run on shared or
-                  single-tenant hardware.
+                description: |-
+                  Tenancy indicates if instance should run on shared or single-tenant hardware.
+                  When Tenancy=host, AWS will attempt to find a suitable host from:
+                  - Preexisting allocated hosts that have auto-placement enabled
+                  - A specific host ID, if configured
+                  - Allocating a new dedicated host if DynamicHostAllocation is configured
                 enum:
                 - default
                 - dedicated
@@ -1104,6 +1239,13 @@ spec:
             required:
             - instanceType
             type: object
+            x-kubernetes-validations:
+            - message: capacityReservationId may not be set when marketType is Spot
+              rule: '!has(self.capacityReservationId) || !has(self.marketType) ||
+                self.marketType != ''Spot'''
+            - message: capacityReservationId cannot be set when spotMarketOptions
+                is specified
+              rule: '!has(self.capacityReservationId) || !has(self.spotMarketOptions)'
           status:
             description: AWSMachineStatus defines the observed state of AWSMachine.
             properties:
@@ -1114,11 +1256,19 @@ spec:
                     address.
                   properties:
                     address:
-                      description: The machine address.
+                      description: address is the machine address.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     type:
-                      description: Machine address type, one of Hostname, ExternalIP,
-                        InternalIP, ExternalDNS or InternalDNS.
+                      description: type is the machine address type, one of Hostname,
+                        ExternalIP, InternalIP, ExternalDNS or InternalDNS.
+                      enum:
+                      - Hostname
+                      - ExternalIP
+                      - InternalIP
+                      - ExternalDNS
+                      - InternalDNS
                       type: string
                   required:
                   - address
@@ -1133,27 +1283,32 @@ spec:
                   properties:
                     lastTransitionTime:
                       description: |-
-                        Last time the condition transitioned from one status to another.
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
                         This should be when the underlying condition changed. If that is not known, then using the time when
                         the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
                       description: |-
-                        A human readable message indicating details about the transition.
+                        message is a human readable message indicating details about the transition.
                         This field may be empty.
+                      maxLength: 10240
+                      minLength: 1
                       type: string
                     reason:
                       description: |-
-                        The reason for the condition's last transition in CamelCase.
+                        reason is the reason for the condition's last transition in CamelCase.
                         The specific API may choose whether or not this field is considered a guaranteed API.
                         This field may be empty.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                     severity:
                       description: |-
                         severity provides an explicit classification of Reason code, so the users or machines can immediately
                         understand the current situation and act accordingly.
                         The Severity field MUST be set only when Status=False.
+                      maxLength: 32
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -1163,6 +1318,8 @@ spec:
                         type of condition in CamelCase or in foo.example.com/CamelCase.
                         Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
                         can be useful (see .node.status.conditions), the ability to deconflict is important.
+                      maxLength: 256
+                      minLength: 1
                       type: string
                   required:
                   - lastTransitionTime
@@ -1170,6 +1327,17 @@ spec:
                   - type
                   type: object
                 type: array
+              dedicatedHost:
+                description: |-
+                  DedicatedHost tracks the dynamically allocated dedicated host.
+                  This field is populated when DynamicHostAllocation is used.
+                properties:
+                  id:
+                    description: |-
+                      ID tracks the dynamically allocated dedicated host ID.
+                      This field is populated when DynamicHostAllocation is used.
+                    type: string
+                type: object
               failureMessage:
                 description: |-
                   FailureMessage will be set in the event that there is a terminal problem
