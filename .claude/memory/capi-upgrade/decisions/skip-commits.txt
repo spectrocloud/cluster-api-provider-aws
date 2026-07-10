@@ -27,3 +27,38 @@ ebe6855e
 #   Reviewer round-1 flagged both as recommend-SKIP; enum ordering matches target's usage.
 9a2d38ff
 60276f54
+
+# ── reviewer-applied round 2 (2026-07-10) — main.go webhook-split intermediates ──
+# The 5 SHAs below are intermediate iterations of the same fork-side webhook/controller
+# split refactor on main.go. Coordinator guidance: RESOLVE the CANONICAL latest commit
+# (f8164af5, see resolve-commits.txt), SKIP earlier iterations. The resolver's 3-way
+# merge for f8164af5 brings in the fork's current main.go webhookPort=0 split machinery
+# (Patch D: fork intent vs target vs upstream).
+# c065115f — "Added webhook port check" (2025-03-01, 181/46) — initial substantial add
+c065115f
+# 3fcd9f70 — "controller and webhook separation in main.go (#959)" (2025-04-17, 142/126) — refactor
+3fcd9f70
+# 5a5028f5 — "webhook seperation" (2025-05-20, 70/92) — refactor iter
+5a5028f5
+# 738315d9 — "webhook seperation2" (2025-05-20, 5/3) — small fixup
+738315d9
+# 5f8cab0c — "webhook seperation" (2025-05-20, 15/16) — small fixup
+5f8cab0c
+
+# ── reviewer-applied round 2 (2026-07-10) — v1beta2 test files removed upstream ──
+# Target v2.12.1 has DELETED both pkg/cloud/services/eks/securitygroup_test.go and
+# pkg/cloud/services/eks/nodegroup_test.go (git show v2.12.1:... → path does not exist).
+# The fork commits update these deleted files' imports to v1beta2. If we PICK, we
+# resurrect files that upstream deleted intentionally. The lone managed_nodegroup.go
+# import fix in 6e9bc829 is ALREADY equivalent in target (v2.12.1 uses .../v2/pkg/...).
+# dd6cfc0e — Update securitygroup_test.go to v1beta2 (test file deleted in v2.12.1)
+dd6cfc0e
+# 6e9bc829 — Update securitygroup_test.go/nodegroup_test.go to v1beta2 + managed_nodegroup.go import fix (already in target)
+6e9bc829
+
+# ── reviewer-applied round 2 (2026-07-10) — pure spectro/generated regeneration ──
+# fa28b436 — "Update spectro generated core-global.yaml" (10 lines to a 14k-line generated
+#            file). The spectro/generated/*.yaml files are re-derivable by running
+#            spectro/run.sh (bundled in 24c392cf's RESOLVE). No point PICKing regenerated
+#            content that will be overwritten by regen post-execute.
+fa28b436

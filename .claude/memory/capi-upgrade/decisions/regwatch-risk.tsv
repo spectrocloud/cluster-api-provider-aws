@@ -14,3 +14,13 @@ fb2387a1	H	PEM-4967 TopSecret region support — substantial fork feature (permi
 89907a44	M	PCP-5519 HostResourceGroup cherry-pick — v1beta2 API surface additions (+53 types.go, +33 webhook, +112 webhook_test) NOT in target v2.12.1 (confirmed: awsmachine_types.go has no HostResourceGroup); real fork feature, must survive
 91dcb84e	M	BYO launch template for EKS managed node groups — mostly webhook+tests (+197 lines) + a comment on existing AWSLaunchTemplate field; core AWSLaunchTemplate already in target — verify webhook validation lands
 ac0c5ec4	M	Fork-only FilterAWSInternalTags OIDC fix — v2.12.1:oidc.go L82 still uses MapPtrToMap without filter; real fork behavior, must survive
+# reviewer-applied round 2 (2026-07-10) — anticipated PICK-RESOLVE entries (target=RESOLVE via 3-way at execute)
+f8164af5	M	Canonical webhook-split commit (2025-12-19 SA config); target v2.12.1 has no webhookPort=0 split — resolver must bring in cumulative fork main.go infra; 5 intermediate iterations SKIP'd; if resolver leaves markers, human triage at Gate 2
+d622c517	M	Private EKS OIDC deletion — adds getOIDCProviderARN to iam/iam.go; survives to fork current; new function on file target has diverged
+b3ff89fb	M	Trust policy reconcile fix — adds reconcileTrustPolicy call in oidc.go; survives to fork current; distinct behavior
+6b3026e7	M	PCP-1561 OIDC cleanup on cluster deprovision — session.go + oidc.go; survives to fork current; distinct behavior
+8f4b217b	M	PCP-2735 EKS deletion stuck — introduces OidcProviderArnAnnotation annotation + logic; annotation still used in fork current (name later refactored by 5fbe28d0)
+5fbe28d0	L	OIDC refactor — renames OidcProviderArnAnnotation → OIDCProviderARNAnnotation (case fix, canonical name in fork current); resolver applies renames + small touches
+246109f2	L	Trust policy configmap early-exit check — 1-line change; survives to fork current
+69989b99	H	Ignition security fix — target v2.12.1 MOVED api/v1beta2/awsmachine_webhook.go to webhooks/awsmachine_webhook.go (structural upstream refactor); resolver must 3-way-merge fork's DefaultIgnitionVersion="3.4" + semver.ParseTolerant validation onto RELOCATED file; requires careful human review
+b687c16d	M	Spectro run.sh fix (4 lines) + regenerated spectro/generated/core-*.yaml (12k/8k lines); resolver may struggle with generated diffs — human confirms post-execute regeneration via spectro/run.sh

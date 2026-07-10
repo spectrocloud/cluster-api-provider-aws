@@ -1,1 +1,62 @@
 # ── INPUT (Gate-1, you edit) — SHAs to force-pick as PICK-RESOLVE (3-way-merged at execute). One per line; '#' = comment. See ../README.md ──
+#
+# reviewer-applied: round-2 convergence 2026-07-10 (adversarial audit vs v2.12.1 tree)
+#
+# ─── MIXED "Added Spectro Manifests" seed ─────────────────────────────────────
+# 24c392cf — MIXED seed: fork's spectro/base/, spectro/global/, spectro/run.sh are
+#            fork-local kustomize inputs that must survive (target v2.12.1 has no
+#            spectro/ dir at all); the generated spectro/generated/core-*.yaml is
+#            re-derived by running spectro/run.sh post-execute. Resolver 3-way-merges
+#            fork intent (full spectro/ tree) vs target (no spectro/) → adds the dir.
+#            Patch F note: palette-side config/vendorcrd/aws is separately regen'd
+#            by vendorcrd-sync at integration — orthogonal to this commit.
+24c392cf
+#
+# ─── main.go webhook-split canonical commit ───────────────────────────────────
+# f8164af5 — "Configure webhooks to run without a service account" (2025-12-19) is
+#            the LATEST + canonical webhook-split change. Earlier iterations
+#            (c065115f, 3fcd9f70, 5a5028f5, 738315d9, 5f8cab0c) are SKIP'd
+#            (see skip-commits.txt). Resolver's 3-way merge should bring in the
+#            fork's current main.go webhookPort=0 split machinery (Patch D: fork
+#            intent vs target vs upstream). If resolver leaves markers, execute
+#            surfaces NEEDS-HUMAN — human triages at Gate 2. See regwatch-risk.tsv.
+f8164af5
+#
+# ─── EKS OIDC hotspot (6 distinct surviving fork behaviors) ───────────────────
+# All 6 fork commits below contribute distinct surviving behavior to the current
+# oidc.go / iam.go. Each is a separate bug/feature fix, not just refactor iterations
+# of the same change. Verified via grep of fork's current pkg/cloud/services/eks/
+# for: getOIDCProviderARN, reconcileTrustPolicy, OIDCProviderARNAnnotation,
+# buildOIDCTrustPolicy, isTrustPolicyConfigMapPresent.
+#
+# d622c517 — Fixed OIDC deletion issue for private EKS cluster (iam.go +getOIDCProviderARN)
+d622c517
+# b3ff89fb — Fixed trust policy reconcile issue (oidc.go +reconcileTrustPolicy call)
+b3ff89fb
+# 6b3026e7 — PCP-1561 OIDC providers cleanup on cluster deprovision (session.go + oidc.go)
+6b3026e7
+# 8f4b217b — PCP-2735 EKS deletion stuck (OidcProviderArnAnnotation constant + annotation-based ARN lookup)
+8f4b217b
+# 5fbe28d0 — code refactor: rename to OIDCProviderARNAnnotation + update usages (survives to canonical name)
+5fbe28d0
+# 246109f2 — trust policy configmap early exit check (small but survives)
+246109f2
+#
+# ─── Ignition security fix on relocated webhook ───────────────────────────────
+# 69989b99 — PCP-6085 v1beta2 ignition-version validation (bump DefaultIgnitionVersion
+#            to "3.4" + reject non-3.x via semver.ParseTolerant). Fork patches
+#            api/v1beta2/awsmachine_webhook.go, but target v2.12.1 MOVED the webhook
+#            to webhooks/awsmachine_webhook.go (structural upstream change). Resolver
+#            must 3-way-merge fork's security fix onto the RELOCATED file. Also
+#            bumps DefaultIgnitionVersion in api/v1beta2/awsmachine_types.go which
+#            target still has at "2.3". HIGH risk (see regwatch) — human confirm.
+69989b99
+#
+# ─── spectro/run.sh fix + regenerated content ─────────────────────────────────
+# b687c16d — "spectro run script fix": 4-line real fork change to spectro/run.sh
+#            (+ 12000/8000 lines of regenerated spectro/generated/core-*.yaml).
+#            The run.sh fix is real fork code that must survive; the generated
+#            content is re-derivable by executing spectro/run.sh post-execute.
+#            Resolver may struggle with the large generated diffs — human confirms
+#            post-execute regeneration.
+b687c16d
