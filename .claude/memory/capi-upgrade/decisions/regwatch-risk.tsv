@@ -24,3 +24,24 @@ b3ff89fb	M	Trust policy reconcile fix — adds reconcileTrustPolicy call in oidc
 246109f2	L	Trust policy configmap early-exit check — 1-line change; survives to fork current
 69989b99	H	Ignition security fix — target v2.12.1 MOVED api/v1beta2/awsmachine_webhook.go to webhooks/awsmachine_webhook.go (structural upstream refactor); resolver must 3-way-merge fork's DefaultIgnitionVersion="3.4" + semver.ParseTolerant validation onto RELOCATED file; requires careful human review
 b687c16d	M	Spectro run.sh fix (4 lines) + regenerated spectro/generated/core-*.yaml (12k/8k lines); resolver may struggle with generated diffs — human confirms post-execute regeneration via spectro/run.sh
+# reviewer-applied round 3 (2026-07-10 — FINAL) — additional PICK-RESOLVE risks
+# 3531eda5 note revised per user pushback + direct v2.12.1 verification: target HAS nodeadm.go (upstream 1661d9761); fork's node.go handles AL2023 INLINE with additional args/commands not in target's nodeadm.go — REAL overlap, RESOLVE not naive PICK
+3531eda5	H	AL2023 userdata (+268 lines) in bootstrap/eks/internal/userdata/node.go — human-noted overlap with target v2.12.1's bootstrap/eks/internal/userdata/nodeadm.go (upstream 1661d9761); resolver output MUST be reviewed at Gate 2 for duplicate bootstrap paths / conflicting AL2023 codepaths
+76019cee	H	EKSConfig LaunchTemplate bootstrap for AL2023 (+util/paused/, +157 lines eksconfig_controller.go) — util/paused/ IS in target v2.12.1 (upstreamed independently) — partly redundant; human-noted overlap; resolver output MUST be reviewed at Gate 2 for duplicate paused-condition handling
+f40fb74d	H	BET-4653 webhook enhancement (RootVolume.DeviceName reset + error msg) — fork patches api/v1beta2/awsmachine_webhook.go but target v2.12.1 RELOCATED webhook to webhooks/awsmachine_webhook.go (same structural relocation as 69989b99)
+c9ad0d74	M	PCP-4952 STS/kubeconfig-based CA fetch — extractCAFromSecret L356, kubeconfigutil.FromSecret L610 in fork current; target lacks
+a2477966	L	PCP-5325 secret region — 4-line refactor (controlPlane.Status.Ready vs EKSControlPlaneReadyCondition)
+b9f3f86a	M	PCP-5517 clustercidr/dns — adds getClusterCidr() function (fork current L634); target lacks
+bd7bc897	M	PEM-10055 sequoia-emulator + transformEndpointForSecretRegion (fork current L314-, L335); go.mod/hack/tools drift handled by CVE gate
+7226c861	M	PCP-259 EKS upgrade post — adds updateUserKubeconfigSecret (fork current L275); target lacks
+f108d78c	L	return correct errors — 4-line variable-shadowing fix
+4b21d29a	M	Log degraded state — adds eks.NodegroupStatusDegraded handler (fork current L679); target lacks
+e6d443e2	M	Do not set amiType if EKSOptimizedLookupType — adds ltHasCustomAMI check (fork current L239-242); target L228 still older AMI.ID == nil
+5ba61538	M	PCP-6865 bypass nodegroup version API for custom AMI — ngIsCustomAMI, versionUpgradeNeeded (fork current L416-417); prevents 100k+ failure event loop
+1a891780	M	Handle nil pointer launchTemplateID with Private Endpoint fallback (fork current L285-292); supersedes 52817669
+46d56391	M	PCP-4486 EKS IRSA — isTrustPolicyConfigMapPresent function (fork current oidc.go L127)
+2c331b16	M	PCP-3571 EKS SG tag updation — updateTagsForEKSManagedSecurityGroup + desiredTags (fork current L87-121); target lacks
+f73e9bb3	L	eks: skip aws:-prefixed tags — uses tags.AwsInternalTagPrefix (fork current tags.go L71) + cosmetic ptr.To() cleanups
+0b29ddfe	M	PCP-1428 AWS FIPS endpoints — adds pkg/utils/resolver_endpoint.go (fork-only new file); session.go uses CustomEndpointResolverForAWS L90,L127
+4d05d66e	L	Fix addons comparison — EKSAddon equality semantic fix (fork current types_test.go L109,L122)
+e1705b54	L	Added tests + conversion.go NodeType round-trip (fork current L40-41, L110-111); NodeType field added by 76019cee's AL2023 support

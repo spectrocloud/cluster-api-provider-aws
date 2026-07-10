@@ -62,3 +62,53 @@ dd6cfc0e
 #            spectro/run.sh (bundled in 24c392cf's RESOLVE). No point PICKing regenerated
 #            content that will be overwritten by regen post-execute.
 fa28b436
+
+# ═════════════════════════════════════════════════════════════════════════════
+# reviewer-applied round 3 (2026-07-10 — FINAL) — superseded fork iterations
+#   & target-supersession of behavior
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─── superseded by a LATER fork iteration on the same file ────────────────────
+# c3dfe72b — PCP-4653 nodegroup customization (5-line change adding a comment +
+#            commenting out one clause of AMI.ID == nil check). Superseded by
+#            e6d443e2 which REPLACES the entire condition with the ltHasCustomAMI
+#            check pattern (verified fork current pkg/cloud/services/eks/nodegroup.go
+#            L239-242). c3dfe72b's specific edit was rewritten by e6d443e2.
+c3dfe72b
+# 52817669 — launchtemplate id hot fix: introduces launchTemplateIDFromAWS local
+#            variable via GetLaunchTemplateID. Superseded by 1a891780 (same day)
+#            which REMOVES launchTemplateIDFromAWS and uses `if launchTemplateID == nil`
+#            fallback + DeleteLaunchTemplate(*launchTemplateID) (verified fork
+#            current controller L285-292). 1a891780 (RESOLVE'd) reflects survival.
+52817669
+
+# ─── target v2.12.1 already handles the concern via a different (correct) path ─
+# 96eb647e — volumetags-hotfix: adds separate volumeSpec block to
+#            input.TagSpecifications. debdb73d later reverted this because it
+#            caused "duplicate resource type" AWS API errors. Target v2.12.1 uses
+#            the CORRECT approach: iterates over a []types.ResourceType{Instance,
+#            Volume, [NetworkInterface]} slice building one TagSpecification per
+#            resource type (verified v2.12.1:instances.go L667-689). Target
+#            supersedes both 96eb647e and debdb73d.
+96eb647e
+# debdb73d — Fix duplicate tag issue: reverts 96eb647e's volumeSpec addition.
+#            Same supersession as above — target v2.12.1's resources-slice iteration
+#            is the canonical approach.
+debdb73d
+
+# ─── controller-runtime v0.20.4 bump + boilerplate (target has v0.22.5) ───────
+# 362cd550 — PCP-5293 Upgrade controller-runtime v0.19.4 → v0.20.4. Target
+#            v2.12.1 already runs controller-runtime v0.22.5 (verified
+#            v2.12.1:go.mod). The webhook file adaptations 362cd550 makes touch
+#            api/v1beta2/*_webhook.go files that target v2.12.1 has RELOCATED to
+#            webhooks/*_webhook.go (structural upstream refactor). Applying 362cd550
+#            would either fail (wrong path) or introduce stale v0.20.4 API calls
+#            against target's newer runtime. Build-green loop (Phase D bounded
+#            loop) + CVE gate handle the API adaptations post-execute.
+362cd550
+# 125ac273 — PCP-5373 hotfix: type-assertion boilerplate follow-up to 362cd550
+#            (adds `r, ok := obj.(*Type); if !ok { … }` in api/v1beta2/*_webhook.go).
+#            Moot when 362cd550 SKIP'd; also patches files that target relocated
+#            to webhooks/ directory. Any needed boilerplate for target's v0.22.5
+#            API will be added by the build-green loop.
+125ac273
