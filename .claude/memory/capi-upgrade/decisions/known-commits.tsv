@@ -5,9 +5,9 @@
 # PICK-RESOLVE for the MIXED commits so the conflict-resolver handles the split at
 # execute (regen generated / pick code) via its 3-way merge. Human reviews the
 # resolver output at Gate 2.
-24c392cf	MIXED	PICK-RESOLVE
-fb2387a1	MIXED	PICK-RESOLVE
-76019cee	MIXED	PICK-RESOLVE
-89907a44	MIXED	PICK-RESOLVE
-91dcb84e	MIXED	PICK-RESOLVE
-2b801f8a	MIXED	PICK-RESOLVE
+24c392cf	F4	PICK-RESOLVE
+fb2387a1	F4	PICK-RESOLVE
+76019cee	F4	PICK-RESOLVE
+89907a44	F4	PICK-RESOLVE
+91dcb84e	F4	PICK-RESOLVE
+2b801f8a	F4	PICK-RESOLVE
