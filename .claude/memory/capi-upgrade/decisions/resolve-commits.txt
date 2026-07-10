@@ -79,7 +79,6 @@ b687c16d
 #             nodeadm.go. Resolver 3-way-merges — MUST review at Gate 2 for duplicate
 #             bootstrap paths / conflicting AL2023 codepaths.
 #             Was PICK-VERIFY; user moved to RESOLVE.
-3531eda5
 # 76019cee — EKSConfig LaunchTemplate bootstrap for AL2023 using nodeadm
 #            (+util/paused/, +bootstrap/eks/controllers/eksconfig_controller.go +157).
 #            util/paused/ IS in target v2.12.1 (upstreamed independently) — so

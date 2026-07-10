@@ -112,3 +112,11 @@ debdb73d
 #            to webhooks/ directory. Any needed boilerplate for target's v0.22.5
 #            API will be added by the build-green loop.
 125ac273
+
+# ── human-decided Gate-1 PR#1065 (2026-07-10) — AL2023 policy: upstream wins ──
+# 3531eda5 — "Code refactor" AL2023 userdata inline in node.go (+454 lines).
+#   Human directive: AL2023 changes from upstream should be picked; fork's node.go
+#   inline additions are SUPERSEDED by upstream's nodeadm.go (1661d9761) approach.
+#   Any regression risk from local->upstream implementation flagged in regwatch and
+#   handled at Gate 2 review of the executed diff.
+3531eda5
