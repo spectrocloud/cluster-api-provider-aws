@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-BUILDER_GOLANG_VERSION ?= 1.24.0
+BUILDER_GOLANG_VERSION ?= 1.26.5
 ROOT_DIR_RELATIVE := .
 
 include $(ROOT_DIR_RELATIVE)/common.mk
@@ -21,7 +21,7 @@ include $(ROOT_DIR_RELATIVE)/common.mk
 # https://suva.sh/posts/well-documented-makefiles
 
 # Go
-GO_VERSION ?=1.24.7
+GO_VERSION ?=1.26.5
 GO_DIRECTIVE_VERSION ?= 1.24.0
 GO_CONTAINER_IMAGE ?= golang:$(GO_VERSION)
 
