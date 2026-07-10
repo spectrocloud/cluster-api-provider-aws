@@ -1,1 +1,16 @@
 # ── INPUT (Gate-1, you edit) — Regression-Watch risk: <sha> <L|M|H> [note]. unset=REVIEW (blocks execute); High=sign-off. '#' = comment. See ../README.md ──
+# reviewer-applied: adversarial regression audit against v2.12.1 tree (spectrocloud-public/cluster-api-provider-aws), 2026-07-10
+24c392cf	M	MIXED seed "Added Spectro Manifests" — kustomize base/global/run.sh (fork infra) + generated/core-*.yaml (regen from run.sh); human must split PICK code / REGEN generated
+f869ba58	M	Fork-only DesiredSize<MinSize adjustment (PCP-nn); target v2.12.1 nodegroup.go scalingConfig() surroundings evolved but this edge case not covered upstream
+e1f1c543	M	Fork-only subnet tag deletion+refresh fix (PCP-230); removeNonClusterSharedTags/describeTagsInput not present in v2.12.1
+fb2387a1	H	PEM-4967 TopSecret region support — substantial fork feature (permissions_boundary.go, roles.go, credentials.yaml, iam.go) not in v2.12.1; MIXED conflict; loss is high-cost
+8b0da54c	L	Target v2.12.1:pkg/cloud/services/eks/nodegroup.go L330-333 already has equivalent nil-check on ng.Version; PICK is redundant — flagged for SKIP (see skip-commits.txt)
+625fd4d2	M	Fork-only isPrivateOnlyEndPoint logic in makeVpcConfig (PCP-4205); target v2.12.1:cluster.go L378-380 still gates on len(cidrs)>0 alone
+9a2d38ff	M	AL2023 AMI family — target v2.12.1 already has AL2023_x86_64_STANDARD/ARM/NEURON/NVIDIA in exp/api/v1beta2/awsmanagedmachinepool_types.go L64-70; PICK likely regresses or double-implements — human confirm SKIP
+60276f54	M	AL2023 NEURON — target already has Al2023x86_64Neuron (types.go L67-68); PICK likely regresses/duplicates — human confirm SKIP
+3531eda5	H	Major AL2023 userdata generation (multi-part MIME, nodeadm, AL2/AL2023 constants, +389 lines) — "Code refactor" title understates scope; overlap with target's AL2023 support unknown; must NOT silently drop
+76019cee	H	EKSConfig LaunchTemplate bootstrap for AL2023 via nodeadm (+util/paused/) — fork-only feature not in target; overlaps with target's AL2023 support in unknown ways
+2b801f8a	M	AMI type lookup change touching api/v1beta2/types.go + eksconfig_controller.go; target v2.12.1 has AL2023 AMI types — verify no double-implementation
+89907a44	M	PCP-5519 HostResourceGroup cherry-pick — v1beta2 API surface additions (+53 types.go, +33 webhook, +112 webhook_test) NOT in target v2.12.1 (confirmed: awsmachine_types.go has no HostResourceGroup); real fork feature, must survive
+91dcb84e	M	BYO launch template for EKS managed node groups — mostly webhook+tests (+197 lines) + a comment on existing AWSLaunchTemplate field; core AWSLaunchTemplate already in target — verify webhook validation lands
+ac0c5ec4	M	Fork-only FilterAWSInternalTags OIDC fix — v2.12.1:oidc.go L82 still uses MapPtrToMap without filter; real fork behavior, must survive

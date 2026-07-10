@@ -1,1 +1,29 @@
 # ── INPUT (Gate-1, you edit) — SHAs to SKIP / drop. One SHA per line; '#' = comment. See ../README.md ──
+#
+# reviewer-applied: adversarial regression audit against v2.12.1, 2026-07-10
+#   Only the most confident SKIPs are applied here; borderline candidates left as NEEDS-DECISION
+#   for the human to confirm.
+#
+# 8b0da54c — target v2.12.1:pkg/cloud/services/eks/nodegroup.go L330-333 already has an
+#            equivalent nil-check on ng.Version (upstream error message is shorter but semantics
+#            match — return fmt.Errorf on nil). PICKing would either merge-conflict or add a
+#            duplicate check. SKIP as patch-equivalent to target.
+8b0da54c
+
+# ── human-applied (via session, 2026-07-10) — safe SKIPs from reviewer round-1 findings ──
+# a8f968ff — "Bump Go toolchain version" — target v2.12.1 has Go 1.24.0, fork on 1.25.0.
+#            PICKing this bumps target backwards; CVE gate (Phase G) will pick the right toolchain.
+a8f968ff
+# 6346e649, dfce8436, ee2e6caa, ebe6855e — pure CVE go.mod/go.sum bumps. Phase G re-remediates
+#   CVEs after the upgrade with the target's current dep tree; these bumps are irrelevant to the
+#   fork's Spectro deltas and would just add noise/conflicts. SKIP.
+6346e649
+dfce8436
+ee2e6caa
+ebe6855e
+# 9a2d38ff, 60276f54 — AL2023 AMI family enum values already present in target
+#   v2.12.1:exp/api/v1beta2/awsmanagedmachinepool_types.go L64-70:
+#     AL2023_x86_64_STANDARD/ARM/NEURON/NVIDIA + AL2023_ARM_64_NVIDIA.
+#   Reviewer round-1 flagged both as recommend-SKIP; enum ordering matches target's usage.
+9a2d38ff
+60276f54
