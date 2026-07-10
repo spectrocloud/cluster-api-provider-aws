@@ -19,18 +19,17 @@ package eks
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/smithy-go"
 	"github.com/pkg/errors"
 
-	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/api/bootstrap/v1beta1"
-	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
-	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta1"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta1"
 	eksiam "sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/eks/iam"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/eks"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/record"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/utils"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
@@ -38,40 +37,41 @@ const (
 	maxIAMRoleNameLength = 64
 )
 
-// NodegroupRolePolicies gives the policies required for a nodegroup role.
-func NodegroupRolePolicies() []string {
+func GenerateNodegroupRolePoliciesARN(partition string) []string {
+	arns := []string{
+		"AmazonEKSWorkerNodePolicy",
+		"AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
+		"AmazonEC2ContainerRegistryReadOnly",
+	}
+
+	policies := []string{}
+	for _, arn := range arns {
+		policies = append(policies, generatePartitionBasedPolicyARN(partition, arn))
+	}
+	return policies
+}
+
+func GenerateFargateRolePoliciesARN(partition string) []string {
 	return []string{
-		"arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-		"arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-		"arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+		generatePartitionBasedPolicyARN(partition, "AmazonEKSFargatePodExecutionRolePolicy"),
 	}
 }
 
-// FargateRolePolicies gives the policies required for a fargate role.
-func FargateRolePolicies() []string {
-	return []string{
-		"arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
+func generatePartitionBasedPolicyARN(partition, name string) string {
+	if partition == "" {
+		partition = "aws"
 	}
-}
 
-// NodegroupRolePoliciesUSGov gives the policies required for a nodegroup role.
-func NodegroupRolePoliciesUSGov() []string {
-	return []string{
-		"arn:aws-us-gov:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-		"arn:aws-us-gov:iam::aws:policy/AmazonEKS_CNI_Policy", //TODO: Can remove when CAPA supports provisioning of OIDC web identity federation with service account token volume projection
-		"arn:aws-us-gov:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-	}
-}
-
-// FargateRolePoliciesUSGov gives the policies required for a fargate role.
-func FargateRolePoliciesUSGov() []string {
-	return []string{
-		"arn:aws-us-gov:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy",
-	}
+	return fmt.Sprintf("arn:%s:iam::aws:policy/%s", partition, name)
 }
 
 func (s *Service) reconcileControlPlaneIAMRole(ctx context.Context) error {
 	s.scope.Debug("Reconciling EKS Control Plane IAM Role")
+
+	partition, err := utils.PartitionForRegion(s.scope.ControlPlane.Spec.Region)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get partition for region %s", s.scope.ControlPlane.Spec.Region)
+	}
 
 	if s.scope.ControlPlane.Spec.RoleName == nil {
 		if !s.scope.EnableIAM() {
@@ -95,7 +95,18 @@ func (s *Service) reconcileControlPlaneIAMRole(ctx context.Context) error {
 			return fmt.Errorf("getting role %s: %w", *s.scope.ControlPlane.Spec.RoleName, ErrClusterRoleNotFound)
 		}
 
-		role, err = s.CreateRole(ctx, *s.scope.ControlPlane.Spec.RoleName, s.scope.Name(), eksiam.ControlPlaneTrustRelationship(false), s.scope.AdditionalTags(), s.scope.ControlPlane.Spec.RolePath, s.scope.ControlPlane.Spec.RolePermissionsBoundary)
+		// Prefer spec-level RolePermissionsBoundary; fall back to the
+		// TopSecret-partition boundary (utils.GetPermissionsBoundary returns
+		// empty for non-TopSecret partitions).
+		permissionsBoundary := s.scope.ControlPlane.Spec.RolePermissionsBoundary
+		if permissionsBoundary == "" {
+			permissionsBoundary, err = utils.GetPermissionsBoundary(partition)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get permissions boundary for partition %s", partition)
+			}
+		}
+
+		role, err = s.CreateRole(ctx, *s.scope.ControlPlane.Spec.RoleName, s.scope.Name(), eksiam.ControlPlaneTrustRelationship(false), s.scope.AdditionalTags(), s.scope.ControlPlane.Spec.RolePath, permissionsBoundary)
 		if err != nil {
 			record.Warnf(s.scope.ControlPlane, "FailedIAMRoleCreation", "Failed to create control plane IAM role %q: %v", *s.scope.ControlPlane.Spec.RoleName, err)
 
@@ -112,7 +123,7 @@ func (s *Service) reconcileControlPlaneIAMRole(ctx context.Context) error {
 	//TODO: check tags and trust relationship to see if they need updating
 
 	policies := []string{
-		fmt.Sprintf("arn:%s:iam::aws:policy/AmazonEKSClusterPolicy", s.scope.Partition()),
+		generatePartitionBasedPolicyARN(partition, "AmazonEKSClusterPolicy"),
 	}
 
 	if s.scope.ControlPlane.Spec.RoleAdditionalPolicies != nil {
@@ -193,6 +204,11 @@ func (s *NodegroupService) reconcileNodegroupIAMRole(ctx context.Context) error 
 		s.scope.ManagedMachinePool.Spec.RoleName = roleName
 	}
 
+	partition, err := utils.PartitionForRegion(s.scope.ControlPlane.Spec.Region)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get partition for region %s", s.scope.ControlPlane.Spec.Region)
+	}
+
 	role, err := s.GetIAMRole(ctx, s.scope.RoleName())
 	if err != nil {
 		if !isNotFound(err) {
@@ -204,7 +220,18 @@ func (s *NodegroupService) reconcileNodegroupIAMRole(ctx context.Context) error 
 			return ErrNodegroupRoleNotFound
 		}
 
-		role, err = s.CreateRole(ctx, s.scope.ManagedMachinePool.Spec.RoleName, s.scope.ClusterName(), eksiam.NodegroupTrustRelationship(), s.scope.AdditionalTags(), s.scope.ManagedMachinePool.Spec.RolePath, s.scope.ManagedMachinePool.Spec.RolePermissionsBoundary)
+		// Prefer spec-level RolePermissionsBoundary; fall back to the
+		// TopSecret-partition boundary (utils.GetPermissionsBoundary returns
+		// empty for non-TopSecret partitions).
+		permissionsBoundary := s.scope.ManagedMachinePool.Spec.RolePermissionsBoundary
+		if permissionsBoundary == "" {
+			permissionsBoundary, err = utils.GetPermissionsBoundary(partition)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get permissions boundary for partition %s", partition)
+			}
+		}
+
+		role, err = s.CreateRole(ctx, s.scope.ManagedMachinePool.Spec.RoleName, s.scope.ClusterName(), eksiam.NodegroupTrustRelationship(), s.scope.AdditionalTags(), s.scope.ManagedMachinePool.Spec.RolePath, permissionsBoundary)
 		if err != nil {
 			record.Warnf(s.scope.ManagedMachinePool, "FailedIAMRoleCreation", "Failed to create nodegroup IAM role %q: %v", s.scope.RoleName(), err)
 			return err
@@ -222,11 +249,7 @@ func (s *NodegroupService) reconcileNodegroupIAMRole(ctx context.Context) error 
 		return errors.Wrapf(err, "error ensuring tags and policy document are set on node role")
 	}
 
-	policies := NodegroupRolePolicies()
-	if strings.Contains(s.scope.Partition(), v1beta1.PartitionNameUSGov) {
-		policies = NodegroupRolePoliciesUSGov()
-	}
-
+	policies := GenerateNodegroupRolePoliciesARN(partition)
 	if len(s.scope.ManagedMachinePool.Spec.RoleAdditionalPolicies) > 0 {
 		if !s.scope.AllowAdditionalRoles() {
 			return ErrCannotUseAdditionalRoles
@@ -315,6 +338,11 @@ func (s *FargateService) reconcileFargateIAMRole(ctx context.Context) (requeue b
 		return true, nil
 	}
 
+	partition, err := utils.PartitionForRegion(s.scope.ControlPlane.Spec.Region)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get partition for region %s", s.scope.ControlPlane.Spec.Region)
+	}
+
 	var createdRole bool
 
 	role, err := s.GetIAMRole(ctx, s.scope.RoleName())
@@ -328,8 +356,19 @@ func (s *FargateService) reconcileFargateIAMRole(ctx context.Context) (requeue b
 			return false, ErrFargateRoleNotFound
 		}
 
+		// Prefer spec-level RolePermissionsBoundary; fall back to the
+		// TopSecret-partition boundary (utils.GetPermissionsBoundary returns
+		// empty for non-TopSecret partitions).
+		permissionsBoundary := s.scope.FargateProfile.Spec.RolePermissionsBoundary
+		if permissionsBoundary == "" {
+			permissionsBoundary, err = utils.GetPermissionsBoundary(partition)
+			if err != nil {
+				return false, errors.Wrapf(err, "failed to get permissions boundary for partition %s", partition)
+			}
+		}
+
 		createdRole = true
-		role, err = s.CreateRole(ctx, s.scope.RoleName(), s.scope.ClusterName(), eksiam.FargateTrustRelationship(), s.scope.AdditionalTags(), s.scope.FargateProfile.Spec.RolePath, s.scope.FargateProfile.Spec.RolePermissionsBoundary)
+		role, err = s.CreateRole(ctx, s.scope.RoleName(), s.scope.ClusterName(), eksiam.FargateTrustRelationship(), s.scope.AdditionalTags(), s.scope.FargateProfile.Spec.RolePath, permissionsBoundary)
 		if err != nil {
 			record.Warnf(s.scope.FargateProfile, "FailedIAMRoleCreation", "Failed to create fargate IAM role %q: %v", s.scope.RoleName(), err)
 			return false, errors.Wrap(err, "failed to create role")
@@ -342,11 +381,7 @@ func (s *FargateService) reconcileFargateIAMRole(ctx context.Context) (requeue b
 		return updatedRole, errors.Wrapf(err, "error ensuring tags and policy document are set on fargate role")
 	}
 
-	policies := FargateRolePolicies()
-	if strings.Contains(s.scope.Partition(), v1beta1.PartitionNameUSGov) {
-		policies = FargateRolePoliciesUSGov()
-	}
-
+	policies := GenerateFargateRolePoliciesARN(partition)
 	updatedPolicies, err := s.EnsurePoliciesAttached(ctx, role, policies)
 	if err != nil {
 		return updatedRole, errors.Wrapf(err, "error ensuring policies are attached: %v", policies)

@@ -39,14 +39,14 @@ func (p PolicyName) IsValid() bool {
 
 // RenderManagedIAMPolicies returns all the managed IAM Policies that would be rendered by the template.
 func (t Template) RenderManagedIAMPolicies() map[string]*iam.ManagedPolicy {
-	cft := t.RenderCloudFormation()
+	cft := t.RenderCloudFormation(nil)
 
 	return cft.GetAllIAMManagedPolicyResources()
 }
 
 // RenderManagedIAMPolicy returns a specific managed IAM Policy by name, or nil if the policy is not found.
 func (t Template) RenderManagedIAMPolicy(name PolicyName) *iam.ManagedPolicy {
-	cft := t.RenderCloudFormation()
+	cft := t.RenderCloudFormation(nil)
 
 	p, err := cft.GetIAMManagedPolicyWithName(string(name))
 	if err != nil {

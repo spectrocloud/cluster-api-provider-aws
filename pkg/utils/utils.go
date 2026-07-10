@@ -5,12 +5,38 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"k8s.io/utils/ptr"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
+
+// PartitionForRegion returns the AWS partition ID for a given region.
+// It mirrors aws-sdk-go v1's endpoints.PartitionForRegion() using string
+// prefix matching — the aws-sdk-go-v2 endpoint resolver no longer exposes
+// a static region→partition table. The returned partition IDs match the
+// partitionAwsIso*/partitionAwsIsoB constants in permissions_boundary.go
+// and the v2 SDK's ARN partition strings, so TopSecret-region features
+// (permissions boundary, IAM/EKS role creation) can key off the result.
+func PartitionForRegion(region string) (string, error) {
+	if region == "" {
+		return "", fmt.Errorf("region is empty")
+	}
+	switch {
+	case strings.HasPrefix(region, "us-gov-"):
+		return "aws-us-gov", nil
+	case strings.HasPrefix(region, "us-isob-"):
+		return "aws-iso-b", nil
+	case strings.HasPrefix(region, "us-iso-"):
+		return "aws-iso", nil
+	case strings.HasPrefix(region, "cn-"):
+		return "aws-cn", nil
+	default:
+		return "aws", nil
+	}
+}
 
 // GetMachinePools belong to a cluster.
 func GetMachinePools(ctx context.Context, client crclient.Client, clusterName string, clusterNS string) ([]clusterv1.MachinePool, error) {
