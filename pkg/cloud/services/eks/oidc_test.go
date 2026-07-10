@@ -123,40 +123,40 @@ func TestOIDCReconcile(t *testing.T) {
 		},
 		{
 			name: "cluster with aws-prefixed tags should not tag OIDC provider with reserved tags",
-			cluster: func(url string) eks.Cluster {
-				return eks.Cluster{
+			cluster: func(url string) ekstypes.Cluster {
+				return ekstypes.Cluster{
 					Name:    aws.String("cluster-test"),
 					Arn:     aws.String("arn:arn"),
 					RoleArn: aws.String("arn:role"),
-					Tags: map[string]*string{
-						"kubernetes.io/cluster/foo":     aws.String("owned"),
-						"aws:cloudformation:stack-name": aws.String("eks-stack"),
+					Tags: map[string]string{
+						"kubernetes.io/cluster/foo":     "owned",
+						"aws:cloudformation:stack-name": "eks-stack",
 					},
-					Identity: &eks.Identity{
-						Oidc: &eks.OIDC{
+					Identity: &ekstypes.Identity{
+						Oidc: &ekstypes.OIDC{
 							Issuer: aws.String(url),
 						},
 					},
 				}
 			},
 			expect: func(m *mock_iamauth.MockIAMAPIMockRecorder, url string) {
-				m.ListOpenIDConnectProviders(&iam.ListOpenIDConnectProvidersInput{}).Return(&iam.ListOpenIDConnectProvidersOutput{
-					OpenIDConnectProviderList: []*iam.OpenIDConnectProviderListEntry{
+				m.ListOpenIDConnectProviders(gomock.Any(), &iam.ListOpenIDConnectProvidersInput{}).Return(&iam.ListOpenIDConnectProvidersOutput{
+					OpenIDConnectProviderList: []iamtypes.OpenIDConnectProviderListEntry{
 						{
 							Arn: aws.String("arn::oidc"),
 						},
 					},
 				}, nil)
-				m.GetOpenIDConnectProvider(&iam.GetOpenIDConnectProviderInput{
+				m.GetOpenIDConnectProvider(gomock.Any(), &iam.GetOpenIDConnectProviderInput{
 					OpenIDConnectProviderArn: aws.String("arn::oidc"),
 				}).Return(&iam.GetOpenIDConnectProviderOutput{
-					ClientIDList:   aws.StringSlice([]string{"sts.amazonaws.com"}),
-					ThumbprintList: aws.StringSlice([]string{testCertThumbprint}),
-					Url:            &url,
+					ClientIDList:   []string{"sts.amazonaws.com"},
+					ThumbprintList: []string{testCertThumbprint},
+					Url:            aws.String(url),
 				}, nil)
-				m.TagOpenIDConnectProvider(&iam.TagOpenIDConnectProviderInput{
+				m.TagOpenIDConnectProvider(gomock.Any(), &iam.TagOpenIDConnectProviderInput{
 					OpenIDConnectProviderArn: aws.String("arn::oidc"),
-					Tags: []*iam.Tag{
+					Tags: []iamtypes.Tag{
 						{
 							Key:   aws.String("kubernetes.io/cluster/foo"),
 							Value: aws.String("owned"),

@@ -538,8 +538,8 @@ func (s *NodegroupService) reconcileNodegroupConfig(ctx context.Context, ng *eks
 		(*ng.ScalingConfig.MinSize != *managedPool.Scaling.MinSize)) {
 		s.Debug("Nodegroup min/max differ from spec, updating scaling configuration", "nodegroup", ng.NodegroupName)
 		input.ScalingConfig = s.scalingConfig()
-		if *ng.ScalingConfig.DesiredSize < int64(aws.Int32Value(managedPool.Scaling.MinSize)) {
-			desiredSize := int64(aws.Int32Value(managedPool.Scaling.MinSize))
+		if *ng.ScalingConfig.DesiredSize < aws.ToInt32(managedPool.Scaling.MinSize) {
+			desiredSize := aws.ToInt32(managedPool.Scaling.MinSize)
 			input.ScalingConfig.DesiredSize = &desiredSize
 		}
 		needsUpdate = true

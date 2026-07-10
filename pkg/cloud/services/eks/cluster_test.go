@@ -289,9 +289,9 @@ func TestMakeVPCConfig(t *testing.T) {
 					PublicCIDRs: []*string{},
 				},
 			},
-			expect: &eks.VpcConfigRequest{
-				SubnetIds:             []*string{&idOne, &idTwo},
-				PublicAccessCidrs:     []*string{},
+			expect: &ekstypes.VpcConfigRequest{
+				SubnetIds:             []string{idOne, idTwo},
+				PublicAccessCidrs:     []string{},
 				EndpointPrivateAccess: aws.Bool(true),
 			},
 		},
@@ -318,8 +318,8 @@ func TestMakeVPCConfig(t *testing.T) {
 					PublicCIDRs: []*string{},
 				},
 			},
-			expect: &eks.VpcConfigRequest{
-				SubnetIds:             []*string{&idOne, &idTwo},
+			expect: &ekstypes.VpcConfigRequest{
+				SubnetIds:             []string{idOne, idTwo},
 				PublicAccessCidrs:     nil,
 				EndpointPrivateAccess: aws.Bool(true),
 				EndpointPublicAccess:  aws.Bool(true),
@@ -348,8 +348,8 @@ func TestMakeVPCConfig(t *testing.T) {
 					PublicCIDRs: []*string{},
 				},
 			},
-			expect: &eks.VpcConfigRequest{
-				SubnetIds:             []*string{&idOne, &idTwo},
+			expect: &ekstypes.VpcConfigRequest{
+				SubnetIds:             []string{idOne, idTwo},
 				PublicAccessCidrs:     nil,
 				EndpointPrivateAccess: aws.Bool(false),
 				EndpointPublicAccess:  aws.Bool(true),

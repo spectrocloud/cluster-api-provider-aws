@@ -425,25 +425,25 @@ func (s *Service) deleteSubnets() error {
 
 		for i := range existing.Subnets {
 
-			describeTagsInput := &ec2.DescribeTagsInput{Filters: []*ec2.Filter{
-				{Name: aws.String("resource-type"), Values: []*string{aws.String("subnet")}},
-				{Name: aws.String("key"), Values: []*string{aws.String(infrav1.NameKubernetesAWSCloudProviderPrefix + s.scope.KubernetesClusterName())}},
-				{Name: aws.String("value"), Values: []*string{aws.String(string(infrav1.ResourceLifecycleShared))}},
+			describeTagsInput := &ec2.DescribeTagsInput{Filters: []types.Filter{
+				{Name: aws.String("resource-type"), Values: []string{"subnet"}},
+				{Name: aws.String("key"), Values: []string{infrav1.NameKubernetesAWSCloudProviderPrefix + s.scope.KubernetesClusterName()}},
+				{Name: aws.String("value"), Values: []string{string(infrav1.ResourceLifecycleShared)}},
 			},
 			}
 
-			if fetchedTags, err := s.EC2Client.DescribeTags(describeTagsInput); err != nil {
+			if fetchedTags, err := s.EC2Client.DescribeTags(context.TODO(), describeTagsInput); err != nil {
 				return errors.Wrapf(err, "failed to delete tags for resource %q", *existing.Subnets[i].SubnetId)
 			} else if len(fetchedTags.Tags) > 0 {
 				s.scope.Trace("Found a tag for deletion")
 				// Create the DeleteTags input
 				deleteTagsInput := &ec2.DeleteTagsInput{
-					Resources: []*string{existing.Subnets[i].SubnetId},
-					Tags:      []*ec2.Tag{{Key: aws.String(infrav1.NameKubernetesAWSCloudProviderPrefix + s.scope.KubernetesClusterName()), Value: aws.String(string(infrav1.ResourceLifecycleShared))}},
+					Resources: []string{aws.ToString(existing.Subnets[i].SubnetId)},
+					Tags:      []types.Tag{{Key: aws.String(infrav1.NameKubernetesAWSCloudProviderPrefix + s.scope.KubernetesClusterName()), Value: aws.String(string(infrav1.ResourceLifecycleShared))}},
 				}
 
 				// Delete tags in AWS.
-				if _, err = s.EC2Client.DeleteTags(deleteTagsInput); err != nil {
+				if _, err = s.EC2Client.DeleteTags(context.TODO(), deleteTagsInput); err != nil {
 					return errors.Wrapf(err, "failed to delete tags for resource %q", *existing.Subnets[i].SubnetId)
 				}
 			}

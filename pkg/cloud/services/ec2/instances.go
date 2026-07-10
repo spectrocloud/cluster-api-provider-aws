@@ -1074,7 +1074,7 @@ func (s *Service) SDKToInstance(v types.Instance) (*infrav1.Instance, error) {
 	if len(v.Licenses) > 0 {
 		i.LicenseConfigurationArns = make([]string, len(v.Licenses))
 		for idx, license := range v.Licenses {
-			i.LicenseConfigurationArns[idx] = aws.StringValue(license.LicenseConfigurationArn)
+			i.LicenseConfigurationArns[idx] = aws.ToString(license.LicenseConfigurationArn)
 		}
 	}
 
