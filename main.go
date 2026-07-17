@@ -42,6 +42,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// +kubebuilder:scaffold:imports
@@ -297,19 +298,25 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := (&rosawebhooks.ROSAControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "ROSAControlPlane")
-			os.Exit(1)
-		}
+		// Webhooks belong to the webhook-only manager (webhookPort != 0). Registering
+		// them calls GetWebhookServer(), which starts the webhook server and loads the
+		// serving cert — absent in controller mode. Same split invariant as the probes
+		// and the EKS block below.
+		if webhookPort != 0 {
+			if err := (&rosawebhooks.ROSAControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "ROSAControlPlane")
+				os.Exit(1)
+			}
 
-		if err := (&expwebhooks.ROSAMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "ROSAMachinePool")
-			os.Exit(1)
-		}
+			if err := (&expwebhooks.ROSAMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "ROSAMachinePool")
+				os.Exit(1)
+			}
 
-		if err := (&expwebhooks.ROSANetwork{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "ROSANetwork")
-			os.Exit(1)
+			if err := (&expwebhooks.ROSANetwork{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "ROSANetwork")
+				os.Exit(1)
+			}
 		}
 
 		setupLog.Debug("enabling ROSA role config controller")
@@ -322,9 +329,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := (&expwebhooks.ROSARoleConfig{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "ROSARoleConfig")
-			os.Exit(1)
+		if webhookPort != 0 {
+			if err := (&expwebhooks.ROSARoleConfig{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "ROSARoleConfig")
+				os.Exit(1)
+			}
 		}
 
 		setupLog.Debug("enabling OCM role config controller")
@@ -339,14 +348,38 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create ready check")
-		os.Exit(1)
-	}
+	// The webhook readyz/healthz probes call GetWebhookServer(), which registers
+	// the webhook server as a manager runnable — it then starts and eagerly loads
+	// /tmp/k8s-webhook-server/serving-certs/tls.crt. In controller mode
+	// (webhookPort == 0) no webhooks are registered and no serving cert is mounted
+	// (the fork runs the webhook server only in the dedicated webhook deployment),
+	// so gate these on webhookPort != 0 — mirrors the spectro v2.7.1 fork split
+	// that the v2.12.1 upgrade resolve flattened. Without this the controller-mode
+	// pod crashes on the missing cert.
+	if webhookPort != 0 {
+		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "unable to create ready check")
+			os.Exit(1)
+		}
 
-	if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create health check")
-		os.Exit(1)
+		if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "unable to create health check")
+			os.Exit(1)
+		}
+	} else {
+		// Controller-only process: the webhook StartedChecker (above) would start the
+		// webhook server and require a serving cert that isn't mounted here. But the
+		// Deployment still probes /healthz and /readyz, so register a basic ping —
+		// otherwise those paths 404 and kubelet CrashLoops the pod.
+		if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+			setupLog.Error(err, "unable to create ready check")
+			os.Exit(1)
+		}
+
+		if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+			setupLog.Error(err, "unable to create health check")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager", "version", version.Get().String())
@@ -498,94 +531,106 @@ func setupEKSReconcilersAndWebhooks(ctx context.Context, mgr ctrl.Manager,
 	}
 
 	setupLog.Debug("enabling EKS control plane controller")
-	if err := (&ekscontrolplanecontrollers.AWSManagedControlPlaneReconciler{
-		Client:                       mgr.GetClient(),
-		EnableIAM:                    enableIAM,
-		AllowAdditionalRoles:         allowAddRoles,
-		WatchFilterValue:             watchFilterValue,
-		ExternalResourceGC:           externalResourceGC,
-		AlternativeGCStrategy:        alternativeGCStrategy,
-		WaitInfraPeriod:              waitInfraPeriod,
-		MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
-		TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AWSManagedControlPlane")
-		os.Exit(1)
-	}
+	// Reconcilers require a service account (API/AWS access); only register them on the
+	// controller manager (webhookPort == 0). The webhook-only manager (webhookPort != 0, e.g. :9443)
+	// runs without a service account and must register webhooks only. Restores the spectro fork
+	// split dropped by the v2.12.1 upgrade resolve (f8164af5); mirrors setupReconcilersAndWebhooks.
+	if webhookPort == 0 {
+		if err := (&ekscontrolplanecontrollers.AWSManagedControlPlaneReconciler{
+			Client:                       mgr.GetClient(),
+			EnableIAM:                    enableIAM,
+			AllowAdditionalRoles:         allowAddRoles,
+			WatchFilterValue:             watchFilterValue,
+			ExternalResourceGC:           externalResourceGC,
+			AlternativeGCStrategy:        alternativeGCStrategy,
+			WaitInfraPeriod:              waitInfraPeriod,
+			MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
+			TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "AWSManagedControlPlane")
+			os.Exit(1)
+		}
 
-	setupLog.Debug("enabling EKS bootstrap controller")
-	if err := (&eksbootstrapcontrollers.EKSConfigReconciler{
-		Client:           mgr.GetClient(),
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "EKSConfig")
-		os.Exit(1)
-	}
+		setupLog.Debug("enabling EKS bootstrap controller")
+		if err := (&eksbootstrapcontrollers.EKSConfigReconciler{
+			Client:           mgr.GetClient(),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "EKSConfig")
+			os.Exit(1)
+		}
 
-	if err := (&eksbootstrapcontrollers.NodeadmConfigReconciler{
-		Client:           mgr.GetClient(),
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NodeadmConfig")
-		os.Exit(1)
-	}
+		if err := (&eksbootstrapcontrollers.NodeadmConfigReconciler{
+			Client:           mgr.GetClient(),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "NodeadmConfig")
+			os.Exit(1)
+		}
 
-	setupLog.Debug("enabling EKS managed cluster controller")
-	if err := (&controllers.AWSManagedClusterReconciler{
-		Client:           mgr.GetClient(),
-		Recorder:         mgr.GetEventRecorderFor("awsmanagedcluster-controller"),
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AWSManagedCluster")
-		os.Exit(1)
+		setupLog.Debug("enabling EKS managed cluster controller")
+		if err := (&controllers.AWSManagedClusterReconciler{
+			Client:           mgr.GetClient(),
+			Recorder:         mgr.GetEventRecorderFor("awsmanagedcluster-controller"),
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "AWSManagedCluster")
+			os.Exit(1)
+		}
 	}
 
 	if feature.Gates.Enabled(feature.EKSFargate) {
 		setupLog.Debug("enabling EKS fargate profile controller")
-		if err := (&expcontrollers.AWSFargateProfileReconciler{
-			Client:           mgr.GetClient(),
-			Recorder:         mgr.GetEventRecorderFor("awsfargateprofile-reconciler"),
-			EnableIAM:        enableIAM,
-			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "AWSFargateProfile")
-		}
-
-		if err := (&expwebhooks.AWSFargateProfile{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "AWSFargateProfile")
-			os.Exit(1)
+		if webhookPort == 0 {
+			if err := (&expcontrollers.AWSFargateProfileReconciler{
+				Client:           mgr.GetClient(),
+				Recorder:         mgr.GetEventRecorderFor("awsfargateprofile-reconciler"),
+				EnableIAM:        enableIAM,
+				WatchFilterValue: watchFilterValue,
+			}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: awsClusterConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "AWSFargateProfile")
+			}
+		} else {
+			if err := (&expwebhooks.AWSFargateProfile{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "AWSFargateProfile")
+				os.Exit(1)
+			}
 		}
 	}
 
 	if feature.Gates.Enabled(feature.MachinePool) {
 		setupLog.Debug("enabling EKS managed machine pool controller")
-		if err := (&expcontrollers.AWSManagedMachinePoolReconciler{
-			AllowAdditionalRoles:         allowAddRoles,
-			Client:                       mgr.GetClient(),
-			EnableIAM:                    enableIAM,
-			Recorder:                     mgr.GetEventRecorderFor("awsmanagedmachinepool-reconciler"),
-			WatchFilterValue:             watchFilterValue,
-			TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
-			MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "AWSManagedMachinePool")
-			os.Exit(1)
-		}
-
-		if err := (&expwebhooks.AWSManagedMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedMachinePool")
-			os.Exit(1)
+		if webhookPort == 0 {
+			if err := (&expcontrollers.AWSManagedMachinePoolReconciler{
+				AllowAdditionalRoles:         allowAddRoles,
+				Client:                       mgr.GetClient(),
+				EnableIAM:                    enableIAM,
+				Recorder:                     mgr.GetEventRecorderFor("awsmanagedmachinepool-reconciler"),
+				WatchFilterValue:             watchFilterValue,
+				TagUnmanagedNetworkResources: feature.Gates.Enabled(feature.TagUnmanagedNetworkResources),
+				MaxWaitActiveUpdateDelete:    maxWaitActiveUpdateDelete,
+			}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: instanceStateConcurrency, RecoverPanic: ptr.To[bool](true)}); err != nil {
+				setupLog.Error(err, "unable to create controller", "controller", "AWSManagedMachinePool")
+				os.Exit(1)
+			}
+		} else {
+			if err := (&expwebhooks.AWSManagedMachinePool{}).SetupWebhookWithManager(mgr); err != nil {
+				setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedMachinePool")
+				os.Exit(1)
+			}
 		}
 	}
 
-	if err := (&ekswebhooks.AWSManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlane")
-		os.Exit(1)
-	}
+	if webhookPort != 0 {
+		if err := (&ekswebhooks.AWSManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlane")
+			os.Exit(1)
+		}
 
-	if err := (&ekswebhooks.AWSManagedControlPlaneTemplate{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlaneTemplate")
-		os.Exit(1)
+		if err := (&ekswebhooks.AWSManagedControlPlaneTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "AWSManagedControlPlaneTemplate")
+			os.Exit(1)
+		}
 	}
 }
 
@@ -677,8 +722,8 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&webhookPort,
 		"webhook-port",
-		9443,
-		"Webhook Server port.",
+		0,
+		"Webhook Server port. Zero runs the binary as a controller-manager (registers reconcilers); a non-zero value (e.g. 9443) runs it as webhook-only (registers admission webhooks, no reconcilers).",
 	)
 
 	fs.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
