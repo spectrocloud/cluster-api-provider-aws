@@ -43,7 +43,6 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/util/paused"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bsutil "sigs.k8s.io/cluster-api/bootstrap/util"
 	expclusterv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/feature"
@@ -178,13 +177,13 @@ func (r *NodeadmConfigReconciler) joinWorker(ctx context.Context, cluster *clust
 		v1beta1conditions.MarkFalse(config,
 			eksbootstrapv1.DataSecretAvailableCondition,
 			eksbootstrapv1.WaitingForClusterInfrastructureReason,
-			clusterv1beta1.ConditionSeverityInfo, "")
+			clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{}, nil
 	}
 
 	if !v1beta1conditions.IsTrue(cluster, clusterv1.ControlPlaneInitializedCondition) {
 		log.Info("Control Plane has not yet been initialized")
-		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.WaitingForControlPlaneInitializationReason, clusterv1beta1.ConditionSeverityInfo, "")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.WaitingForControlPlaneInitializationReason, clusterv1.ConditionSeverityInfo, "")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -199,7 +198,7 @@ func (r *NodeadmConfigReconciler) joinWorker(ctx context.Context, cluster *clust
 			config,
 			eksbootstrapv1.DataSecretAvailableCondition,
 			eksbootstrapv1.DataSecretGenerationFailedReason,
-			clusterv1beta1.ConditionSeverityInfo,
+			clusterv1.ConditionSeverityInfo,
 			"Control plane is not initialized yet",
 		)
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -211,12 +210,12 @@ func (r *NodeadmConfigReconciler) joinWorker(ctx context.Context, cluster *clust
 	files, err := fileResolver.ResolveFiles(ctx, config.Namespace, config.Spec.Files)
 	if err != nil {
 		log.Info("Failed to resolve files for user data")
-		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "%s", err.Error())
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 		return ctrl.Result{}, err
 	}
 
 	serviceCIDR := ""
-	if len(cluster.Spec.ClusterNetwork.Services.CIDRBlocks) > 0 {
+	if cluster.Spec.ClusterNetwork != nil && cluster.Spec.ClusterNetwork.Services != nil && len(cluster.Spec.ClusterNetwork.Services.CIDRBlocks) > 0 {
 		serviceCIDR = cluster.Spec.ClusterNetwork.Services.CIDRBlocks[0]
 	}
 	nodeInput := &userdata.NodeadmInput{
@@ -257,7 +256,7 @@ func (r *NodeadmConfigReconciler) joinWorker(ctx context.Context, cluster *clust
 		log.Error(err, "Failed to extract CA from kubeconfig secret")
 		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition,
 			eksbootstrapv1.DataSecretGenerationFailedReason,
-			clusterv1beta1.ConditionSeverityWarning,
+			clusterv1.ConditionSeverityWarning,
 			"Failed to extract CA from kubeconfig secret: %v", err)
 		return ctrl.Result{}, err
 	}
@@ -270,14 +269,14 @@ func (r *NodeadmConfigReconciler) joinWorker(ctx context.Context, cluster *clust
 	userDataScript, err := userdata.NewNodeadmUserdata(nodeInput)
 	if err != nil {
 		log.Error(err, "Failed to create a worker join configuration")
-		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, "")
 		return ctrl.Result{}, err
 	}
 
 	// store userdata as secret
 	if err := r.storeBootstrapData(ctx, cluster, config, userDataScript); err != nil {
 		log.Error(err, "Failed to store bootstrap data")
-		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1.ConditionSeverityWarning, "")
 		return ctrl.Result{}, err
 	}
 
