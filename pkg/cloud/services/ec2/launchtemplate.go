@@ -124,8 +124,12 @@ func (s *Service) ReconcileLaunchTemplate(
 		return err
 	}
 
-	// Check if the instance tags were changed. If they were, create a new LaunchTemplate.
-	tagsChanged, _, _, _ := tagsChanged(annotation, scope.AdditionalTags()) //nolint:dogsled
+	// Check if the instance tags were changed. If they were, we either patch the LT
+	// resource tags in place (tag-only drift on EKS-adjacent pools) or fall through
+	// to the version-bump path (content drift, or non-EKS AWSMachinePool). Retain
+	// created/deleted/newAnnotation so the tag-only branch can call
+	// UpdateResourceTags and refresh the annotation without rerunning tagsChanged.
+	tagsChanged, tagsCreated, tagsDeleted, newTagsAnnotation := tagsChanged(annotation, scope.AdditionalTags())
 
 	needsUpdate, err := ec2svc.LaunchTemplateNeedsUpdate(scope, scope.GetLaunchTemplate(), launchTemplate)
 	if err != nil {
@@ -142,6 +146,47 @@ func (s *Service) ReconcileLaunchTemplate(
 	userDataSecretKeyChanged := launchTemplateUserDataSecretKey != nil && bootstrapDataSecretKey.String() != launchTemplateUserDataSecretKey.String()
 	launchTemplateNeedsUserDataSecretKeyTag := launchTemplateUserDataSecretKey == nil
 
+	userDataHashChanged := launchTemplateUserDataHash != bootstrapDataHash
+
+	// PCP-7401: A tag-only drift must not trigger a new launch-template version on
+	// EKS-adjacent pools. Publishing a new LT version updates
+	// Status.LaunchTemplateVersion, which the managed-nodegroup reconciler then
+	// reads and translates into an EKS UpdateNodegroupVersion call — that rolls
+	// every instance in the pool. For a tag-only change there's no content
+	// justification for that: the LT's TagSpecifications for future launches DO
+	// stay at the current version's value (AWS forbids mutating TagSpecifications
+	// on an existing version), but the ASG's PropagateAtLaunch=true tags
+	// (reconciled every tick by NodegroupService.reconcileASGTags) take precedence
+	// over LT TagSpecifications at instance launch, so new instances still end up
+	// correctly tagged. Existing instances / nodegroup ARN / SGs are reconciled by
+	// their own metadata-only paths; none of them require an LT version bump.
+	//
+	// The in-place path is gated on IsEKSManaged() so classic non-EKS
+	// AWSMachinePool (self-managed kubeadm cluster on an ASG) keeps its historical
+	// bump-then-StartASGInstanceRefresh behavior on tag drift. Both
+	// AWSManagedMachinePool and AWSMachinePool attached to an
+	// AWSManagedControlPlane (self-managed ASG worker pool on EKS) return true and
+	// take the fast path.
+	if scope.IsEKSManaged() {
+		tagsOnlyDiff := tagsChanged &&
+			!needsUpdate && !amiChanged && !userDataHashChanged &&
+			!userDataSecretKeyChanged && !launchTemplateNeedsUserDataSecretKeyTag
+
+		if tagsOnlyDiff {
+			scope.Info("tag-only launch-template drift, updating LT resource tags in place without version bump",
+				"launchTemplateID", scope.GetLaunchTemplateIDStatus(),
+				"created", tagsCreated, "deleted", tagsDeleted)
+			ltID := scope.GetLaunchTemplateIDStatus()
+			if err := ec2svc.UpdateResourceTags(&ltID, tagsCreated, tagsDeleted); err != nil {
+				return err
+			}
+			if err := UpdateMachinePoolAnnotationJSON(scope, TagsLastAppliedAnnotation, newTagsAnnotation); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
 	if needsUpdate || tagsChanged || amiChanged || userDataSecretKeyChanged {
 		canUpdate, err := canUpdateLaunchTemplate()
 		if err != nil {
@@ -153,10 +198,11 @@ func (s *Service) ReconcileLaunchTemplate(
 		}
 	}
 
-	userDataHashChanged := launchTemplateUserDataHash != bootstrapDataHash
-
 	// Create a new launch template version if there's a difference in configuration, tags,
-	// userdata, OR we've discovered a new AMI ID.
+	// userdata, OR we've discovered a new AMI ID. PCP-7401: tag drift on EKS-adjacent
+	// pools is handled in place by the tagsOnlyDiff branch above (which returns
+	// early), so tagsChanged only lands here for non-EKS AWSMachinePool where the
+	// historical bump-then-StartASGInstanceRefresh behavior is retained.
 	if needsUpdate || tagsChanged || amiChanged || userDataHashChanged || userDataSecretKeyChanged || launchTemplateNeedsUserDataSecretKeyTag {
 		scope.Info("creating new version for launch template", "existing", launchTemplate, "incoming", scope.GetLaunchTemplate(), "needsUpdate", needsUpdate, "tagsChanged", tagsChanged, "amiChanged", amiChanged, "userDataHashChanged", userDataHashChanged, "userDataSecretKeyChanged", userDataSecretKeyChanged)
 		// There is a limit to the number of Launch Template Versions.
