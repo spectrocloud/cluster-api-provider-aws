@@ -20,6 +20,8 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -27,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +41,7 @@ import (
 	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/internal/userdata"
 	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/util/paused"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
@@ -47,10 +51,14 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	v1beta1patch "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	kubeconfigutil "sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/cluster-api/util/predicates"
 )
 
 const eksConfigKind = "EKSConfig"
+
+// NodeTypeAL2023 selects nodeadm userdata instead of the AL2 bootstrap script.
+const NodeTypeAL2023 = "al2023"
 
 // EKSConfigReconciler reconciles a EKSConfig object.
 type EKSConfigReconciler struct {
@@ -144,10 +152,10 @@ func (r *EKSConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}()
 
-	return ctrl.Result{}, r.joinWorker(ctx, cluster, config, configOwner)
+	return r.joinWorker(ctx, cluster, config, configOwner)
 }
 
-func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1.Cluster, config *eksbootstrapv1.EKSConfig, configOwner *bsutil.ConfigOwner) error {
+func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1.Cluster, config *eksbootstrapv1.EKSConfig, configOwner *bsutil.ConfigOwner) (ctrl.Result, error) {
 	log := logger.FromContext(ctx)
 
 	// only need to reconcile the secret for Machine kinds once, but MachinePools need updates for new launch templates
@@ -161,15 +169,15 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 		err := r.Client.Get(ctx, secretKey, existingSecret)
 		switch {
 		case err == nil:
-			return nil
+			return ctrl.Result{}, nil
 		case !apierrors.IsNotFound(err):
 			log.Error(err, "unable to check for existing bootstrap secret")
-			return err
+			return ctrl.Result{}, err
 		}
 	}
 
 	if !cluster.Spec.ControlPlaneRef.IsDefined() || cluster.Spec.ControlPlaneRef.Kind != "AWSManagedControlPlane" {
-		return errors.New("Cluster's controlPlaneRef needs to be an AWSManagedControlPlane in order to use the EKS bootstrap provider")
+		return ctrl.Result{}, errors.New("Cluster's controlPlaneRef needs to be an AWSManagedControlPlane in order to use the EKS bootstrap provider")
 	}
 
 	if !ptr.Deref(cluster.Status.Initialization.InfrastructureProvisioned, false) {
@@ -178,18 +186,31 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 			eksbootstrapv1.DataSecretAvailableCondition,
 			eksbootstrapv1.WaitingForClusterInfrastructureReason,
 			clusterv1beta1.ConditionSeverityInfo, "")
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	if !ptr.Deref(cluster.Status.Initialization.ControlPlaneInitialized, false) {
 		log.Info("Control Plane has not yet been initialized")
 		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.WaitingForControlPlaneInitializationReason, clusterv1beta1.ConditionSeverityInfo, "")
-		return nil
+		// AL2023 reads the cluster CA from the kubeconfig secret, so it must retry rather
+		// than wait for an event: this controller does not watch the control plane.
+		if config.Spec.NodeType == NodeTypeAL2023 {
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		return ctrl.Result{}, nil
 	}
 
 	controlPlane := &ekscontrolplanev1.AWSManagedControlPlane{}
 	if err := r.Get(ctx, client.ObjectKey{Name: cluster.Spec.ControlPlaneRef.Name, Namespace: cluster.Namespace}, controlPlane); err != nil {
-		return err
+		return ctrl.Result{}, err
+	}
+
+	if config.Spec.NodeType == NodeTypeAL2023 && !controlPlane.Status.Ready {
+		log.Info("Control plane is not ready yet, waiting to generate AL2023 userdata")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition,
+			eksbootstrapv1.DataSecretGenerationFailedReason,
+			clusterv1beta1.ConditionSeverityInfo, "Control plane is not ready yet")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	log.Info("Generating userdata")
@@ -198,7 +219,13 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 	if err != nil {
 		log.Info("Failed to resolve files for user data")
 		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "%s", err.Error())
-		return err
+		return ctrl.Result{}, err
+	}
+
+	// AL2023 renders nodeadm config; the file/user/NTP/mount sections of the spec are not
+	// part of that format and are ignored, as they were before the nodeadm split.
+	if config.Spec.NodeType == NodeTypeAL2023 {
+		return r.joinAL2023Worker(ctx, cluster, config, configOwner, controlPlane)
 	}
 
 	nodeInput := &userdata.NodeInput{
@@ -243,17 +270,106 @@ func (r *EKSConfigReconciler) joinWorker(ctx context.Context, cluster *clusterv1
 	if err != nil {
 		log.Error(err, "Failed to create a worker join configuration")
 		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	// store userdata as secret
 	if err := r.storeBootstrapData(ctx, cluster, config, userDataScript); err != nil {
 		log.Error(err, "Failed to store bootstrap data")
 		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "")
-		return err
+		return ctrl.Result{}, err
 	}
 
-	return nil
+	return ctrl.Result{}, nil
+}
+
+// joinAL2023Worker generates and stores nodeadm userdata for an AL2023 worker pool.
+func (r *EKSConfigReconciler) joinAL2023Worker(ctx context.Context, cluster *clusterv1.Cluster, config *eksbootstrapv1.EKSConfig, configOwner *bsutil.ConfigOwner, controlPlane *ekscontrolplanev1.AWSManagedControlPlane) (ctrl.Result, error) {
+	log := logger.FromContext(ctx)
+
+	caCert, err := r.extractCAFromSecret(ctx, client.ObjectKey{Namespace: cluster.Namespace, Name: cluster.Name})
+	if err != nil {
+		log.Error(err, "Failed to extract CA from kubeconfig secret")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition,
+			eksbootstrapv1.DataSecretGenerationFailedReason,
+			clusterv1beta1.ConditionSeverityWarning,
+			"Failed to extract CA from kubeconfig secret: %v", err)
+		return ctrl.Result{}, err
+	}
+
+	al2023Input := &userdata.AL2023Input{
+		// AWSManagedControlPlane webhooks default and validate EKSClusterName
+		ClusterName:           controlPlane.Spec.EKSClusterName,
+		KubeletExtraArgs:      config.Spec.KubeletExtraArgs,
+		PreBootstrapCommands:  config.Spec.PreBootstrapCommands,
+		PostBootstrapCommands: config.Spec.PostBootstrapCommands,
+		DNSClusterIP:          config.Spec.DNSClusterIP,
+		UseMaxPods:            config.Spec.UseMaxPods,
+		APIServerEndpoint:     controlPlane.Spec.ControlPlaneEndpoint.Host,
+		CACert:                caCert,
+		NodeGroupName:         config.Name,
+		ClusterCIDR:           r.getClusterCidr(cluster, controlPlane),
+	}
+
+	// A pool that owns its launch template carries the AMI and capacity type used for the
+	// node labels; a MachinePool-owned config leaves them unset.
+	if configOwner.GetKind() == "AWSManagedMachinePool" {
+		pool := &expinfrav1.AWSManagedMachinePool{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: configOwner.GetName()}, pool); err != nil {
+			log.Info("Failed to get AWSManagedMachinePool", "error", err)
+		} else {
+			if pool.Spec.AWSLaunchTemplate != nil && pool.Spec.AWSLaunchTemplate.AMI.ID != nil {
+				al2023Input.AMIImageID = *pool.Spec.AWSLaunchTemplate.AMI.ID
+			}
+			al2023Input.CapacityType = pool.Spec.CapacityType
+		}
+	}
+
+	userDataScript, err := userdata.NewAL2023Node(al2023Input)
+	if err != nil {
+		log.Error(err, "Failed to create a worker join configuration")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.storeBootstrapData(ctx, cluster, config, userDataScript); err != nil {
+		log.Error(err, "Failed to store bootstrap data")
+		v1beta1conditions.MarkFalse(config, eksbootstrapv1.DataSecretAvailableCondition, eksbootstrapv1.DataSecretGenerationFailedReason, clusterv1beta1.ConditionSeverityWarning, "")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// getClusterCidr returns the service CIDR to advertise to nodeadm, preferring the
+// cluster's service CIDR and falling back to the control plane VPC CIDR.
+func (r *EKSConfigReconciler) getClusterCidr(cluster *clusterv1.Cluster, controlPlane *ekscontrolplanev1.AWSManagedControlPlane) string {
+	// v1beta2 made ClusterNetwork and Services value types, so only the slice needs checking.
+	if len(cluster.Spec.ClusterNetwork.Services.CIDRBlocks) > 0 {
+		return cluster.Spec.ClusterNetwork.Services.CIDRBlocks[0]
+	}
+
+	return controlPlane.Spec.NetworkSpec.VPC.CidrBlock
+}
+
+// extractCAFromSecret returns the base64 cluster CA from the cluster's kubeconfig secret.
+func (r *EKSConfigReconciler) extractCAFromSecret(ctx context.Context, obj client.ObjectKey) (string, error) {
+	data, err := kubeconfigutil.FromSecret(ctx, r.Client, obj)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to get kubeconfig secret %s", obj.Name)
+	}
+	config, err := clientcmd.Load(data)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to parse kubeconfig data from secret %s", obj.Name)
+	}
+
+	for _, cluster := range config.Clusters {
+		if len(cluster.CertificateAuthorityData) > 0 {
+			return base64.StdEncoding.EncodeToString(cluster.CertificateAuthorityData), nil
+		}
+	}
+
+	return "", fmt.Errorf("no cluster with CA data found in kubeconfig")
 }
 
 func (r *EKSConfigReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, option controller.Options) error {

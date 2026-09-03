@@ -25,6 +25,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	eksbootstrapv1 "sigs.k8s.io/cluster-api-provider-aws/v2/bootstrap/eks/api/v1beta2"
+	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 )
 
 func TestNewNode(t *testing.T) {
@@ -393,4 +394,172 @@ users:
 			g.Expect(string(bytes)).To(Equal(string(testcase.expectedBytes)))
 		})
 	}
+}
+
+// TestNewAL2023Node locks the AL2023 EKSConfig userdata layout. These bytes go into the
+// pool's launch template, so any change here creates a new template version and repaves
+// every node. Update the expectations only alongside a deliberate repave.
+func TestNewAL2023Node(t *testing.T) {
+	format.TruncatedDiff = false
+
+	baseInput := func() *AL2023Input {
+		return &AL2023Input{
+			ClusterName:       "test-cluster",
+			APIServerEndpoint: "https://ABC123.gr7.eu-west-1.eks.amazonaws.com",
+			CACert:            "dGVzdC1jYQ==",
+			NodeGroupName:     "worker-pool",
+			ClusterCIDR:       "10.96.0.0/12",
+		}
+	}
+
+	t.Run("no bootstrap commands emits only the node config part", func(t *testing.T) {
+		g := NewWithT(t)
+
+		out, err := NewAL2023Node(baseInput())
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(Equal(`MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="//"
+
+
+--//
+Content-Type: application/node.eks.aws
+
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:
+    name: test-cluster
+    apiServerEndpoint: https://ABC123.gr7.eu-west-1.eks.amazonaws.com
+    certificateAuthority: dGVzdC1jYQ==
+    cidr: 10.96.0.0/12
+  kubelet:
+    config:
+      maxPods: 110
+      clusterDNS:
+      - 10.96.0.10
+    flags:
+    - "--node-labels=eks.amazonaws.com/nodegroup-image=,eks.amazonaws.com/capacityType=ON_DEMAND,eks.amazonaws.com/nodegroup=worker-pool"
+
+--//--`))
+	})
+
+	t.Run("bootstrap commands add a shell script part", func(t *testing.T) {
+		g := NewWithT(t)
+
+		input := baseInput()
+		input.PreBootstrapCommands = []string{"echo pre1", "echo pre2"}
+		input.PostBootstrapCommands = []string{"echo post1"}
+
+		out, err := NewAL2023Node(input)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(HavePrefix(`MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="//"
+
+--//
+Content-Type: text/x-shellscript; charset="us-ascii"
+
+#!/bin/bash
+set -o errexit
+set -o pipefail
+set -o nounset
+echo pre1
+echo pre2
+echo post1
+
+--//
+Content-Type: application/node.eks.aws
+`))
+	})
+
+	t.Run("node labels come from kubeletExtraArgs when set", func(t *testing.T) {
+		g := NewWithT(t)
+
+		input := baseInput()
+		input.KubeletExtraArgs = map[string]string{"node-labels": "custom=label"}
+
+		out, err := NewAL2023Node(input)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(ContainSubstring(`    - "--node-labels=custom=label"`))
+	})
+
+	t.Run("ami id and capacity type feed the default node labels", func(t *testing.T) {
+		g := NewWithT(t)
+
+		input := baseInput()
+		input.AMIImageID = "ami-123"
+		input.CapacityType = ptr.To(expinfrav1.ManagedMachinePoolCapacityTypeSpot)
+
+		out, err := NewAL2023Node(input)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(ContainSubstring(
+			`eks.amazonaws.com/nodegroup-image=ami-123,eks.amazonaws.com/capacityType=spot,eks.amazonaws.com/nodegroup=worker-pool`))
+	})
+
+	t.Run("useMaxPods lowers the maxPods default", func(t *testing.T) {
+		g := NewWithT(t)
+
+		input := baseInput()
+		input.UseMaxPods = ptr.To(true)
+
+		out, err := NewAL2023Node(input)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(ContainSubstring("maxPods: 58"))
+	})
+
+	t.Run("clusterDNS derives from the cluster cidr", func(t *testing.T) {
+		g := NewWithT(t)
+
+		input := baseInput()
+		input.ClusterCIDR = "172.20.0.0/16"
+
+		out, err := NewAL2023Node(input)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(ContainSubstring("cidr: 172.20.0.0/16"))
+		g.Expect(string(out)).To(ContainSubstring("- 172.20.0.10"))
+	})
+
+	t.Run("explicit dnsClusterIP wins over the derived one", func(t *testing.T) {
+		g := NewWithT(t)
+
+		input := baseInput()
+		input.DNSClusterIP = ptr.To("10.100.0.53")
+
+		out, err := NewAL2023Node(input)
+
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(string(out)).To(ContainSubstring("- 10.100.0.53"))
+	})
+
+	t.Run("missing required fields are rejected", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			mutate  func(*AL2023Input)
+			wantErr string
+		}{
+			{"no endpoint", func(i *AL2023Input) { i.APIServerEndpoint = "" }, "API server endpoint is required for AL2023"},
+			{"no ca cert", func(i *AL2023Input) { i.CACert = "" }, "CA certificate is required for AL2023"},
+			{"no cluster name", func(i *AL2023Input) { i.ClusterName = "" }, "cluster name is required for AL2023"},
+			{"no nodegroup name", func(i *AL2023Input) { i.NodeGroupName = "" }, "node group name is required for AL2023"},
+		}
+
+		for _, testcase := range tests {
+			t.Run(testcase.name, func(t *testing.T) {
+				g := NewWithT(t)
+
+				input := baseInput()
+				testcase.mutate(input)
+
+				_, err := NewAL2023Node(input)
+
+				g.Expect(err).To(MatchError(testcase.wantErr))
+			})
+		}
+	})
 }

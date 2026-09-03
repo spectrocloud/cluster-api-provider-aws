@@ -57,7 +57,7 @@ func TestEKSConfigReconciler(t *testing.T) {
 		}
 		t.Logf("Calling reconcile on cluster '%s' and config '%s' should requeue", cluster.Name, config.Name)
 		g.Eventually(func(gomega Gomega) {
-			err := reconciler.joinWorker(ctx, cluster, config, configOwner("Machine"))
+			_, err := reconciler.joinWorker(ctx, cluster, config, configOwner("Machine"))
 			gomega.Expect(err).NotTo(HaveOccurred())
 		}).Should(Succeed())
 
@@ -111,7 +111,7 @@ func TestEKSConfigReconciler(t *testing.T) {
 		}
 		t.Logf("Calling reconcile on cluster '%s' and config '%s' should requeue", cluster.Name, config.Name)
 		g.Eventually(func(gomega Gomega) {
-			err := reconciler.joinWorker(ctx, cluster, config, configOwner("MachinePool"))
+			_, err := reconciler.joinWorker(ctx, cluster, config, configOwner("MachinePool"))
 			gomega.Expect(err).NotTo(HaveOccurred())
 		}).Should(Succeed())
 
@@ -135,7 +135,7 @@ func TestEKSConfigReconciler(t *testing.T) {
 		}
 		t.Log(dump("config", config))
 		g.Eventually(func(gomega Gomega) {
-			err := reconciler.joinWorker(ctx, cluster, config, configOwner("MachinePool"))
+			_, err := reconciler.joinWorker(ctx, cluster, config, configOwner("MachinePool"))
 			gomega.Expect(err).NotTo(HaveOccurred())
 		}).Should(Succeed())
 		t.Logf("Secret '%s' should exist and be up to date", config.Name)
@@ -182,7 +182,7 @@ func TestEKSConfigReconciler(t *testing.T) {
 		}
 		t.Logf("Calling reconcile on cluster '%s' and config '%s' should requeue", cluster.Name, config.Name)
 		g.Eventually(func(gomega Gomega) {
-			err := reconciler.joinWorker(ctx, cluster, config, configOwner("Machine"))
+			_, err := reconciler.joinWorker(ctx, cluster, config, configOwner("Machine"))
 			gomega.Expect(err).NotTo(HaveOccurred())
 		}).Should(Succeed())
 
@@ -255,7 +255,7 @@ func TestEKSConfigReconciler(t *testing.T) {
 		}
 		t.Logf("Calling reconcile on cluster '%s' and config '%s' should requeue", cluster.Name, config.Name)
 		g.Eventually(func(gomega Gomega) {
-			err := reconciler.joinWorker(ctx, cluster, config, configOwner("Machine"))
+			_, err := reconciler.joinWorker(ctx, cluster, config, configOwner("Machine"))
 			gomega.Expect(err).NotTo(HaveOccurred())
 		}).Should(Succeed())
 
