@@ -556,11 +556,20 @@ func (s *NodegroupService) reconcileNodegroupConfig(ctx context.Context, ng *eks
 		needsUpdate = true
 	}
 
-	specRepairConfig := s.nodeRepairConfig()
-	if !cmp.Equal(ng.NodeRepairConfig, specRepairConfig, cmpopts.IgnoreUnexported(ekstypes.NodeRepairConfig{})) {
-		s.Debug("Nodegroup repair configuration differs from spec, updating the nodegroup repair config", "nodegroup", ng.NodegroupName)
-		input.NodeRepairConfig = specRepairConfig
-		needsUpdate = true
+	// Only reconcile NodeRepairConfig when the user has explicitly set it in
+	// Spec. NodeRepairConfigToSDK synthesizes &{Enabled: false} from a nil
+	// spec, which never matches the nil NodeRepairConfig that EKS returns for
+	// un-configured nodegroups, so every reconcile of every pre-existing pool
+	// fires an UpdateNodegroupConfig that is at best a no-op and at worst
+	// silently overwrites a customer-enabled auto-repair. Matches the guard
+	// already used in the create path (reconcileNodegroup / CreateNodegroup).
+	if managedPool.NodeRepairConfig != nil {
+		specRepairConfig := s.nodeRepairConfig()
+		if !cmp.Equal(ng.NodeRepairConfig, specRepairConfig, cmpopts.IgnoreUnexported(ekstypes.NodeRepairConfig{})) {
+			s.Debug("Nodegroup repair configuration differs from spec, updating the nodegroup repair config", "nodegroup", ng.NodegroupName)
+			input.NodeRepairConfig = specRepairConfig
+			needsUpdate = true
+		}
 	}
 
 	if !needsUpdate {
