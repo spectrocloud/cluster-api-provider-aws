@@ -20,12 +20,21 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/go-logr/logr"
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
 	capierrors "sigs.k8s.io/cluster-api/errors"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
+	ekscontrolplanev1 "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	expinfrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/scope"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/eks/iam"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/cloud/services/eks/mock_eksiface"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/pkg/logger"
 )
 
 func TestSetStatus(t *testing.T) {
@@ -60,6 +69,96 @@ func TestSetStatus(t *testing.T) {
 	g.Expect(*s.scope.ManagedMachinePool.Status.FailureMessage).To(ContainSubstring(message))
 	g.Expect(s.scope.ManagedMachinePool.Status.Ready).To(Equal(false))
 	g.Expect(*s.scope.ManagedMachinePool.Status.FailureReason).To(Equal(string(capierrors.InsufficientResourcesMachineError)))
+}
+
+func TestReconcileNodegroupConfig_NodeRepairConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		specRepair  *expinfrav1.NodeRepairConfig
+		liveRepair  *ekstypes.NodeRepairConfig
+		expectCall  bool
+		expectValue *ekstypes.NodeRepairConfig
+	}{
+		{
+			name:       "nil spec, nil live: no call (adoption / never-set nodegroup)",
+			specRepair: nil,
+			liveRepair: nil,
+			expectCall: false,
+		},
+		{
+			name:       "nil spec, live enabled: no call (does not overwrite unmanaged field)",
+			specRepair: nil,
+			liveRepair: &ekstypes.NodeRepairConfig{Enabled: aws.Bool(true)},
+			expectCall: false,
+		},
+		{
+			name:        "explicit spec differs from live: call fires with spec value",
+			specRepair:  &expinfrav1.NodeRepairConfig{Enabled: aws.Bool(true)},
+			liveRepair:  &ekstypes.NodeRepairConfig{Enabled: aws.Bool(false)},
+			expectCall:  true,
+			expectValue: &ekstypes.NodeRepairConfig{Enabled: aws.Bool(true)},
+		},
+		{
+			name:       "explicit spec matches live: no call",
+			specRepair: &expinfrav1.NodeRepairConfig{Enabled: aws.Bool(false)},
+			liveRepair: &ekstypes.NodeRepairConfig{Enabled: aws.Bool(false)},
+			expectCall: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			mockControl := gomock.NewController(t)
+			defer mockControl.Finish()
+			eksMock := mock_eksiface.NewMockEKSAPI(mockControl)
+
+			if tc.expectCall {
+				expected := tc.expectValue
+				eksMock.EXPECT().
+					UpdateNodegroupConfig(gomock.Eq(context.TODO()), gomock.AssignableToTypeOf(&eks.UpdateNodegroupConfigInput{})).
+					DoAndReturn(func(_ context.Context, in *eks.UpdateNodegroupConfigInput, _ ...func(*eks.Options)) (*eks.UpdateNodegroupConfigOutput, error) {
+						g.Expect(in.NodeRepairConfig).To(Equal(expected))
+						return &eks.UpdateNodegroupConfigOutput{}, nil
+					})
+			}
+
+			log := logger.NewLogger(logr.Discard())
+			s := &NodegroupService{
+				scope: &scope.ManagedMachinePoolScope{
+					Logger: *log,
+					ControlPlane: &ekscontrolplanev1.AWSManagedControlPlane{
+						Spec: ekscontrolplanev1.AWSManagedControlPlaneSpec{
+							EKSClusterName: "test-cluster",
+						},
+					},
+					ManagedMachinePool: &expinfrav1.AWSManagedMachinePool{
+						Spec: expinfrav1.AWSManagedMachinePoolSpec{
+							EKSNodegroupName: "test-ng",
+							NodeRepairConfig: tc.specRepair,
+						},
+					},
+					MachinePool: &clusterv1.MachinePool{},
+				},
+				EKSClient:  eksMock,
+				IAMService: iam.IAMService{Wrapper: log},
+			}
+
+			ng := &ekstypes.Nodegroup{
+				NodegroupName: aws.String("test-ng"),
+				ScalingConfig: &ekstypes.NodegroupScalingConfig{
+					DesiredSize: aws.Int32(1),
+					MinSize:     aws.Int32(1),
+					MaxSize:     aws.Int32(1),
+				},
+				NodeRepairConfig: tc.liveRepair,
+			}
+
+			err := s.reconcileNodegroupConfig(context.TODO(), ng)
+			g.Expect(err).NotTo(HaveOccurred())
+		})
+	}
 }
 
 func TestIsSymbolicLaunchTemplateVersion(t *testing.T) {
