@@ -46,7 +46,7 @@ func TestEKSConfigReconcilerReturnEarlyIfClusterInfraNotReady(t *testing.T) {
 	}
 
 	g.Eventually(func(gomega Gomega) {
-		err := reconciler.joinWorker(context.Background(), cluster, config, configOwner("Machine"))
+		_, err := reconciler.joinWorker(context.Background(), cluster, config, configOwner("Machine"))
 		gomega.Expect(err).NotTo(HaveOccurred())
 	}).Should(Succeed())
 }
@@ -69,7 +69,7 @@ func TestEKSConfigReconcilerReturnEarlyIfClusterControlPlaneNotInitialized(t *te
 	}
 
 	g.Eventually(func(gomega Gomega) {
-		err := reconciler.joinWorker(context.Background(), cluster, config, configOwner("Machine"))
+		_, err := reconciler.joinWorker(context.Background(), cluster, config, configOwner("Machine"))
 		gomega.Expect(err).NotTo(HaveOccurred())
 	}).Should(Succeed())
 }
